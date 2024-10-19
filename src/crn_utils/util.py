@@ -48,11 +48,11 @@ def read_CDE(metadata_version:str="v3.0", local_path:str|bool|Path=False):
         print("read local file")
 
     # drop rows with no table name (i.e. ASAP_ids)
-    CDE_df.dropna(subset=['Table'], inplace=True)
-    CDE_df.reset_index(drop=True, inplace=True)
+    CDE_df = CDE_df[["Table", "Field", "Description", "DataType", "Required", "Validation", "Shared_key"]]
+    CDE_df = CDE_df.dropna(subset=['Table'])
+    CDE_df = CDE_df.reset_index(drop=True)
     CDE_df = CDE_df.drop_duplicates()
     # force extraneous columns to be dropped.
-    CDE_df = CDE_df[["Table", "Field", "Description", "DataType", "Required", "Validation"]]
 
     return CDE_df
 
@@ -105,7 +105,7 @@ def export_table(table_name:str, df:pd.DataFrame, out_dir:str):
     export_root = Path(out_dir).parent
     export_root.mkdir(parents=True, exist_ok=True)
 
-    df.replace({"":NULL, pd.NA:NULL, "none":NULL, "nan":NULL, "Nan":NULL}, inplace=True)
+    df = df.replace({"":NULL, pd.NA:NULL, "none":NULL, "nan":NULL, "Nan":NULL})
     df.to_csv(out_dir / f"{table_name}.csv", index=False)
 
 
@@ -125,6 +125,9 @@ def read_meta_table(table_path):
     # drop the first column if it is just the index
     if table_df.columns[0] == "Unnamed: 0":
         table_df = table_df.drop(columns=["Unnamed: 0"])
+
+    # drop rows with all null values
+    table_df.dropna(how='all', inplace=True)
 
     table_df.replace({"":NULL, pd.NA:NULL, "none":NULL, "nan":NULL, "Nan":NULL}, inplace=True)
 

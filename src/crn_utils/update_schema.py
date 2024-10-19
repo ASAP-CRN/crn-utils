@@ -89,7 +89,7 @@ from validate import validate_table, create_valid_table
 #     return STUDYv2, PROTOCOLv2, SAMPLEv2, SUBJECTv2, CLINPATHv2, DATAv2
 
     
-def v1_to_v2(tables_path: str | Path, out_dir: str|None, CDEv1: pd.DataFrame, CDEv2: pd.DataFrame):
+def v1_to_v2(tables_path: str | Path, out_dir: str|None, CDEv1: pd.DataFrame, CDEv2: pd.DataFrame, team_dataset_id:str|None=None):
     """
     Load the tables from the tables_path, and update them to the CDEv2 schema.
     Export the new tables to a datestamped out_dir.
@@ -117,7 +117,10 @@ def v1_to_v2(tables_path: str | Path, out_dir: str|None, CDEv1: pd.DataFrame, CD
     # assert len(SAMPLEv1['preprocessing_references'].unique()) == 1
     STUDYv2 = v1_tables['STUDY'].copy()
     STUDYv2['preprocessing_references'] = v1_tables['SAMPLE']['preprocessing_references'][0]
-    STUDYv2['team_dataset_id'] = STUDYv2['project_dataset'].str.replace(" ", "_").str.replace("-", "_")
+    if team_dataset_id is not None:
+        STUDYv2['team_dataset_id'] = team_dataset_id
+    else:
+        STUDYv2['team_dataset_id'] = STUDYv2['project_dataset'].str.replace(" ", "_").str.replace("-", "_")
     v2_tables['STUDY'] = filter_table_columns(STUDYv2, CDEv2, "STUDY")
 
 
@@ -168,18 +171,41 @@ def v1_to_v2(tables_path: str | Path, out_dir: str|None, CDEv1: pd.DataFrame, CD
 
 # Update function for CDEv3 (transforming from v2.1 to v3)
 def intervention_typer(x):
+    control_types = set(("Healthy Control", 
+                    "No PD nor other neurological disorder",
+                    'no pd nor other neurological disorder',
+                     NULL,
+                    "HC", "Healthy", "Healthy", "healthy control", "Control", "control"
+                    )    
+                    )
+    
+    case_types = set((
+                    "Idiopathic PD", "Hemiparkinson/hemiatrophy syndrome", "Idiopathic PD",
+                    "Juvenile autosomal recessive parkinsonism",
+                    "Motor neuron disease with parkinsonism", 
+                    "Neuroleptic-induced parkinsonism",  "Psychogenic parkinsonism", "Vascular parkinsonism",
+                    "PD", "idiopathic PD", "Parkinson's Disease","parkinsons", "parkinson's", 
+                    "Parkinson's", "Parkinsons", "idiopathic pd"
+                ))
+    other_types =  set(("Frontotemporal dementia","Corticobasal syndrome", 
+                        "Multiple system atrophy","Normal pressure hydrocephalus", 
+                        "Progressive supranuclear palsy","Dementia with Lewy bodies", 
+                        "Dopa-responsive dystonia", "Essential tremor","Alzheimer's disease",
+                        "Spinocerebellar Ataxia (SCA)", "Prodromal non-motor PD", "Prodromal motor PD", "Other neurological disorder"
+                    ))
+
     if x is None:
         return "Control"
     else:
-        x = x.lower() 
-        if x in [ NULL, "", "Control", "Healthy", "HC", "No PD or other neurological disease", "No PD or other neurological disorder"]:
+        # x = x.lower() 
+        if x in control_types:
             return "Control"
-        elif x in ["PD", "Parkinson's Disease"]:
+        elif x in case_types:
             return "Case"
-        elif x == "Other neurological disorder":
-            return "Other Control"
-        else:
-            return "Case"
+        elif x in other_types:
+            return "Other"
+        else: #default "Other"
+            return "Other"
 
 
 def v2_to_v3_PMDBS(tables_path: str | Path, out_dir: str, CDEv2: pd.DataFrame, CDEv3: pd.DataFrame):
@@ -218,14 +244,25 @@ def v2_to_v3_PMDBS(tables_path: str | Path, out_dir: str, CDEv2: pd.DataFrame, C
     # SAMPLE
     v3_tables["SAMPLE"] = filter_table_columns(v2_tables["SAMPLE"], CDEv3, "SAMPLE")
 
+    subject_id = v3_tables["SUBJECT"]['subject_id']
+    primary_diagnosis = v3_tables["SUBJECT"]['primary_diagnosis'].str.lower().str.replace(" ", "_")
+    diagnosis_mapper = dict(zip(subject_id, primary_diagnosis))
+    v3_tables["SAMPLE"]['condition_id'] = v3_tables["SAMPLE"]['subject_id'].map(diagnosis_mapper)
+
+
+    # DATA
+    v3_tables["DATA"] = filter_table_columns(v2_tables["DATA"], CDEv3, "DATA")
+
     # PMDBS
     v3_tables["PMDBS"] = filter_table_columns(v2_tables["SAMPLE"], CDEv3, "PMDBS")
+
+
 
     # ASSAY_RNAseq
     ASSAY_RNAseqv3 = filter_table_columns(v2_tables["SAMPLE"], CDEv3, "ASSAY_RNAseq")
     ASSAY_RNAseqv3['technology'] = v2_tables["DATA"]['technology'][0]
     ASSAY_RNAseqv3['omic'] = v2_tables["DATA"]['omic'][0]
-    v3_tables["PMDBS"] = ASSAY_RNAseqv3
+    v3_tables["ASSAY_RNAseq"] = ASSAY_RNAseqv3
 
     # CLINPATH
     CLINPATHv3 = filter_table_columns(v2_tables["CLINPATH"], CDEv3, "CLINPATH")
@@ -257,7 +294,11 @@ def v2_to_v3_PMDBS(tables_path: str | Path, out_dir: str, CDEv2: pd.DataFrame, C
     CONDITIONv3['condition_id'] = v3_tables["SUBJECT"]['primary_diagnosis'].unique()
     CONDITIONv3['intervention_name'] = "Case-Control"
     CONDITIONv3['intervention_id'] = CONDITIONv3['condition_id'].apply(intervention_typer)
+    CONDITIONv3['condition_id'] = CONDITIONv3['condition_id'].str.lower().str.replace(" ", "_")
+
     v3_tables["CONDITION"] = CONDITIONv3
+
+
 
 
     if out_dir is not None:
@@ -310,7 +351,7 @@ def filter_table_columns(merged_table: pd.DataFrame, CDE: pd.DataFrame, table_na
     missing_cols = set(schema_cols) - set(merged_table.columns)
 
     for col in missing_cols:
-        merged_table[col] = None
+        merged_table[col] = NULL
 
     return merged_table[schema_cols].drop_duplicates(inplace=False).reset_index(drop=True)
 
@@ -327,6 +368,22 @@ def move_table_columns(df_to: pd.DataFrame,df_from: pd.DataFrame, CDE: pd.DataFr
             df_to[col] = df_from[col]
 
     return df_to
+
+
+def create_upload_medadata_package(metadata_path:Path, tables:dict):
+    # extract team_dataset_id and metadata_tables, and metadata_version from STUDY table
+    # team = STUDY['ASAP_team_name'][0].lstrip("TEAM-").lower()
+    STUDY = tables['STUDY']
+    metadata_tables = eval(STUDY['metadata_tables'].iloc[0])
+    metadata_version = STUDY['metadata_version_date'].iloc[0].split("_")[0]
+    dataset_name = STUDY['team_dataset_id'].iloc[0]
+    # create upload directory
+    upload_path = metadata_path / "upload" / dataset_name
+    upload_path.mkdir(exist_ok=True, parents=True)
+
+    for table in metadata_tables:
+        df = tables[table]
+        df.to_csv(upload_path/f"{table}.csv", index=False)
 
 
 def main():

@@ -186,6 +186,7 @@ def validate_table(df: pd.DataFrame, table_name: str, specific_cde_df: pd.DataFr
             elif datatype.item() == "Enum":
 
                 valid_values = eval(specific_cde_df.loc[entry_idx,"Validation"].item())
+                valid_values += [NULL]
                 entries = df[field]
                 valid_entries = entries.apply(lambda x: x in valid_values)
                 invalid_values = entries[~valid_entries].unique()
