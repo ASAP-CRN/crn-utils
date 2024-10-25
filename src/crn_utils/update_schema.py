@@ -99,7 +99,8 @@ def v1_to_v2(tables_path: str | Path, out_dir: str|None, CDEv1: pd.DataFrame, CD
 
     in_tables = ['STUDY', 'PROTOCOL', 'SUBJECT', 'CLINPATH', 'SAMPLE']
     # in_tables = [table_name for table_name in in_tables if f"{table_name}.csv" in os.listdir(tables_path)]
-
+    metadata_version = "v2.1"
+    METADATA_VERSION_DATE = f"{metadata_version}_{pd.Timestamp.now().strftime('%Y%m%d')}"
 
     # Load the tables
     v1_tables = {}
@@ -121,8 +122,10 @@ def v1_to_v2(tables_path: str | Path, out_dir: str|None, CDEv1: pd.DataFrame, CD
         STUDYv2['team_dataset_id'] = team_dataset_id
     else:
         STUDYv2['team_dataset_id'] = STUDYv2['project_dataset'].str.replace(" ", "_").str.replace("-", "_")
-    v2_tables['STUDY'] = filter_table_columns(STUDYv2, CDEv2, "STUDY")
 
+    STUDYv2['metadata_version_date'] = METADATA_VERSION_DATE
+    
+    v2_tables['STUDY'] = filter_table_columns(STUDYv2, CDEv2, "STUDY")
 
     # PROTOCOL
     v2_tables["PROTOCOL"] = v1_tables["PROTOCOL"]
@@ -141,8 +144,6 @@ def v1_to_v2(tables_path: str | Path, out_dir: str|None, CDEv1: pd.DataFrame, CD
         SAMP_CLIN['source_subject_id'] = SAMP_CLIN['source_subject_id_x']
         SAMP_CLIN = SAMP_CLIN.drop(columns=['source_subject_id_x','source_subject_id_y'])
     SUBJ_SAMP_CLIN = pd.merge(v1_tables["SUBJECT"], SAMP_CLIN, on="subject_id", how="left")
-
-    v2_tables["PROTOCOL"] = v1_tables["PROTOCOL"]
 
     v2_tables["SUBJECT"] = filter_table_columns(SUBJ_SAMP_CLIN, CDEv2, "SUBJECT")
     v2_tables["CLINPATH"] = filter_table_columns(SUBJ_SAMP_CLIN, CDEv2, "CLINPATH")
@@ -216,6 +217,10 @@ def v2_to_v3_PMDBS(tables_path: str | Path, out_dir: str, CDEv2: pd.DataFrame, C
     current_date = datetime.datetime.now()
     v2_meta_tables = ['STUDY', 'PROTOCOL', 'SUBJECT', 'CLINPATH', 'SAMPLE', 'DATA']
     v3_meta_tables = ['STUDY', 'PROTOCOL', 'SUBJECT', 'SAMPLE', 'DATA', 'CLINPATH', 'PMDBS', 'CONDITION', 'ASSAY_RNAseq']
+    metadata_version = "v3.0"
+
+    METADATA_VERSION_DATE = f"{metadata_version}_{pd.Timestamp.now().strftime('%Y%m%d')}"
+
     # Load the tables
     v2_tables = {}
     aux_tables = {}
@@ -233,6 +238,10 @@ def v2_to_v3_PMDBS(tables_path: str | Path, out_dir: str, CDEv2: pd.DataFrame, C
     # STUDYv3['sample_types'] = STUDYv2['brain_regions']
     STUDYv3.rename(columns={"number_of_brain_samples": "number_samples", "brain_regions": "sample_types"}, inplace=True)
 
+    STUDYv3['metadata_version_date'] = METADATA_VERSION_DATE
+
+
+
     v3_tables["STUDY"] = filter_table_columns(STUDYv3, CDEv3, "STUDY")
     
     # PROTOCOL
@@ -244,6 +253,7 @@ def v2_to_v3_PMDBS(tables_path: str | Path, out_dir: str, CDEv2: pd.DataFrame, C
     # SAMPLE
     v3_tables["SAMPLE"] = filter_table_columns(v2_tables["SAMPLE"], CDEv3, "SAMPLE")
 
+    v3_tables["SAMPLE"]["alternate_id"] = v2_tables["SAMPLE"]["alternate_sample_id"]
     subject_id = v3_tables["SUBJECT"]['subject_id']
     primary_diagnosis = v3_tables["SUBJECT"]['primary_diagnosis'].str.lower().str.replace(" ", "_")
     diagnosis_mapper = dict(zip(subject_id, primary_diagnosis))
@@ -296,10 +306,9 @@ def v2_to_v3_PMDBS(tables_path: str | Path, out_dir: str, CDEv2: pd.DataFrame, C
     CONDITIONv3['intervention_id'] = CONDITIONv3['condition_id'].apply(intervention_typer)
     CONDITIONv3['condition_id'] = CONDITIONv3['condition_id'].str.lower().str.replace(" ", "_")
 
+    CONDITIONv3 = CONDITIONv3.fillna(NULL)
+
     v3_tables["CONDITION"] = CONDITIONv3
-
-
-
 
     if out_dir is not None:
         # Prepare output directory
@@ -352,6 +361,7 @@ def filter_table_columns(merged_table: pd.DataFrame, CDE: pd.DataFrame, table_na
 
     for col in missing_cols:
         merged_table[col] = NULL
+    merged_table = merged_table.fillna(NULL)
 
     return merged_table[schema_cols].drop_duplicates(inplace=False).reset_index(drop=True)
 
