@@ -118,10 +118,12 @@ def v1_to_v2(tables_path: str | Path, out_dir: str|None, CDEv1: pd.DataFrame, CD
     # assert len(SAMPLEv1['preprocessing_references'].unique()) == 1
     STUDYv2 = v1_tables['STUDY'].copy()
     STUDYv2['preprocessing_references'] = v1_tables['SAMPLE']['preprocessing_references'][0]
+    # force replacement of team_dataset_id 
     if team_dataset_id is not None:
-        STUDYv2['team_dataset_id'] = team_dataset_id
+        STUDYv2['team_dataset_id'] = team_dataset_id.replace(" ", "_").replace("-", "_")
     else:
-        STUDYv2['team_dataset_id'] = STUDYv2['project_dataset'].str.replace(" ", "_").str.replace("-", "_")
+        if STUDYv2['team_dataset_id'].isnull().all() or STUDYv2['team_dataset_id']==NULL:
+            STUDYv2['team_dataset_id'] = STUDYv2['project_dataset'].str.replace(" ", "_").str.replace("-", "_")
 
     STUDYv2['metadata_version_date'] = METADATA_VERSION_DATE
     
@@ -387,6 +389,7 @@ def create_upload_medadata_package(metadata_path:Path, tables:dict):
     metadata_tables = eval(STUDY['metadata_tables'].iloc[0])
     metadata_version = STUDY['metadata_version_date'].iloc[0].split("_")[0]
     dataset_name = STUDY['team_dataset_id'].iloc[0]
+
     # create upload directory
     upload_path = metadata_path / "upload" / dataset_name
     upload_path.mkdir(exist_ok=True, parents=True)

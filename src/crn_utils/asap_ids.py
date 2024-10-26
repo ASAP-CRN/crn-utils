@@ -4,66 +4,12 @@ import json
 from pathlib import Path
 import argparse
 
+from crn_utils.util import read_CDE, read_meta_table
 
 DATASET_ID = "ASAP_PMBDS"
 STUDY_PREFIX = f"{DATASET_ID}_"
 
-
-
-ASAP_CDE = "ASAP_CDE_v2.csv"
-
-# copy these helper here from utils/io.py
-# Function to read a table with the specified data types
-def read_meta_table(table_path,dtypes_dict):
-    table_df = pd.read_csv(table_path,dtype=dtypes_dict, index_col=0)
-    return table_df
-
-# Function to get data types dictionary for a given table
-def get_dtypes_dict(cde_df):
-    # unnescessary.
-    # # Filter the CDE data frame to get the fields and data types for the specified table
-    # table_cde = cde_df[cde_df["Table"] == table_name]
-    
-    if cde_df is None:
-        return None
-    
-    # Initialize the data types dictionary
-    dtypes_dict = {}
-    
-    # Iterate over the rows to fill the dictionary
-    for _, row in cde_df.iterrows():
-        field_name = row["Field"]
-        data_type = row["DataType"]
-        
-        # Set the data type to string for "String" and "Enum" fields
-        if data_type in ["String", "Enum"]:
-            dtypes_dict[field_name] = str
-    
-    return dtypes_dict
-
-def read_CDE(cde_path: str|Path) -> tuple[pd.DataFrame, dict]:
-    """Load CDE from local csv and cache it, return a dataframe and dictionary of dtypes"""
-    # # Construct the path to CSD.csv
-    # # google id for ASAP_CDE sheet
-    # GOOGLE_SHEET_ID = "1xjxLftAyD0B8mPuOKUp5cKMKjkcsrp_zr9yuVULBLG8"
-    # sheet_name = "ASAP_CDE_v2"
-    # cde_url = f"https://docs.google.com/spreadsheets/d/{GOOGLE_SHEET_ID}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
-
-    try:
-        CDE_df = pd.read_csv(cde_path)
-    except Exception as e:
-        print("try local file")
-        try:
-            CDE_df = pd.read_csv("ASAP_CDE_v2.csv")
-        except FileNotFoundError:
-
-            # If the local file doesn't exist, return an error
-            print("Error: Both path and local file are not available.")
-            CDE_df = None
-
-    dtypes_dict = get_dtypes_dict(CDE_df)
-    return CDE_df, dtypes_dict
-
+#
 
 
 
@@ -352,6 +298,7 @@ def generate_asap_sample_ids(asapid_mapper:dict,
     return ud_sampleid_mapper
 
 
+# TODO:  change this to "update_meta_tables" and have it return the updated tables
 
 def process_meta_files(table_path, 
                         CDE_path, 

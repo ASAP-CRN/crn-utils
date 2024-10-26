@@ -122,7 +122,7 @@ def read_meta_table(table_path):
         table_df[col] = table_df[col].str.encode('latin1', errors='replace').str.decode('utf-8', errors='replace')
 
 
-    # drop the first column if it is just the index
+    # drop the first column if it is just the index incase it was saved with index = True
     if table_df.columns[0] == "Unnamed: 0":
         table_df = table_df.drop(columns=["Unnamed: 0"])
 

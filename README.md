@@ -9,15 +9,18 @@ Should unify the business logic for the following resources and tools:
 
 
 ## metadata versioning and validation
-
+`validate.py`
+`checksums.py`
+`update_schema.py`
 
 ## ASAP ID generation / management
-
+`asap_ids.py`
 
 ## release automation and archiving
+`resource_tools.py`
 
-
-
+## general utilities
+`util.py`
 
 ## DEPRICATED BELOW.
 

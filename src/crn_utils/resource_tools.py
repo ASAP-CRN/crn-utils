@@ -3,52 +3,25 @@ import json
 # import ijson
 from pathlib import Path
 import argparse
-from google.cloud import storage
 
 import requests
 
+from util import read_CDE, read_meta_table
+
 ##  HARD CODED VARIABLES
 
-DATASET_ID = "ASAP_PMBDS"
-STUDY_PREFIX = f"{DATASET_ID}_"
+COLLECTION_ID = "ASAP_PMBDS"
+STUDY_PREFIX = f"{COLLECTION_ID}_"
 
 
 
-ASAP_CDE = "ASAP_CDE_v2.csv"
 
-
-
-def download_blob(bucket_name, source_blob_name, destination_file_name):
+def dump_CDE(cde_path:Path, version:str="v3.0") -> pd.DataFrame:
     """
-    Downloads a blob from the bucket.
-    
-    Args:
-    bucket_name (str): The name of the bucket.
-    source_blob_name (str): The name of the blob in the bucket.
-    destination_file_name (str): The local file path to which the blob should be downloaded.
+    helper to dump the CDE from its ground-truth google sheet source
     """
-    # Initialize a client
-    storage_client = storage.Client()
+    cde_df = read_CDE(metadata_version=version)
 
-    # Get the bucket
-    bucket = storage_client.bucket(bucket_name)
-
-    # Get the blob
-    blob = bucket.blob(source_blob_name)
-
-    # Download the blob to a local file
-    blob.download_to_filename(destination_file_name)
-
-    print(f"Blob {source_blob_name} downloaded to {destination_file_name}.")
-
-
-def dump_CDE(cde_path:Path, version:str="v2.1") -> pd.DataFrame:
-    # Construct the path to CSD.csv
-    # google id for ASAP_CDE sheet
-    GOOGLE_SHEET_ID = "1xjxLftAyD0B8mPuOKUp5cKMKjkcsrp_zr9yuVULBLG8"
-    cde_url = f"https://docs.google.com/spreadsheets/d/{GOOGLE_SHEET_ID}/gviz/tq?tqx=out:csv&sheet={version}"
-
-    cde_df = pd.read_csv(cde_url)
     print("read url")
     cde_df.to_csv(cde_path, index=False)
     print(f"dumped CDE to {cde_path}")
@@ -56,7 +29,8 @@ def dump_CDE(cde_path:Path, version:str="v2.1") -> pd.DataFrame:
 
 
 def dump_file_manifest(fm_path:Path) -> None:
-    #    https://docs.google.com/document/d/1hNz8ujcSgpDcf6VpFCdhr1G_Pob7o805mNfQIBk8Uis/edit?usp=sharing
+    #    https://docs.google.com/document/d/1hNz8ujcSgpDcf6VpFCdhr1G_Pob7o805mNfQIBk8Uis/edit?usp=sharing 
+    # currently : ASAP CRN Cloud File Manifest - v2.0
     GOOGLE_SHEET_ID = "1hNz8ujcSgpDcf6VpFCdhr1G_Pob7o805mNfQIBk8Uis"
     file_manifest_url = f"https://docs.google.com/document/d/{GOOGLE_SHEET_ID}/export?format=pdf"
 
@@ -76,6 +50,7 @@ def dump_file_manifest(fm_path:Path) -> None:
 
 def dump_data_dictionary(dd_path:Path) -> None:
     # https://docs.google.com/document/d/1A65aDHwis5pt_at4tjf0rF292TLw9sSnSXan8MLc4Os/edit?usp=sharing
+    # currently ASAP CRN Data Dictionary - v2.1
     GOOGLE_SHEET_ID = "1A65aDHwis5pt_at4tjf0rF292TLw9sSnSXan8MLc4Os"
     dd_url = f"https://docs.google.com/document/d/{GOOGLE_SHEET_ID}/export?format=pdf"
     response = requests.get(dd_url)
@@ -100,38 +75,6 @@ def dump_readme(rm_path:Path) -> None:
     with open(rm_path, 'wb') as file:
         file.write(response.content)
     print(f"PDF downloaded and saved as {rm_path}")
-
-
-# copy these helper here from utils/io.py
-# Function to read a table with the specified data types
-def read_meta_table(table_path,dtypes_dict):
-    table_df = pd.read_csv(table_path,dtype=dtypes_dict, index_col=0)
-    return table_df
-
-# Function to get data types dictionary for a given table
-def get_dtypes_dict(cde_df):
-    # unnescessary.
-    # # Filter the CDE data frame to get the fields and data types for the specified table
-    # table_cde = cde_df[cde_df["Table"] == table_name]
-    
-    if cde_df is None:
-        return None
-    
-    # Initialize the data types dictionary
-    dtypes_dict = {}
-    
-    # Iterate over the rows to fill the dictionary
-    for _, row in cde_df.iterrows():
-        field_name = row["Field"]
-        data_type = row["DataType"]
-        
-        # Set the data type to string for "String" and "Enum" fields
-        if data_type in ["String", "Enum"]:
-            dtypes_dict[field_name] = str
-    
-    return dtypes_dict
-
-
 
 
 
@@ -177,6 +120,7 @@ def write_id_mapper(id_mapper, id_mapper_path):
     return 0
 
 
+## helpers for formatting ASAP_IDs
 def get_sampr(v):
     return int(v.split("_")[3].replace("s","")) 
 
@@ -421,6 +365,8 @@ def generate_asap_sample_ids(asapid_mapper:dict,
 
 
 
+# TODO:  change this to "update_meta_tables" and have it return the updated tables
+
 def process_meta_files(table_path, 
                         CDE_path, 
                         subject_mapper_path = "ASAP_subj_map.json",
@@ -431,6 +377,7 @@ def process_meta_files(table_path,
     """
     read in the meta data table, generate new ids, update the id_mapper, write the updated id_mapper to file
     """
+
 
     try:
         asapid_mapper = load_id_mapper(subject_mapper_path)
@@ -456,36 +403,43 @@ def process_meta_files(table_path,
         sourceid_mapper = {}
         print(f"{source_mapper_path} not found... starting from scratch")
 
-    
-    CDE, dtypes_dict = read_CDE(CDE_path)
+    # this is invalid
+    CDE = read_CDE(metadata_version="v3.0")
     if CDE is None:
         return 0
     
+
+    # loop over tables which have 
+    tables = CDE['Table'].unique()
     # add ASAP_team_id to the STUDY and PROTOCOL tables
-    study_path = table_path / "STUDY.csv"
-    if study_path.exists():
-        study_df = read_meta_table(study_path, dtypes_dict)
-        # print(f"before: {study_df['ASAP_team_name'].str.upper()} {[ord(s) for s in study_df['ASAP_team_name'][0].upper().replace('-', '_')]}")
-        team_id = study_df['ASAP_team_name'].str.upper().replace('-', '_')  #this isn't actually replacing ...
-        # print(f"after: {team_id},  {study_df['ASAP_team_name'].str.upper().replace('-', '_')}  ")
 
-        study_df['ASAP_team_id'] = team_id
-        # add ASAP_dataset_id = DATASET_ID to the STUDY tables
-        study_df['ASAP_dataset_id'] = DATASET_ID
-    else:
-        study_df = None
-        print(f"{study_path} not found... aborting")
-        return 0
+    for table in tables:
+        table_path = Path(table_path)
+        table_path = table_path / table
+        print(f"processing {table_path}")
+  
+        df = read_meta_table(table_path)
 
-    protocol_path = table_path / "PROTOCOL.csv"
-    if protocol_path.exists():
-        protocol_df = read_meta_table(protocol_path, dtypes_dict)
-        protocol_df['ASAP_dataset_id'] = DATASET_ID
-    else:
-        protocol_df = None
-        print(f"{protocol_path} not found... aborting")
-        return 0
-    
+        if table in ['STUDY', 'PROTOCOL']:
+
+            team_id = df['ASAP_team_name'].str.upper().replace('-', '_')  #this isn't actually replacing ...
+            # print(f"after: {team_id},  {study_df['ASAP_team_name'].str.upper().replace('-', '_')}  ")
+
+            if table == 'STUDY':
+                df['ASAP_team_id'] = team_id
+            # add ASAP_dataset_id = DATASET_ID to the STUDY tables
+            df['ASAP_dataset_id'] = DATASET_ID
+
+        elif (table in ['SUBJECT', 'SAMPLE', 'CLINPATH', 'DATA']): 
+            pass
+
+
+        else:
+            df = None
+            print(f"{table} not found... aborting")
+            return 0
+
+    ## WIP... currently broken
     # add ASAP_subject_id to the SUBJECT tables
     subject_path = table_path / "SUBJECT.csv"
     if subject_path.exists():
@@ -532,6 +486,9 @@ def process_meta_files(table_path,
     if data_path.exists():
         data_df = read_meta_table(data_path, dtypes_dict)
         data_df['ASAP_sample_id'] = data_df['sample_id'].map(sampleid_mapper)
+
+
+    # TODO  add to ASSAY_RNAseq.csv and PMDBS.csv
 
 
     # export updated tables
