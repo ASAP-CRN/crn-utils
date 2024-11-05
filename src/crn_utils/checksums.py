@@ -4,7 +4,7 @@
 
 import subprocess
 
-
+# # create functions to login to GCP and get hashes....
 def get_md5_hashes( bucket_name, prefix):
     """
     Fetches MD5 hashes of objects in a GCS bucket matching a given prefix.
@@ -46,44 +46,28 @@ def get_md5_hashes( bucket_name, prefix):
         print(f"gsutil command failed: {result.stderr}")
         return result
 
-
-def authenticate_with_service_account(key_file_path):
-    """
-    Authenticates with a Google Cloud service account using a key file.
-
-    Args:
-        key_file_path (str): The path to the service account key file.
-    """
-
-    cmd = f"gcloud auth activate-service-account --key-file={key_file_path}"
-    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-
-    return result 
-
-# create functions to login to GCP and get hashes....
-
-def download_blob(bucket_name, source_blob_name, destination_file_name):
-    """
-    Downloads a blob from the bucket.
+# def download_blob(bucket_name, source_blob_name, destination_file_name):
+#     """
+#     Downloads a blob from the bucket.
     
-    Args:
-    bucket_name (str): The name of the bucket.
-    source_blob_name (str): The name of the blob in the bucket.
-    destination_file_name (str): The local file path to which the blob should be downloaded.
-    """
-    # Initialize a client
-    storage_client = storage.Client()
+#     Args:
+#     bucket_name (str): The name of the bucket.
+#     source_blob_name (str): The name of the blob in the bucket.
+#     destination_file_name (str): The local file path to which the blob should be downloaded.
+#     """
+#     # Initialize a client
+#     storage_client = storage.Client()
 
-    # Get the bucket
-    bucket = storage_client.bucket(bucket_name)
+#     # Get the bucket
+#     bucket = storage_client.bucket(bucket_name)
 
-    # Get the blob
-    blob = bucket.blob(source_blob_name)
+#     # Get the blob
+#     blob = bucket.blob(source_blob_name)
 
-    # Download the blob to a local file
-    blob.download_to_filename(destination_file_name)
+#     # Download the blob to a local file
+#     blob.download_to_filename(destination_file_name)
 
-    print(f"Blob {source_blob_name} downloaded to {destination_file_name}.")
+#     print(f"Blob {source_blob_name} downloaded to {destination_file_name}.")
 
 
 
@@ -116,6 +100,28 @@ def extract_md5_from_details2(md5_file):
             if "Hash (md5)" in line:
                 md5s[current_file] = line.split(":")[1].strip()
     return md5s
+
+
+def extract_md5_from_details3(md5_file):
+    md5s = {}
+    with open(md5_file, "r") as f:
+        lines = f.readlines()
+        current_file = None
+        for line in lines:
+            if line.startswith("Hashes [hex]"):
+                current_file = line.strip().rstrip("Hashes [hex]: for")
+                # remove " for "
+                # current_file = current_file.lstrip(" for")
+                current_file = current_file.strip()
+            if "Hash (md5)" in line:
+                md5s[current_file] = line.split(":")[1].strip()
+            elif line.startswith("Hash (crc32c)"):
+                pass
+            else:
+                print(f"cruff: {line.strip()}")
+
+    return md5s
+
 
 # Function to parse the file to extract MD5 and filenames
 def extract_md5_from_details2_lines(lines):

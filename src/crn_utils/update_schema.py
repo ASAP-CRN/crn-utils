@@ -188,7 +188,7 @@ def intervention_typer(x):
                     "Motor neuron disease with parkinsonism", 
                     "Neuroleptic-induced parkinsonism",  "Psychogenic parkinsonism", "Vascular parkinsonism",
                     "PD", "idiopathic PD", "Parkinson's Disease","parkinsons", "parkinson's", 
-                    "Parkinson's", "Parkinsons", "idiopathic pd"
+                    "Parkinson's", "Parkinsons", "idiopathic pd", "hemiparkinson_hemiatrophy_syndrome"
                 ))
     other_types =  set(("Frontotemporal dementia","Corticobasal syndrome", 
                         "Multiple system atrophy","Normal pressure hydrocephalus", 
@@ -241,8 +241,8 @@ def v2_to_v3_PMDBS(tables_path: str | Path, out_dir: str, CDEv2: pd.DataFrame, C
     STUDYv3.rename(columns={"number_of_brain_samples": "number_samples", "brain_regions": "sample_types"}, inplace=True)
 
     STUDYv3['metadata_version_date'] = METADATA_VERSION_DATE
-
-
+    # fix ORCID which was misspelled prior to v3
+    STUDYv3['PI_ORCID'] = v2_tables['STUDY']['PI_ORCHID']
 
     v3_tables["STUDY"] = filter_table_columns(STUDYv3, CDEv3, "STUDY")
     
@@ -381,22 +381,6 @@ def move_table_columns(df_to: pd.DataFrame,df_from: pd.DataFrame, CDE: pd.DataFr
 
     return df_to
 
-
-def create_upload_medadata_package(metadata_path:Path, tables:dict):
-    # extract team_dataset_id and metadata_tables, and metadata_version from STUDY table
-    # team = STUDY['ASAP_team_name'][0].lstrip("TEAM-").lower()
-    STUDY = tables['STUDY']
-    metadata_tables = eval(STUDY['metadata_tables'].iloc[0])
-    metadata_version = STUDY['metadata_version_date'].iloc[0].split("_")[0]
-    dataset_name = STUDY['team_dataset_id'].iloc[0]
-
-    # create upload directory
-    upload_path = metadata_path / "upload" / dataset_name
-    upload_path.mkdir(exist_ok=True, parents=True)
-
-    for table in metadata_tables:
-        df = tables[table]
-        df.to_csv(upload_path/f"{table}.csv", index=False)
 
 
 def main():

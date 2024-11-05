@@ -98,7 +98,6 @@ ASSAY_RNAseq,sequencing_length,Sequencing Length.:   Nominal Number of base pair
 ASSAY_RNAseq,sequencing_instrument,Sequencing Instrument.:   The instrument used to perform sequencing.   Illumina NovaSeq 6000 recommended by protocols alignment group leads.,Enum,Required,"[""Illumina NovaSeq 6000"", ""llumina HiSeq 2500"", ""Illumina HiSeq 3000"", ""Illumina HiSeq 4000"", ""Illumina NextSeq 550"", ""Illumina HiSeq X Ten"", ""Illumina HiSeq X Five"", ""Illumina MiSeq"", ""on Torrent PGM"", ""Ion Torrent Proton"", ""Ion Torrent S5"", ""Ion Torrent S5 XL"", ""PacBio RS"", ""PacBio RS II"", ""Other""]",0,,,,
 ,,,,,,,,,,
 ,ASAP_sample_id,ASAP Sample ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,
-,ASAP_subject_id,ASAP Subject ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,
 ,ASAP_dataset_id,ASAP Dataset ID. Unique ID issued by ASAP CRN Cloud. ,String,Assigned,,1,,,,
 ,ASAP_team_id,ASAP Team ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,
 DATA,sample_id,"Sample ID.:   ID of each individual sample used in the study (e.g. cortex of anterior cingulate gyrus); if from the same brain several regions are included in the study, each region (i.e. each sample) has different ID and listed as a separate entry",String,Required,,1,,,,
@@ -184,7 +183,6 @@ CLINPATH,quant_path_avail,Quantitative Pathology Available:  Indicates if quanta
 ,,,,,,,,,,
 ,ASAP_dataset_id,ASAP Dataset ID. Unique ID issued by ASAP CRN Cloud. ,String,Assigned,,1,,,,
 ,ASAP_team_id,ASAP Team ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,
-,ASAP_sample_id,ASAP Sample ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,
 CONDITION,condition_id,"Sample experimental condition, from SAMPLE",String,Required,,1,,new for v3,,
 CONDITION,intervention_name,Description of the top experimental conditions,String,Required,,0,,,,MOUSE
 CONDITION,intervention_id,ID for specifying the experimental condition,String,Required,,0,,,,MOUSE
@@ -193,7 +191,6 @@ CONDITION,intervention_aux_table,Table which defines all experimental conditions
 ,,,,,,,,,,
 ,ASAP_dataset_id,ASAP Dataset ID. Unique ID issued by ASAP CRN Cloud. ,String,Assigned,,1,,,,
 ,ASAP_team_id,ASAP Team ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,
-,ASAP_subject_id,ASAP Subject ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,
-MOUSE,subject_id,The Subject ID.  This will be a unique ID for the subject.  Please submit the subject ID used internally.  In the harmonized dataset this may be modified by the ASAP team to prevent naming collisions.  ,String,Required,,1,,,,MOUSE
+MOUSE,subject_id,The Sample ID.  This will be a unique ID for the subject.  Please submit the subject ID used internally.  In the harmonized dataset this may be modified by the ASAP team to prevent naming collisions.  ,String,Required,,1,,,,MOUSE
 MOUSE,strain,Strain:   Mouse strain details,String,Required,,0,,,,MOUSE
 MOUSE,aux_table,"Table which defines additional mouse ""subject"" information",String,Optional,,0,,,,MOUSE

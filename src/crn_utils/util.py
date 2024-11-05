@@ -2,6 +2,7 @@
 import pandas as pd
 from pathlib import Path
 import datetime
+import shutil
 
 NULL = "NA"
 
@@ -55,6 +56,39 @@ def read_CDE(metadata_version:str="v3.0", local_path:str|bool|Path=False):
     # force extraneous columns to be dropped.
 
     return CDE_df
+
+
+def read_CDE_asap_ids( local_path:str|bool|Path=False):
+    """
+    Load CDE from local csv and cache it, return a dataframe and dictionary of dtypes
+    """
+    # Construct the path to CSD.csv
+    GOOGLE_SHEET_ID = "1c0z5KvRELdT2AtQAH2Dus8kwAyyLrR0CROhKOjpU4Vc"
+
+    sheet_name = "ASAP_assigned_keys"
+
+    cde_url = f"https://docs.google.com/spreadsheets/d/{GOOGLE_SHEET_ID}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
+    print(cde_url)
+    if local_path:
+        # ASAP_assigned_keys only in v3.0
+        cde_url = Path(local_path) / f"ASAP_CDE_v3.0_{sheet_name}.csv"
+        print(cde_url)
+   
+    try:
+        df = pd.read_csv(cde_url)
+        read_source = "url" if not local_path else "local file"
+        print(f"read {read_source}")
+    except:
+        df = pd.read_csv(f"ASAP_CDE_v3.0_{sheet_name}.csv")
+        print("read local file")
+
+    # drop rows with no table name (i.e. ASAP_ids)
+    df = df[["Table", "Field", "Description", "DataType", "Required", "Validation"]]
+    df = df.dropna(subset=['Table'])
+    df = df.reset_index(drop=True)
+
+    return df
+
 
 def compare_CDEs(df1, df2):
     """
@@ -152,3 +186,41 @@ def prep_table(df_in:pd.DataFrame, CDE:pd.DataFrame) -> pd.DataFrame:
         if col in df.columns and col not in ["sample_id", "source_subject_id", "subject_id", "source_sample_id","assay", "file_type", "file_name", "file_MD5", 'replicate', 'batch']:
             df[col] = df[col].apply(capitalize_first_letter) 
     return df
+
+
+
+
+def create_metadata_package(metadata_source:Path, package_destination:Path):
+    """
+    Move the metadata folders in the metadata_source to the package_destination
+
+    Do it folder by folder to avoid copying empty folders
+    use Path tools to copy since these are local files.  We will upload with gsutil later
+
+    return list of folders copied
+    """
+
+    package_destination.mkdir(exist_ok=True)
+    # make metadata subdir
+    package_destination = package_destination / "metadata"
+    package_destination.mkdir(exist_ok=True)
+
+    copied = []
+    for folder in metadata_source.iterdir():
+        # check that the folder is not empty
+        if folder.is_dir():
+            # check that the folder is not empty
+            if not list(folder.iterdir()):
+                print(f"Skipping empty folder {folder}")
+                continue
+            else:
+                dest = package_destination / folder.name
+                # dest.mkdir(exist_ok=True)
+                shutil.copytree(folder, dest, dirs_exist_ok=True)
+
+                print(f"Copied {folder} to {dest}")
+                copied.append(folder)
+    return copied
+    
+    
+
