@@ -4,69 +4,37 @@ import json
 from pathlib import Path
 import argparse
 
+from crn_utils.util import read_CDE, read_meta_table, read_CDE_asap_ids, load_tables, export_meta_tables
+import shutil
 
-DATASET_ID = "ASAP_PMBDS"
-STUDY_PREFIX = f"{DATASET_ID}_"
+__all__ = ['load_id_mapper', 
+            'write_id_mapper', 
+            'get_sampr', 
+            'get_id', 
+            'generate_asap_team_id', 
+            'generate_asap_dataset_id', 
+            'generate_human_subject_ids', 
+            'generate_human_sample_ids', 
+            'load_pmdbs_id_mappers', 
+            'export_pmdbs_id_mappers', 
+            'update_pmdbs_id_mappers',
+            'update_pmdbs_meta_tables',
+            'load_tables',
+            'export_meta_tables', 
+            'process_meta_files',
+            'load_mouse_id_mappers',
+            'export_mouse_id_mappers',
+            'update_mouse_id_mappers',
+            'update_mouse_meta_tables',
+            'load_mouse_id_mappers',
+            'export_mouse_id_mappers']
 
 
-
-ASAP_CDE = "ASAP_CDE_v2.csv"
-
-# copy these helper here from utils/io.py
-# Function to read a table with the specified data types
-def read_meta_table(table_path,dtypes_dict):
-    table_df = pd.read_csv(table_path,dtype=dtypes_dict, index_col=0)
-    return table_df
-
-# Function to get data types dictionary for a given table
-def get_dtypes_dict(cde_df):
-    # unnescessary.
-    # # Filter the CDE data frame to get the fields and data types for the specified table
-    # table_cde = cde_df[cde_df["Table"] == table_name]
     
-    if cde_df is None:
-        return None
-    
-    # Initialize the data types dictionary
-    dtypes_dict = {}
-    
-    # Iterate over the rows to fill the dictionary
-    for _, row in cde_df.iterrows():
-        field_name = row["Field"]
-        data_type = row["DataType"]
-        
-        # Set the data type to string for "String" and "Enum" fields
-        if data_type in ["String", "Enum"]:
-            dtypes_dict[field_name] = str
-    
-    return dtypes_dict
 
-def read_CDE(cde_path: str|Path) -> tuple[pd.DataFrame, dict]:
-    """Load CDE from local csv and cache it, return a dataframe and dictionary of dtypes"""
-    # # Construct the path to CSD.csv
-    # # google id for ASAP_CDE sheet
-    # GOOGLE_SHEET_ID = "1xjxLftAyD0B8mPuOKUp5cKMKjkcsrp_zr9yuVULBLG8"
-    # sheet_name = "ASAP_CDE_v2"
-    # cde_url = f"https://docs.google.com/spreadsheets/d/{GOOGLE_SHEET_ID}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
-
-    try:
-        CDE_df = pd.read_csv(cde_path)
-    except Exception as e:
-        print("try local file")
-        try:
-            CDE_df = pd.read_csv("ASAP_CDE_v2.csv")
-        except FileNotFoundError:
-
-            # If the local file doesn't exist, return an error
-            print("Error: Both path and local file are not available.")
-            CDE_df = None
-
-    dtypes_dict = get_dtypes_dict(CDE_df)
-    return CDE_df, dtypes_dict
-
-
-
-
+#####################
+# general id utils
+#####################
 def load_id_mapper(id_mapper_path:Path) -> dict:
     """ load the id mapper from the json file"""
     id_mapper_path = Path(id_mapper_path)
@@ -96,12 +64,19 @@ def load_id_mapper(id_mapper_path:Path) -> dict:
             
 #     return id_mapper
 
-def write_id_mapper(id_mapper, id_mapper_path):
+
+
+# TODO: test this function save the old one before overwriting
+def write_id_mapper(id_mapper:dict, id_mapper_path:Path):
     """ write the id mapper to the json file"""
-    # if Path.exists(id_mapper_path):
-    #     mode = 'a'
-    # else:
-    #     mode = 'w'
+    if id_mapper_path.exists():
+        # copy the old file to a backup using datetime to make it unique
+        # Get the current date and time
+
+        backup_path = Path(f"{id_mapper_path.parent}/backup/{pd.Timestamp.now().strftime('%Y%m%d')}_{id_mapper_path.name}")
+        shutil.copy(id_mapper_path, backup_path)
+        print(f"backed up old id_mapper to {backup_path}")
+
     mode = 'w'
     with open(id_mapper_path, mode) as f:
         json.dump(id_mapper, f, indent=4)
@@ -116,10 +91,44 @@ def get_id(v):
     return v[:17] 
 
 
-def generate_asap_subject_ids(asapid_mapper:dict,
+
+def generate_asap_team_id(team:str) -> str:
+    """input: team name and output: team_id"""
+    return f"TEAM_{team.upper()}"
+
+def generate_asap_dataset_id(dataset_id_mapper:dict, long_dataset_name:str) -> tuple[str,dict]:
+    """
+    generate new dataset_ids from the long_dataset_name.  Format will be "DS_xxxx"
+
+    long_dataset_name: <team_name>_<source>_<dataset_name> i.e. the folder name in 'asap-crn-metadata'
+    (do we actually need to use underscores?)
+    """
+    source = long_dataset_name.split("-")[1]
+
+    if long_dataset_name in dataset_id_mapper.keys():
+        print(f"{long_dataset_name} already has a dataset_id: {dataset_id_mapper[long_dataset_name]}")
+        print(f"beware of potential long_dataset_name collision")
+        
+        return dataset_id_mapper[long_dataset_name], dataset_id_mapper
+    else:
+        n = len(dataset_id_mapper) + 1
+        dataset_id = f"DS_{source.upper()}_{n:04}"
+        dataset_id_mapper[long_dataset_name] = dataset_id
+        return dataset_id,dataset_id_mapper
+
+
+
+#####################
+# source typed id utils
+#####################
+
+
+
+def generate_human_subject_ids(subjectid_mapper:dict,
                              gp2id_mapper:dict,
                              sourceid_mapper:dict, 
-                             subject_df:pd.DataFrame) -> tuple[dict,dict,dict,pd.DataFrame,int]:
+                             subject_df:pd.DataFrame,
+                             source:str = "pmdbs") -> tuple[dict,dict,dict]:
     """
     generate new unique_ids for new subject_ids in subject_df table, 
     update the id_mapper with the new ids from the data table
@@ -127,9 +136,12 @@ def generate_asap_subject_ids(asapid_mapper:dict,
     return t
     """
 
+    # force NA to be Nan
+    subject_df = subject_df.replace("NA", pd.NA)
+
     # extract the max value of the mapper's third (last) section ([2] or [-1]) to get our n
-    if bool(asapid_mapper):
-        n = max([int(v.split("_")[2]) for v in asapid_mapper.values() if v]) + 1
+    if bool(subjectid_mapper):
+        n = max([int(v.split("_")[2]) for v in subjectid_mapper.values() if v]) + 1
     else:
         n = 1
     nstart = n
@@ -200,10 +212,10 @@ def generate_asap_subject_ids(asapid_mapper:dict,
         # check if subj_id is known
         add_subj_id = False
         # check if subj_id (subject_id) is known
-        if subj_id in set(asapid_mapper.keys()): # duplicate!!
+        if subj_id in set(subjectid_mapper.keys()): # duplicate!!
             # TODO: log this
             # TODO: check for `subject_id` naming collisions with other teams
-            asap_subj_id = asapid_mapper[subj_id]
+            asap_subj_id = subjectid_mapper[subj_id]
         else:
             add_subj_id = True
             asap_subj_id = None
@@ -223,7 +235,7 @@ def generate_asap_subject_ids(asapid_mapper:dict,
 
         if len(testset) == 0:  # generate a new asap_subj_id
             # print(samp_n)
-            asap_subject_id = f"{STUDY_PREFIX}{samp_n:06}"
+            asap_subject_id = f"{source.upper()}_{samp_n:06}"
             # df_dups_subset.insert(0, 'ASAP_subject_id', asap_subject_id, inplace=True)
         else: # testset should have the asap_subj_id
             asap_subject_id = testset.pop() # but where did it come from?
@@ -232,7 +244,7 @@ def generate_asap_subject_ids(asapid_mapper:dict,
         src = []
         if add_subj_id:
             # TODO:  instead of just adding we should check if it exists...
-            asapid_mapper[subj_id] = asap_subject_id
+            subjectid_mapper[subj_id] = asap_subject_id
             n_asap_id_add += 1
             src.append('asap')
 
@@ -261,11 +273,11 @@ def generate_asap_subject_ids(asapid_mapper:dict,
 
     # print(id_source)
 
-    return asapid_mapper, gp2id_mapper, sourceid_mapper
+    return subjectid_mapper, gp2id_mapper, sourceid_mapper
 
-def generate_asap_sample_ids(asapid_mapper:dict, 
-                             sample_df:pd.DataFrame, 
-                             sampleid_mapper:dict) -> tuple[dict, pd.DataFrame]:
+def generate_human_sample_ids(subjectid_mapper:dict, 
+                             sampleid_mapper:dict, 
+                             sample_df:pd.DataFrame) -> dict:
     """
     generate new unique_ids for new sample_ids in sample_df table, 
     update the id_mapper with the new ids from the data table
@@ -296,12 +308,12 @@ def generate_asap_sample_ids(asapid_mapper:dict,
     for subj_id in uniq_subj:
 
         df_subset = to_map[to_map.subject_id==subj_id].copy()
-        asap_id = asapid_mapper[subj_id]
+        asap_id = subjectid_mapper[subj_id]
 
         dups = df_subset[df_subset.duplicated(keep=False, subset=['sample_id'])].sort_values('sample_id').reset_index(drop = True).copy()
         nodups = df_subset[~df_subset.duplicated(keep=False, subset=['sample_id'])].sort_values('sample_id').reset_index(drop = True).copy()
    
-        asap_id = asapid_mapper[subj_id]
+        asap_id = subjectid_mapper[subj_id]
         if bool(ud_sampleid_mapper):
             # see if there are any samples already with this asap_id
             sns = [get_sampr(v) for v in ud_sampleid_mapper.values() if get_id(v)==asap_id]
@@ -340,162 +352,252 @@ def generate_asap_sample_ids(asapid_mapper:dict,
                     rep_n += 1
             df_chunks.append(dups)
 
-
     df_wids = pd.concat(df_chunks)
     id_mapper = dict(zip(df_wids['sample_id'],
                         df_wids['ASAP_sample_id']))
 
     ud_sampleid_mapper.update(id_mapper)
-
-
     # print(ud_sampleid_mapper)
     return ud_sampleid_mapper
 
+###############################################
+### PMDBS specific functions
+###############################################
+def load_pmdbs_id_mappers(map_path, suffix):
+    source = "PMDBS"
+
+    prototypes = ['dataset', 'subj', 'samp', 'gp2', 'sourcesubj']
+
+    outputs = ()
+    for prot in prototypes:
+        if prot == 'dataset':
+            fname = f"ASAP_{prot}_{suffix}.json"
+        else:
+            fname = f"ASAP_{source}_{prot}_{suffix}.json"
+        
+        try:
+            id_mapper = load_id_mapper(map_path / fname)
+        except FileNotFoundError:
+            id_mapper = {}
+            print(f"{map_path / fname} not found... starting from scratch")
+        outputs += (id_mapper,)
+
+    return outputs
 
 
-def process_meta_files(table_path, 
-                        CDE_path, 
-                        subject_mapper_path = "ASAP_subj_map.json",
-                        sample_mapper_path = "ASAP_samp_map.json",
-                        gp2_mapper_path = "ASAP_gp2_map.json",
-                        source_mapper_path = "ASAP_source_map.json",
-                        export_path = None):
+def export_pmdbs_id_mappers(map_path, suffix, datasetid_mapper, subjectid_mapper, sampleid_mapper, gp2id_mapper, sourceid_mapper):
+    source = "PMDBS"
+
+    subject_mapper_path = map_path / f"ASAP_{source}_subj_{suffix}.json"
+    sample_mapper_path = map_path / f"ASAP_{source}_samp_{suffix}.json"
+    gp2_mapper_path = map_path / f"ASAP_{source}_gp2_{suffix}.json"
+    source_mapper_path = map_path / f"ASAP_{source}_sourcesubj_{suffix}.json"
+    dataset_mapper_path = map_path / f"ASAP_dataset_{suffix}.json"
+    # update the dataset_id_mapper
+    write_id_mapper(datasetid_mapper, dataset_mapper_path)
+    write_id_mapper(subjectid_mapper, subject_mapper_path)
+    write_id_mapper(sampleid_mapper, sample_mapper_path)
+    write_id_mapper(gp2id_mapper, gp2_mapper_path)
+    write_id_mapper(sourceid_mapper, source_mapper_path)
+    # print(f"wrote updated PMDBS ID mappers")
+
+
+# isolate generation of the IDs and adding to mappers from updating the tables.
+def update_pmdbs_id_mappers(clinpath_df, 
+                        sample_df,
+                        long_dataset_name,
+                        datasetid_mapper,
+                        subjectid_mapper,
+                        sampleid_mapper,
+                        gp2id_mapper,
+                        sourceid_mapper):
     """
-    read in the meta data table, generate new ids, update the id_mapper, write the updated id_mapper to file
+    read in the CLINPATH and SAMPLE data tables, generate new ids, update the id_mappers
+
+    return updated id_mappers
     """
-
-    try:
-        asapid_mapper = load_id_mapper(subject_mapper_path)
-    except FileNotFoundError:
-        asapid_mapper = {}
-        print(f"{subject_mapper_path} not found... starting from scratch")
-
-    try:
-        sampleid_mapper = load_id_mapper(sample_mapper_path)
-    except FileNotFoundError:
-        sampleid_mapper = {}
-        print(f"{sample_mapper_path} not found... starting from scratch")
-
-    try:
-        gp2id_mapper = load_id_mapper(gp2_mapper_path)
-    except FileNotFoundError:
-        gp2id_mapper = {}
-        print(f"{gp2_mapper_path} not found... starting from scratch")
-
-    try:
-        sourceid_mapper = load_id_mapper(source_mapper_path)
-    except FileNotFoundError:
-        sourceid_mapper = {}
-        print(f"{source_mapper_path} not found... starting from scratch")
-
+        
+    _, datasetid_mapper = generate_asap_dataset_id(datasetid_mapper, long_dataset_name)
     
-    CDE, dtypes_dict = read_CDE(CDE_path)
-    if CDE is None:
-        return 0
-    
-    # add ASAP_team_id to the STUDY and PROTOCOL tables
-    study_path = table_path / "STUDY.csv"
-    if study_path.exists():
-        study_df = read_meta_table(study_path, dtypes_dict)
-        # print(f"before: {study_df['ASAP_team_name'].str.upper()} {[ord(s) for s in study_df['ASAP_team_name'][0].upper().replace('-', '_')]}")
-        team_id = study_df['ASAP_team_name'].str.upper().replace('-', '_')  #this isn't actually replacing ...
-        # print(f"after: {team_id},  {study_df['ASAP_team_name'].str.upper().replace('-', '_')}  ")
+    subjec_ids_df = clinpath_df[["subject_id","source_subject_id","GP2_id"]]
 
-        study_df['ASAP_team_id'] = team_id
-        # add ASAP_dataset_id = DATASET_ID to the STUDY tables
-        study_df['ASAP_dataset_id'] = DATASET_ID
-    else:
-        study_df = None
-        print(f"{study_path} not found... aborting")
-        return 0
-
-    protocol_path = table_path / "PROTOCOL.csv"
-    if protocol_path.exists():
-        protocol_df = read_meta_table(protocol_path, dtypes_dict)
-        protocol_df['ASAP_dataset_id'] = DATASET_ID
-    else:
-        protocol_df = None
-        print(f"{protocol_path} not found... aborting")
-        return 0
-    
     # add ASAP_subject_id to the SUBJECT tables
-    subject_path = table_path / "SUBJECT.csv"
-    if subject_path.exists():
-        subject_df = read_meta_table(subject_path, dtypes_dict)
-        output = generate_asap_subject_ids(asapid_mapper,
+    output = generate_human_subject_ids(subjectid_mapper,
                                             gp2id_mapper,
                                             sourceid_mapper, 
-                                            subject_df)
-        asapid_mapper, gp2id_mapper,sourceid_mapper = output
-
-        ASAP_subject_id = subject_df['subject_id'].map(asapid_mapper)
-        subject_df.insert(0, 'ASAP_subject_id', ASAP_subject_id)
-
-        # # add ASAP_dataset_id = DATASET_ID to the SUBJECT tables
-        # subject_df['ASAP_dataset_id'] = DATASET_ID
-    else:
-        subject_df = None
-        print(f"{subject_path} not found... aborting")
-        return 0
+                                            subjec_ids_df)
+    subjectid_mapper, gp2id_mapper,sourceid_mapper = output
     
-    # add ASAP_sample_id and ASAP_dataset_id to the SAMPLE tables
-    sample_path = table_path / "SAMPLE.csv"
-    if sample_path.exists():
-        sample_df = read_meta_table(sample_path, dtypes_dict)
-        sampleid_mapper = generate_asap_sample_ids(asapid_mapper, sample_df, sampleid_mapper)
-        sample_df['ASAP_dataset_id'] = DATASET_ID
+    sample_ids_df = sample_df[["sample_id","subject_id","source_sample_id"]]
+    sampleid_mapper = generate_human_sample_ids(subjectid_mapper, sampleid_mapper, sample_ids_df)
 
-        ASAP_sample_id = sample_df['sample_id'].map(sampleid_mapper)
-        sample_df.insert(0, 'ASAP_sample_id', ASAP_sample_id)
-
-    else:
-        sample_df = None
-        print(f"{sample_path} not found... aborting")
-        return 0
-
-    # add ASAP_sample_id to the CLINPATH tables
-    clinpath_path = table_path / "CLINPATH.csv"
-    if clinpath_path.exists():
-        clinpath_df = read_meta_table(clinpath_path, dtypes_dict)
-        clinpath_df['ASAP_subject_id'] = clinpath_df['subject_id'].map(asapid_mapper)
-
-    # add ASAP_sample_id to the DATA tables
-    data_path = table_path / "DATA.csv"
-    if data_path.exists():
-        data_df = read_meta_table(data_path, dtypes_dict)
-        data_df['ASAP_sample_id'] = data_df['sample_id'].map(sampleid_mapper)
+    return datasetid_mapper, subjectid_mapper, sampleid_mapper, gp2id_mapper, sourceid_mapper
 
 
-    # export updated tables
-    if export_path is not None:
+# 
+def update_pmdbs_meta_tables(dfs, 
+                        long_dataset_name,
+                        asap_ids_schema,
+                        datasetid_mapper,
+                        subjectid_mapper,
+                        sampleid_mapper,
+                        gp2id_mapper,
+                        sourceid_mapper):
+    """
+    process the metadata tables to add ASAP_IDs to the tables with the mappers
 
-        #HACK: do we want to specify the full export path, or separate by team ID?
-        asap_tables_path = export_path / study_df.ASAP_team_id[0]
-        print(f"exporting to {asap_tables_path}")
-        if  not asap_tables_path.exists():
-            asap_tables_path.mkdir()
+    PMDBS tables:
+        ['PMDBS', 'CONDITION', 'CLINPATH', 'SUBJECT', 'ASSAY_RNAseq', 'SAMPLE', 'DATA', 'STUDY', 'PROTOCOL']
+    """
+    
+    pmdbs_tables = ['STUDY', 'PROTOCOL','SUBJECT', 'ASSAY_RNAseq', 'SAMPLE', 'PMDBS', 'CONDITION', 'CLINPATH', 'DATA']
+    ASAP_sample_id_tables = asap_ids_schema[asap_ids_schema['Field'] == 'ASAP_sample_id']['Table'].to_list()
+    ASAP_subject_id_tables = asap_ids_schema[asap_ids_schema['Field'] == 'ASAP_subject_id']['Table'].to_list()
+       
 
-        if study_path.exists():
-            study_df.to_csv(asap_tables_path / study_path.name)
-        if protocol_path.exists():
-            protocol_df.to_csv(asap_tables_path / protocol_path.name)
-        if subject_path.exists():
-            subject_df.to_csv(asap_tables_path / subject_path.name)
-        if sample_path.exists():
-            sample_df.to_csv(asap_tables_path / sample_path.name)
-        if clinpath_path.exists():
-            clinpath_df.to_csv(asap_tables_path / clinpath_path.name)
-        if data_path.exists():
-            data_df.to_csv(asap_tables_path / data_path.name)
-    else:
-        print("no ASAP_tables with ASAP_ID's exported")
+    DATASET_ID = datasetid_mapper[long_dataset_name] 
 
-    # write the updated id_mapper to file
-    print(f"overwriting updated id_mapper to {subject_mapper_path},{sample_mapper_path}, etc.")
-    write_id_mapper(asapid_mapper, subject_mapper_path)
-    write_id_mapper(sourceid_mapper, source_mapper_path)
-    write_id_mapper(gp2id_mapper, gp2_mapper_path)
+    if 'STUDY' in dfs.keys(): # un-necessary check
+        TEAM_ID = dfs['STUDY']['ASAP_team_name'].str.upper().str.replace('-', '_')[0]
+    else:  # this should NEVER happen
+        print(f"STUDY table not found in dataset {long_dataset_name}")
+        TEAM_ID = "TEAM_"+long_dataset_name.split('-')[0].upper()
+    
+    # now we add the IDs
+    for tab in pmdbs_tables:
+        if tab not in dfs:
+            print(f"Table {tab} not found in dataset {long_dataset_name}")
+            continue
+
+        # insert the DATASET_ID at the beginning of the dataframe
+        dfs[tab].insert(0, 'ASAP_dataset_id', DATASET_ID)
+        # insert the TEAM_ID at the beginning of the dataframe
+        dfs[tab].insert(0, 'ASAP_team_id', TEAM_ID)
+    
+        if tab in ASAP_subject_id_tables:
+            # first do the ASAP_subject_id
+            ASAP_subject_id = dfs[tab]["subject_id"].map(subjectid_mapper)
+            dfs[tab].insert(0, 'ASAP_subject_id', ASAP_subject_id)
+
+        if tab in ASAP_sample_id_tables:
+            # second do the ASAP_sample_id
+            ASAP_sample_id = dfs[tab]["sample_id"].map(sampleid_mapper)
+            dfs[tab].insert(0, 'ASAP_sample_id', ASAP_sample_id)
+
+    return dfs
+
+###############################################
+### MOUSE specific functions
+###############################################
+def load_mouse_id_mappers(map_path, suffix):
+    source = "PMDBS"
+    pass
+
+def update_mouse_meta_tables():
+    pass
+
+def update_mouse_id_mappers(clinpath_df, sample_df,
+                        long_dataset_name,
+                        datasetid_mapper,
+                        sampleid_mapper,):
+    pass
+
+def generate_mouse_sample_ids(subjectid_mapper:dict, 
+                             sampleid_mapper:dict, 
+                             sample_df:pd.DataFrame) -> dict:
+    pass
+
+def load_mouse_id_mappers(map_path, suffix):
+    source = "MOUSE"
+    prototypes = ['dataset', 'samp']
+
+    outputs = ()
+    for prot in prototypes:
+        if prot == 'dataset':
+            fname = f"ASAP_{prot}_{suffix}.json"
+        else:
+            fname = f"ASAP_{source}_{prot}_{suffix}.json"
+        
+        try:
+            id_mapper = load_id_mapper(map_path / fname)
+        except FileNotFoundError:
+            id_mapper = {}
+            print(f"{map_path / fname} not found... starting from scratch")
+            outputs += (id_mapper,)
+
+    return outputs
+
+def export_mouse_id_mappers(map_path, suffix, datasetid_mapper, subjectid_mapper, sampleid_mapper, gp2id_mapper, sourceid_mapper):
+    source = "MOUSE"
+    sample_mapper_path = map_path / f"ASAP_{source}_samp_{suffix}.json"
+    dataset_mapper_path = map_path / f"ASAP_dataset_{suffix}.json"
+    # update the dataset_id_mapper
+    write_id_mapper(datasetid_mapper, dataset_mapper_path)
     write_id_mapper(sampleid_mapper, sample_mapper_path)
+
+
+# isolate generation of the IDs and adding to mappers from updating the tables.
+def update_mouse_id_mappers( sample_df,
+                        long_dataset_name,
+                        datasetid_mapper,
+                        sampleid_mapper):
+    pass
+
+
+
+###############################################
+### multi-source wrapper functions
+###############################################
+def process_meta_files(long_dataset_name,
+                        table_path, 
+                        asap_ids_schema,
+                        map_path, suffix,
+                        export_path = None):
+
+    print("unimplimented>...  returning 0")
+
+    # infer source from dataset name
+    source = long_dataset_name.split("-")[1]
+
+    if source.upper() == "PMDBS":
+        # define tables to process
+        pmdbs_tables = ['STUDY', 'PROTOCOL','SUBJECT', 'ASSAY_RNAseq', 'SAMPLE', 'PMDBS', 'CONDITION', 'CLINPATH', 'DATA']
+
+        # load the tables 
+        dfs = load_tables(table_path, pmdbs_tables)
+
+        # load the id mappers
+        table1 = "CLINPATH"
+        table2 = "SAMPLE"
+        load_id_mappers = load_pmdbs_id_mappers
+        datasetid_mapper, subjectid_mapper, sampleid_mapper, gp2id_mapper, sourceid_mapper = load_id_mappers(map_path, suffix)
+
+        # update the id mappers 
+        update_id_mappers = update_pmdbs_id_mappers
+        datasetid_mapper, subjectid_mapper, sampleid_mapper, gp2id_mapper, sourceid_mapper = update_id_mappers(dfs[table1], dfs[table2], long_dataset_name, datasetid_mapper, subjectid_mapper, sampleid_mapper, gp2id_mapper, sourceid_mapper)
+        # update the tables
+        update_meta_dables = update_pmdbs_meta_tables
+        dfs = update_meta_dables(dfs, long_dataset_name, asap_ids_schema, datasetid_mapper, subjectid_mapper, sampleid_mapper, gp2id_mapper, sourceid_mapper)
+
+        # export the tables
+        if export_path is not None:
+            export_meta_tables(dfs, export_path)
+
+
+        # export the id mappers
+        export_id_mappers = export_pmdbs_id_mappers
+        export_id_mappers(map_path, suffix, datasetid_mapper, subjectid_mapper, sampleid_mapper, gp2id_mapper, sourceid_mapper)
+        
+
+    elif source.upper() == "MOUSE":
+        pass
+
+    elif source.upper() == "IPSC":
+        pass
+    else:
+        print(f"source: {source} not recognized assuing human/pmdbs")
+        pass
+
 
     return 1
 
@@ -507,10 +609,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="A command-line tool to update tables from ASAP_CDEv1 to ASAP_CDEv2.")
     
     # Add arguments
+    parser.add_argument("--dataset", default=".",
+                        help="long_dataset_name: <team_name>_<source>_<dataset_name> i.e. the folder name in 'asap-crn-metadata'. Defaults to the current working directory.")
     parser.add_argument("--tables", default=Path.cwd(),
                         help="Path to the directory containing meta TABLES. Defaults to the current working directory.")
-    parser.add_argument("--cde", default=Path.cwd(),
-                        help="Path to the directory containing CSD.csv. Defaults to the current working directory.")
+    parser.add_argument("--schema", default=Path.cwd(),
+                        help="Path to the directory containing ASAP_ID schema.csv. Defaults to the current working directory.")
     parser.add_argument("--map", default=Path.cwd(),
                         help="Path to the directory containing path to mapper.json files. Defaults to the current working directory.")
     parser.add_argument("--suf", default="test",
@@ -521,23 +625,13 @@ if __name__ == "__main__":
     # Parse the arguments
     args = parser.parse_args()
 
-    CDE_path = Path(args.cde) / ASAP_CDE
-   
-    subject_mapper_path = Path(args.map) / f"ASAP_subj_{args.suf}.json"
-    sample_mapper_path = Path(args.map) / f"ASAP_samp_{args.suf}.json"
-    gp2_mapper_path = Path(args.map) / f"ASAP_gp2_{args.suf}.json"
-    source_mapper_path = Path(args.map) / f"ASAP_source_{args.suf}.json"
-
+    asap_ids_schema = read_CDE_asap_ids(local_path=args.cde)
     table_root = Path(args.tables) 
     export_root= Path(args.outdir)
-    print(f"exporting to:  {export_root}")
-    
-    process_meta_files(table_root, 
-                        CDE_path, 
-                        subject_mapper_path=subject_mapper_path, 
-                        sample_mapper_path=sample_mapper_path, 
-                        gp2_mapper_path=gp2_mapper_path,
-                        source_mapper_path = source_mapper_path,
+
+    process_meta_files( args.dataset,
+                        table_root, 
+                        asap_ids_schema,
+                        args.map, 
+                        args.suf,
                         export_path = export_root)
-    
-    

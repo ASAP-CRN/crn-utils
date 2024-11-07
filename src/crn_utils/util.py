@@ -2,8 +2,16 @@
 import pandas as pd
 from pathlib import Path
 import datetime
+import shutil
 
 NULL = "NA"
+
+__all__ = ["read_CDE", "read_CDE_asap_ids", 
+            "compare_CDEs", "export_tables_versioned", 
+            "export_table", 
+            "read_meta_table", "capitalize_first_letter", "prep_table", 
+            "load_tables", "export_meta_tables", "create_metadata_package"]
+            
 
 def read_CDE(metadata_version:str="v3.0", local_path:str|bool|Path=False):
     """
@@ -48,13 +56,46 @@ def read_CDE(metadata_version:str="v3.0", local_path:str|bool|Path=False):
         print("read local file")
 
     # drop rows with no table name (i.e. ASAP_ids)
-    CDE_df.dropna(subset=['Table'], inplace=True)
-    CDE_df.reset_index(drop=True, inplace=True)
+    CDE_df = CDE_df[["Table", "Field", "Description", "DataType", "Required", "Validation", "Shared_key"]]
+    CDE_df = CDE_df.dropna(subset=['Table'])
+    CDE_df = CDE_df.reset_index(drop=True)
     CDE_df = CDE_df.drop_duplicates()
     # force extraneous columns to be dropped.
-    CDE_df = CDE_df[["Table", "Field", "Description", "DataType", "Required", "Validation"]]
 
     return CDE_df
+
+
+def read_CDE_asap_ids( local_path:str|bool|Path=False):
+    """
+    Load CDE from local csv and cache it, return a dataframe and dictionary of dtypes
+    """
+    # Construct the path to CSD.csv
+    GOOGLE_SHEET_ID = "1c0z5KvRELdT2AtQAH2Dus8kwAyyLrR0CROhKOjpU4Vc"
+
+    sheet_name = "ASAP_assigned_keys"
+
+    cde_url = f"https://docs.google.com/spreadsheets/d/{GOOGLE_SHEET_ID}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
+    print(cde_url)
+    if local_path:
+        # ASAP_assigned_keys only in v3.0
+        cde_url = Path(local_path) / f"ASAP_CDE_v3.0_{sheet_name}.csv"
+        print(cde_url)
+   
+    try:
+        df = pd.read_csv(cde_url)
+        read_source = "url" if not local_path else "local file"
+        print(f"read {read_source}")
+    except:
+        df = pd.read_csv(f"ASAP_CDE_v3.0_{sheet_name}.csv")
+        print("read local file")
+
+    # drop rows with no table name (i.e. ASAP_ids)
+    df = df[["Table", "Field", "Description", "DataType", "Required", "Validation"]]
+    df = df.dropna(subset=['Table'])
+    df = df.reset_index(drop=True)
+
+    return df
+
 
 def compare_CDEs(df1, df2):
     """
@@ -105,7 +146,7 @@ def export_table(table_name:str, df:pd.DataFrame, out_dir:str):
     export_root = Path(out_dir).parent
     export_root.mkdir(parents=True, exist_ok=True)
 
-    df.replace({"":NULL, pd.NA:NULL, "none":NULL, "nan":NULL, "Nan":NULL}, inplace=True)
+    df = df.replace({"":NULL, pd.NA:NULL, "none":NULL, "nan":NULL, "Nan":NULL})
     df.to_csv(out_dir / f"{table_name}.csv", index=False)
 
 
@@ -122,9 +163,12 @@ def read_meta_table(table_path):
         table_df[col] = table_df[col].str.encode('latin1', errors='replace').str.decode('utf-8', errors='replace')
 
 
-    # drop the first column if it is just the index
+    # drop the first column if it is just the index incase it was saved with index = True
     if table_df.columns[0] == "Unnamed: 0":
         table_df = table_df.drop(columns=["Unnamed: 0"])
+
+    # drop rows with all null values
+    table_df.dropna(how='all', inplace=True)
 
     table_df.replace({"":NULL, pd.NA:NULL, "none":NULL, "nan":NULL, "Nan":NULL}, inplace=True)
 
@@ -149,3 +193,56 @@ def prep_table(df_in:pd.DataFrame, CDE:pd.DataFrame) -> pd.DataFrame:
         if col in df.columns and col not in ["sample_id", "source_subject_id", "subject_id", "source_sample_id","assay", "file_type", "file_name", "file_MD5", 'replicate', 'batch']:
             df[col] = df[col].apply(capitalize_first_letter) 
     return df
+
+
+def load_tables(table_path, tables):
+    dfs = {}
+    for tab in tables:
+        print(f"loading {tab}")
+        dfs[tab] = read_meta_table(table_path / f"{tab}.csv")
+    return dfs
+
+
+def export_meta_tables(dfs,export_path):
+    for tab in dfs.keys():
+        if tab not in dfs:
+            print(f"Table {tab} not found in dataset tables")
+            continue
+        dfs[tab].to_csv(export_path / f"{tab}.csv")
+    return 0
+
+
+def create_metadata_package(metadata_source:Path, package_destination:Path):
+    """
+    Move the metadata folders in the metadata_source to the package_destination
+
+    Do it folder by folder to avoid copying empty folders
+    use Path tools to copy since these are local files.  We will upload with gsutil later
+
+    return list of folders copied
+    """
+
+    package_destination.mkdir(exist_ok=True)
+    # make metadata subdir
+    package_destination = package_destination / "metadata"
+    package_destination.mkdir(exist_ok=True)
+
+    copied = []
+    for folder in metadata_source.iterdir():
+        # check that the folder is not empty
+        if folder.is_dir():
+            # check that the folder is not empty
+            if not list(folder.iterdir()):
+                print(f"Skipping empty folder {folder}")
+                continue
+            else:
+                dest = package_destination / folder.name
+                # dest.mkdir(exist_ok=True)
+                shutil.copytree(folder, dest, dirs_exist_ok=True)
+
+                print(f"Copied {folder} to {dest}")
+                copied.append(folder)
+    return copied
+    
+    
+

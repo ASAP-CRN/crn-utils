@@ -89,7 +89,7 @@ from validate import validate_table, create_valid_table
 #     return STUDYv2, PROTOCOLv2, SAMPLEv2, SUBJECTv2, CLINPATHv2, DATAv2
 
     
-def v1_to_v2(tables_path: str | Path, out_dir: str|None, CDEv1: pd.DataFrame, CDEv2: pd.DataFrame):
+def v1_to_v2(tables_path: str | Path, out_dir: str|None, CDEv1: pd.DataFrame, CDEv2: pd.DataFrame, team_dataset_id:str|None=None):
     """
     Load the tables from the tables_path, and update them to the CDEv2 schema.
     Export the new tables to a datestamped out_dir.
@@ -99,7 +99,8 @@ def v1_to_v2(tables_path: str | Path, out_dir: str|None, CDEv1: pd.DataFrame, CD
 
     in_tables = ['STUDY', 'PROTOCOL', 'SUBJECT', 'CLINPATH', 'SAMPLE']
     # in_tables = [table_name for table_name in in_tables if f"{table_name}.csv" in os.listdir(tables_path)]
-
+    metadata_version = "v2.1"
+    METADATA_VERSION_DATE = f"{metadata_version}_{pd.Timestamp.now().strftime('%Y%m%d')}"
 
     # Load the tables
     v1_tables = {}
@@ -117,9 +118,16 @@ def v1_to_v2(tables_path: str | Path, out_dir: str|None, CDEv1: pd.DataFrame, CD
     # assert len(SAMPLEv1['preprocessing_references'].unique()) == 1
     STUDYv2 = v1_tables['STUDY'].copy()
     STUDYv2['preprocessing_references'] = v1_tables['SAMPLE']['preprocessing_references'][0]
-    STUDYv2['team_dataset_id'] = STUDYv2['project_dataset'].str.replace(" ", "_").str.replace("-", "_")
-    v2_tables['STUDY'] = filter_table_columns(STUDYv2, CDEv2, "STUDY")
+    # force replacement of team_dataset_id 
+    if team_dataset_id is not None:
+        STUDYv2['team_dataset_id'] = team_dataset_id.replace(" ", "_").replace("-", "_")
+    else:
+        if STUDYv2['team_dataset_id'].isnull().all() or STUDYv2['team_dataset_id']==NULL:
+            STUDYv2['team_dataset_id'] = STUDYv2['project_dataset'].str.replace(" ", "_").str.replace("-", "_")
 
+    STUDYv2['metadata_version_date'] = METADATA_VERSION_DATE
+    
+    v2_tables['STUDY'] = filter_table_columns(STUDYv2, CDEv2, "STUDY")
 
     # PROTOCOL
     v2_tables["PROTOCOL"] = v1_tables["PROTOCOL"]
@@ -138,8 +146,6 @@ def v1_to_v2(tables_path: str | Path, out_dir: str|None, CDEv1: pd.DataFrame, CD
         SAMP_CLIN['source_subject_id'] = SAMP_CLIN['source_subject_id_x']
         SAMP_CLIN = SAMP_CLIN.drop(columns=['source_subject_id_x','source_subject_id_y'])
     SUBJ_SAMP_CLIN = pd.merge(v1_tables["SUBJECT"], SAMP_CLIN, on="subject_id", how="left")
-
-    v2_tables["PROTOCOL"] = v1_tables["PROTOCOL"]
 
     v2_tables["SUBJECT"] = filter_table_columns(SUBJ_SAMP_CLIN, CDEv2, "SUBJECT")
     v2_tables["CLINPATH"] = filter_table_columns(SUBJ_SAMP_CLIN, CDEv2, "CLINPATH")
@@ -168,18 +174,41 @@ def v1_to_v2(tables_path: str | Path, out_dir: str|None, CDEv1: pd.DataFrame, CD
 
 # Update function for CDEv3 (transforming from v2.1 to v3)
 def intervention_typer(x):
+    control_types = set(("Healthy Control", 
+                    "No PD nor other neurological disorder",
+                    'no pd nor other neurological disorder',
+                     NULL,
+                    "HC", "Healthy", "Healthy", "healthy control", "Control", "control"
+                    )    
+                    )
+    
+    case_types = set((
+                    "Idiopathic PD", "Hemiparkinson/hemiatrophy syndrome", "Idiopathic PD",
+                    "Juvenile autosomal recessive parkinsonism",
+                    "Motor neuron disease with parkinsonism", 
+                    "Neuroleptic-induced parkinsonism",  "Psychogenic parkinsonism", "Vascular parkinsonism",
+                    "PD", "idiopathic PD", "Parkinson's Disease","parkinsons", "parkinson's", 
+                    "Parkinson's", "Parkinsons", "idiopathic pd", "hemiparkinson_hemiatrophy_syndrome"
+                ))
+    other_types =  set(("Frontotemporal dementia","Corticobasal syndrome", 
+                        "Multiple system atrophy","Normal pressure hydrocephalus", 
+                        "Progressive supranuclear palsy","Dementia with Lewy bodies", 
+                        "Dopa-responsive dystonia", "Essential tremor","Alzheimer's disease",
+                        "Spinocerebellar Ataxia (SCA)", "Prodromal non-motor PD", "Prodromal motor PD", "Other neurological disorder"
+                    ))
+
     if x is None:
         return "Control"
     else:
-        x = x.lower() 
-        if x in [ NULL, "", "Control", "Healthy", "HC", "No PD or other neurological disease", "No PD or other neurological disorder"]:
+        # x = x.lower() 
+        if x in control_types:
             return "Control"
-        elif x in ["PD", "Parkinson's Disease"]:
+        elif x in case_types:
             return "Case"
-        elif x == "Other neurological disorder":
-            return "Other Control"
-        else:
-            return "Case"
+        elif x in other_types:
+            return "Other"
+        else: #default "Other"
+            return "Other"
 
 
 def v2_to_v3_PMDBS(tables_path: str | Path, out_dir: str, CDEv2: pd.DataFrame, CDEv3: pd.DataFrame):
@@ -190,6 +219,10 @@ def v2_to_v3_PMDBS(tables_path: str | Path, out_dir: str, CDEv2: pd.DataFrame, C
     current_date = datetime.datetime.now()
     v2_meta_tables = ['STUDY', 'PROTOCOL', 'SUBJECT', 'CLINPATH', 'SAMPLE', 'DATA']
     v3_meta_tables = ['STUDY', 'PROTOCOL', 'SUBJECT', 'SAMPLE', 'DATA', 'CLINPATH', 'PMDBS', 'CONDITION', 'ASSAY_RNAseq']
+    metadata_version = "v3.0"
+
+    METADATA_VERSION_DATE = f"{metadata_version}_{pd.Timestamp.now().strftime('%Y%m%d')}"
+
     # Load the tables
     v2_tables = {}
     aux_tables = {}
@@ -207,6 +240,10 @@ def v2_to_v3_PMDBS(tables_path: str | Path, out_dir: str, CDEv2: pd.DataFrame, C
     # STUDYv3['sample_types'] = STUDYv2['brain_regions']
     STUDYv3.rename(columns={"number_of_brain_samples": "number_samples", "brain_regions": "sample_types"}, inplace=True)
 
+    STUDYv3['metadata_version_date'] = METADATA_VERSION_DATE
+    # fix ORCID which was misspelled prior to v3
+    STUDYv3['PI_ORCID'] = v2_tables['STUDY']['PI_ORCHID']
+
     v3_tables["STUDY"] = filter_table_columns(STUDYv3, CDEv3, "STUDY")
     
     # PROTOCOL
@@ -218,14 +255,26 @@ def v2_to_v3_PMDBS(tables_path: str | Path, out_dir: str, CDEv2: pd.DataFrame, C
     # SAMPLE
     v3_tables["SAMPLE"] = filter_table_columns(v2_tables["SAMPLE"], CDEv3, "SAMPLE")
 
+    v3_tables["SAMPLE"]["alternate_id"] = v2_tables["SAMPLE"]["alternate_sample_id"]
+    subject_id = v3_tables["SUBJECT"]['subject_id']
+    primary_diagnosis = v3_tables["SUBJECT"]['primary_diagnosis'].str.lower().str.replace(" ", "_")
+    diagnosis_mapper = dict(zip(subject_id, primary_diagnosis))
+    v3_tables["SAMPLE"]['condition_id'] = v3_tables["SAMPLE"]['subject_id'].map(diagnosis_mapper)
+
+
+    # DATA
+    v3_tables["DATA"] = filter_table_columns(v2_tables["DATA"], CDEv3, "DATA")
+
     # PMDBS
     v3_tables["PMDBS"] = filter_table_columns(v2_tables["SAMPLE"], CDEv3, "PMDBS")
+
+
 
     # ASSAY_RNAseq
     ASSAY_RNAseqv3 = filter_table_columns(v2_tables["SAMPLE"], CDEv3, "ASSAY_RNAseq")
     ASSAY_RNAseqv3['technology'] = v2_tables["DATA"]['technology'][0]
     ASSAY_RNAseqv3['omic'] = v2_tables["DATA"]['omic'][0]
-    v3_tables["PMDBS"] = ASSAY_RNAseqv3
+    v3_tables["ASSAY_RNAseq"] = ASSAY_RNAseqv3
 
     # CLINPATH
     CLINPATHv3 = filter_table_columns(v2_tables["CLINPATH"], CDEv3, "CLINPATH")
@@ -257,8 +306,11 @@ def v2_to_v3_PMDBS(tables_path: str | Path, out_dir: str, CDEv2: pd.DataFrame, C
     CONDITIONv3['condition_id'] = v3_tables["SUBJECT"]['primary_diagnosis'].unique()
     CONDITIONv3['intervention_name'] = "Case-Control"
     CONDITIONv3['intervention_id'] = CONDITIONv3['condition_id'].apply(intervention_typer)
-    v3_tables["CONDITION"] = CONDITIONv3
+    CONDITIONv3['condition_id'] = CONDITIONv3['condition_id'].str.lower().str.replace(" ", "_")
 
+    CONDITIONv3 = CONDITIONv3.fillna(NULL)
+
+    v3_tables["CONDITION"] = CONDITIONv3
 
     if out_dir is not None:
         # Prepare output directory
@@ -310,7 +362,8 @@ def filter_table_columns(merged_table: pd.DataFrame, CDE: pd.DataFrame, table_na
     missing_cols = set(schema_cols) - set(merged_table.columns)
 
     for col in missing_cols:
-        merged_table[col] = None
+        merged_table[col] = NULL
+    merged_table = merged_table.fillna(NULL)
 
     return merged_table[schema_cols].drop_duplicates(inplace=False).reset_index(drop=True)
 
@@ -327,6 +380,7 @@ def move_table_columns(df_to: pd.DataFrame,df_from: pd.DataFrame, CDE: pd.DataFr
             df_to[col] = df_from[col]
 
     return df_to
+
 
 
 def main():
