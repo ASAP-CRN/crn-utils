@@ -6,6 +6,13 @@ import shutil
 
 NULL = "NA"
 
+__all__ = ["read_CDE", "read_CDE_asap_ids", 
+            "compare_CDEs", "export_tables_versioned", 
+            "export_table", 
+            "read_meta_table", "capitalize_first_letter", "prep_table", 
+            "load_tables", "export_meta_tables", "create_metadata_package"]
+            
+
 def read_CDE(metadata_version:str="v3.0", local_path:str|bool|Path=False):
     """
     Load CDE from local csv and cache it, return a dataframe and dictionary of dtypes
@@ -188,6 +195,21 @@ def prep_table(df_in:pd.DataFrame, CDE:pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def load_tables(table_path, tables):
+    dfs = {}
+    for tab in tables:
+        print(f"loading {tab}")
+        dfs[tab] = read_meta_table(table_path / f"{tab}.csv")
+    return dfs
+
+
+def export_meta_tables(dfs,export_path):
+    for tab in dfs.keys():
+        if tab not in dfs:
+            print(f"Table {tab} not found in dataset tables")
+            continue
+        dfs[tab].to_csv(export_path / f"{tab}.csv")
+    return 0
 
 
 def create_metadata_package(metadata_source:Path, package_destination:Path):
