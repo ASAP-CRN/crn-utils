@@ -190,7 +190,7 @@ def prep_table(df_in:pd.DataFrame, CDE:pd.DataFrame) -> pd.DataFrame:
     columns_to_convert = {col: 'str' for col in string_enum_fields if col in df.columns}
     df = df.astype(columns_to_convert)
     for col in string_enum_fields:
-        if col in df.columns and col not in ["sample_id", "source_subject_id", "subject_id", "source_sample_id","assay", "file_type", "file_name", "file_MD5", 'replicate', 'batch']:
+        if col in df.columns and col not in ["sample_id", "source_subject_id", "subject_id", "source_sample_id","assay", "file_type", "file_name", "file_MD5", 'replicate', 'batch','path_brak']:
             df[col] = df[col].apply(capitalize_first_letter) 
     return df
 
