@@ -113,3 +113,34 @@ def authenticate_with_service_account(key_file_path):
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
 
     return result 
+
+
+# %%
+
+def gsutil_rm( destination, directory=False):
+    """
+    copies the files to a GCS bucket path
+
+    Args:
+        destination (str): local file path or GCS bucket path
+        directory (bool): is the source or destination a directory
+
+    Returns:
+       None.
+    """
+
+    project = "dnastack-asap-parkinsons"
+
+    if directory:
+        cmd = f"gsutil -u {project} rm -r {destination}"
+    else:
+        cmd = f"gsutil -u {project} rm  {destination}"
+
+    print(cmd)
+    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    if result.returncode == 0:
+        print(f"gsutil command succeeded: {result.stdout}")
+    else:
+        # raise RuntimeError(f"gsutil command failed: {result.stderr}")
+        print(f"gsutil command failed: {result.stderr}")
+    return result.stdout

@@ -194,8 +194,10 @@ def intervention_typer(x):
                         "Multiple system atrophy","Normal pressure hydrocephalus", 
                         "Progressive supranuclear palsy","Dementia with Lewy bodies", 
                         "Dopa-responsive dystonia", "Essential tremor","Alzheimer's disease",
-                        "Spinocerebellar Ataxia (SCA)", "Prodromal non-motor PD", "Prodromal motor PD", "Other neurological disorder"
+                        "Spinocerebellar Ataxia (SCA)", "Other neurological disorder"
                     ))
+
+    prodromal_types =  set(("Prodromal non-motor PD", "Prodromal motor PD" ))
 
     if x is None:
         return "Control"
@@ -205,9 +207,12 @@ def intervention_typer(x):
             return "Control"
         elif x in case_types:
             return "Case"
-        elif x in other_types:
+        elif x in other_types: # we can assume for now that these are Controls
+            return "Control"
+        elif x in prodromal_types: # we can assume for now that these are Controls
             return "Other"
         else: #default "Other"
+            print(f"Unknown intervention type: {x}")
             return "Other"
 
 

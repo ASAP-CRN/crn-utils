@@ -18,7 +18,7 @@ __all__ = ['load_id_mapper',
             'load_pmdbs_id_mappers', 
             'export_pmdbs_id_mappers', 
             'update_pmdbs_id_mappers',
-            'update_pmdbs_meta_tables',
+            'update_pmdbs_meta_tables_with_asap_ids',
             'load_tables',
             'export_meta_tables', 
             'process_meta_files',
@@ -435,7 +435,7 @@ def update_pmdbs_id_mappers(clinpath_df,
 
 
 # 
-def update_pmdbs_meta_tables(dfs, 
+def update_pmdbs_meta_tables_with_asap_ids(dfs, 
                         long_dataset_name,
                         asap_ids_schema,
                         datasetid_mapper,
@@ -546,7 +546,7 @@ def update_mouse_id_mappers( sample_df,
 
 
 ###############################################
-### multi-source wrapper functions
+### multi-source wrapper functions WIP
 ###############################################
 def process_meta_files(long_dataset_name,
                         table_path, 
@@ -576,8 +576,8 @@ def process_meta_files(long_dataset_name,
         update_id_mappers = update_pmdbs_id_mappers
         datasetid_mapper, subjectid_mapper, sampleid_mapper, gp2id_mapper, sourceid_mapper = update_id_mappers(dfs[table1], dfs[table2], long_dataset_name, datasetid_mapper, subjectid_mapper, sampleid_mapper, gp2id_mapper, sourceid_mapper)
         # update the tables
-        update_meta_dables = update_pmdbs_meta_tables
-        dfs = update_meta_dables(dfs, long_dataset_name, asap_ids_schema, datasetid_mapper, subjectid_mapper, sampleid_mapper, gp2id_mapper, sourceid_mapper)
+        update_meta_tables = update_pmdbs_meta_tables_with_asap_ids
+        dfs = update_meta_tables(dfs, long_dataset_name, asap_ids_schema, datasetid_mapper, subjectid_mapper, sampleid_mapper, gp2id_mapper, sourceid_mapper)
 
         # export the tables
         if export_path is not None:
