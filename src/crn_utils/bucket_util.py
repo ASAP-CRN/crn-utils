@@ -29,7 +29,7 @@ def gsutil_ls( bucket_name, prefix):
 
     return result.stdout.split("\n")
 
-def gsutil_ls2( bucket_name, prefix):
+def gsutil_ls2( bucket_name:str, prefix:str, project: str|None = None):
     """
     prints the files in a GCS bucket matching a given prefix. 
 
@@ -41,13 +41,17 @@ def gsutil_ls2( bucket_name, prefix):
         list of files
     """
 
-    project = "dnastack-asap-parkinsons"
-    cmd = f"gsutil ls \"gs://{bucket_name}/{prefix}\""
+    # project = "dnastack-asap-parkinsons"
+    if project is None:
+        cmd = f"gsutil ls \"gs://{bucket_name}/{prefix}\""
+    else:
+        cmd = f"gsutil -u {project} ls \"gs://{bucket_name}/{prefix}\""
 
-    print(cmd)
+    # print(cmd)
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
     if result.returncode == 0:
-        print(f"gsutil command succeeded: {result.stdout}")
+        print(f"gsutil command succeeded")
+        # print(f"gsutil command succeeded: {result.stdout}")
     else:
         # raise RuntimeError(f"gsutil command failed: {result.stderr}")
         print(f"gsutil command failed: {result.stderr}")
@@ -75,6 +79,40 @@ def gsutil_cp( source, destination, directory=False):
         cmd = f"gsutil -u {project} cp -r {source} {destination}"
     else:
         cmd = f"gsutil -u {project} cp {source} {destination}"
+
+    print(cmd)
+    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    if result.returncode == 0:
+        print(f"gsutil command succeeded: {result.stdout}")
+    else:
+        # raise RuntimeError(f"gsutil command failed: {result.stderr}")
+        print(f"gsutil command failed: {result.stderr}")
+    return result.stdout
+
+def gsutil_cp2( source, destination, directory:bool=False, project: str|None = None):
+    """
+    copies the files to a GCS bucket path
+
+    Args:
+        source (str): local file path or GCS bucket path
+        destination (str): local file path or GCS bucket path
+        directory (bool): is the source or destination a directory
+        project (str): GCP project name
+
+    Returns:
+       None.
+    """
+
+    if project is None:
+        project_flag = ""
+    else:
+        project_flag = f"-u {project}"
+
+
+    if directory:
+        cmd = f"gsutil {project_flag} cp -r {source} {destination}"
+    else:
+        cmd = f"gsutil {project_flag} cp {source} {destination}"
 
     print(cmd)
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
