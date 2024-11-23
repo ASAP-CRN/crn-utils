@@ -8,16 +8,10 @@ def gsutil_ls( bucket_name, prefix):
     Args:
         bucket_name (str): The name of the GCS bucket.
         prefix (str): The prefix to filter objects.
-        project_id (str): Your Google Cloud Project ID. depricated to force "dnastack-asap-parkinsons"
+
 
     Returns:
-       None.
-    # # Example usage:
-    # project_id = "your-project-id"
-    # bucket_name = "your-bucket-name"
-    # prefix = "path/to/your/files/*.gz"
-
-    # gsutil_ls(project_id, bucket_name, prefix)
+       list of files
 
     """
 
@@ -25,6 +19,31 @@ def gsutil_ls( bucket_name, prefix):
     cmd = f"gsutil -u {project} ls gs://{bucket_name}/{prefix}"
 
     prefix = prefix + "/" if not prefix.endswith("/") else prefix
+    print(cmd)
+    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    if result.returncode == 0:
+        print(f"gsutil command succeeded: {result.stdout}")
+    else:
+        # raise RuntimeError(f"gsutil command failed: {result.stderr}")
+        print(f"gsutil command failed: {result.stderr}")
+
+    return result.stdout.split("\n")
+
+def gsutil_ls2( bucket_name, prefix):
+    """
+    prints the files in a GCS bucket matching a given prefix. 
+
+    Args:
+        bucket_name (str): The name of the GCS bucket.
+        prefix (str): The prefix to filter objects.
+
+    Returns:
+        list of files
+    """
+
+    project = "dnastack-asap-parkinsons"
+    cmd = f"gsutil ls \"gs://{bucket_name}/{prefix}\""
+
     print(cmd)
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
     if result.returncode == 0:
@@ -99,6 +118,35 @@ def gsutil_mv( source, destination, directory=False):
         print(f"gsutil command failed: {result.stderr}")
 
     return result.stdout
+
+def gsutil_rsync( source, destination):
+    """
+    rsync the files between paths / GCS bucket path
+
+
+    Args:
+        source (str): local file path or GCS bucket path
+        destination (str): local file path or GCS bucket path
+    Returns:
+       stdout.=
+    """
+
+    project = "dnastack-asap-parkinsons"
+    
+
+    cmd = f"gsutil -u {project} -m rsync -d {source} {destination}"
+    print(cmd)
+
+    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    if result.returncode == 0:
+        print(f"gsutil command succeeded: {result.stdout}")
+
+    else:
+        # raise RuntimeError(f"gsutil command failed: {result.stderr}")
+        print(f"gsutil command failed: {result.stderr}")
+
+    return result.stdout
+
 
 
 def authenticate_with_service_account(key_file_path):

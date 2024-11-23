@@ -178,9 +178,8 @@ def intervention_typer(x):
                     "No PD nor other neurological disorder",
                     'no pd nor other neurological disorder',
                      NULL,
-                    "HC", "Healthy", "Healthy", "healthy control", "Control", "control"
-                    )    
-                    )
+                    "HC", "Healthy", "Healthy", "healthy control", "Control", "control",
+                    "no_pd_nor_other_neurological_disorder","healthy_control"))
     
     case_types = set((
                     "Idiopathic PD", "Hemiparkinson/hemiatrophy syndrome", "Idiopathic PD",
@@ -188,16 +187,15 @@ def intervention_typer(x):
                     "Motor neuron disease with parkinsonism", 
                     "Neuroleptic-induced parkinsonism",  "Psychogenic parkinsonism", "Vascular parkinsonism",
                     "PD", "idiopathic PD", "Parkinson's Disease","parkinsons", "parkinson's", 
-                    "Parkinson's", "Parkinsons", "idiopathic pd", "hemiparkinson_hemiatrophy_syndrome"
-                ))
+                    "Parkinson's", "Parkinsons", "idiopathic pd", "hemiparkinson_hemiatrophy_syndrome", "pd","idiopathic_pd" ))
     other_types =  set(("Frontotemporal dementia","Corticobasal syndrome", 
                         "Multiple system atrophy","Normal pressure hydrocephalus", 
                         "Progressive supranuclear palsy","Dementia with Lewy bodies", 
                         "Dopa-responsive dystonia", "Essential tremor","Alzheimer's disease",
-                        "Spinocerebellar Ataxia (SCA)", "Other neurological disorder"
-                    ))
+                        "Spinocerebellar Ataxia (SCA)", "Other neurological disorder","other_neurological_disorder"))
 
-    prodromal_types =  set(("Prodromal non-motor PD", "Prodromal motor PD" ))
+    prodromal_types =  set(("Prodromal non-motor PD", "Prodromal motor PD", 'prodromal_motor_pd'))
+
 
     if x is None:
         return "Control"
@@ -262,7 +260,8 @@ def v2_to_v3_PMDBS(tables_path: str | Path, out_dir: str, CDEv2: pd.DataFrame, C
 
     v3_tables["SAMPLE"]["alternate_id"] = v2_tables["SAMPLE"]["alternate_sample_id"]
     subject_id = v3_tables["SUBJECT"]['subject_id']
-    primary_diagnosis = v3_tables["SUBJECT"]['primary_diagnosis'].str.lower().str.replace(" ", "_")
+    primary_diagnosis = v3_tables["SUBJECT"]['primary_diagnosis'].str.lower().str.replace(" ", "_").str.replace("/", "_").str.replace("'","")
+
     diagnosis_mapper = dict(zip(subject_id, primary_diagnosis))
     v3_tables["SAMPLE"]['condition_id'] = v3_tables["SAMPLE"]['subject_id'].map(diagnosis_mapper)
 
@@ -311,7 +310,7 @@ def v2_to_v3_PMDBS(tables_path: str | Path, out_dir: str, CDEv2: pd.DataFrame, C
     CONDITIONv3['condition_id'] = v3_tables["SUBJECT"]['primary_diagnosis'].unique()
     CONDITIONv3['intervention_name'] = "Case-Control"
     CONDITIONv3['intervention_id'] = CONDITIONv3['condition_id'].apply(intervention_typer)
-    CONDITIONv3['condition_id'] = CONDITIONv3['condition_id'].str.lower().str.replace(" ", "_")
+    CONDITIONv3['condition_id'] = CONDITIONv3['condition_id'].str.lower().str.replace(" ", "_").str.replace("/", "_").str.replace("'","")
 
     CONDITIONv3 = CONDITIONv3.fillna(NULL)
 

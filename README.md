@@ -3,10 +3,10 @@
 Set of utility python functions and scripts for managing metadata and relase documents for the ASAP CRN cloud. 
 
 Should unify the business logic for the following resources and tools:
-- [asap-cloud-dataset-resources] (https://github.com/ASAP-CRN/asap-cloud-dataset-resources)
+- [asap-crn-metadata] (https://github.com/ASAP-CRN/asap-crn-metadata)
+- [asap-crn-cloud-release-resources ] (https://github.com/ASAP-CRN/asap-crn-cloud-release-resources) which generates unique asap_ids for the submitted datasets.
 - [crn-meta-validate] (https://github.com/ASAP-CRN/crn-meta-validate )which defines the metadata validation [streamlit app] (https://asap-meta-qc.streamlit.app/)
-- [asap-cloud-data-processing-resources] (https://github.com/ASAP-CRN/asap-cloud-data-processing-resources) which generates unique asap_ids for the submitted datasets.
-
+- etc
 
 ## metadata versioning and validation
 `validate.py`
@@ -22,6 +22,9 @@ Should unify the business logic for the following resources and tools:
 ## general utilities
 `util.py`
 
+## bucket file utilities
+`bucket_util.py`
 
+# TODO: make this pip-installable with versioned updates... (currently relying on commit to document provenance)
 
 -------------------------------
