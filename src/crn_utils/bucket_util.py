@@ -186,6 +186,35 @@ def gsutil_rsync( source, destination):
     return result.stdout
 
 
+def gsutil_rsync2( source, destination):
+    """
+    rsync the files between paths / GCS bucket path
+
+
+    Args:
+        source (str): local file path or GCS bucket path
+        destination (str): local file path or GCS bucket path
+    Returns:
+       stdout.=
+    """
+
+    project = "dnastack-asap-parkinsons"
+    
+
+    cmd = f"gsutil -u {project} -m rsync -r -d {source} {destination}"
+    print(cmd)
+
+    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    if result.returncode == 0:
+        print(f"gsutil command succeeded: {result.stdout}")
+
+    else:
+        # raise RuntimeError(f"gsutil command failed: {result.stderr}")
+        print(f"gsutil command failed: {result.stderr}")
+
+    return result.stdout
+
+
 
 def authenticate_with_service_account(key_file_path):
     """
