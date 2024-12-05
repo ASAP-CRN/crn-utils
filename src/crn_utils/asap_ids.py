@@ -74,7 +74,7 @@ def write_id_mapper(id_mapper:dict, id_mapper_path:Path):
         # Get the current date and time
 
         backup_path = Path(f"{id_mapper_path.parent}/backup/{pd.Timestamp.now().strftime('%Y%m%d')}_{id_mapper_path.name}")
-        shutil.copy(id_mapper_path, backup_path)
+        shutil.copy2(id_mapper_path, backup_path)
         print(f"backed up old id_mapper to {backup_path}")
 
     mode = 'w'
@@ -435,22 +435,28 @@ def update_pmdbs_id_mappers(clinpath_df,
 
 
 # 
-def update_pmdbs_meta_tables_with_asap_ids(dfs, 
-                        long_dataset_name,
-                        asap_ids_schema,
-                        datasetid_mapper,
-                        subjectid_mapper,
-                        sampleid_mapper,
-                        gp2id_mapper,
-                        sourceid_mapper):
+def update_pmdbs_meta_tables_with_asap_ids(dfs:dict, 
+                        long_dataset_name:str,
+                        asap_ids_schema:pd.DataFrame,
+                        datasetid_mapper:dict,
+                        subjectid_mapper:dict,
+                        sampleid_mapper:dict,
+                        gp2id_mapper:dict,
+                        sourceid_mapper:dict,
+                        pmdbs_tables:list|None = None) -> dict:
     """
     process the metadata tables to add ASAP_IDs to the tables with the mappers
 
     PMDBS tables:
         ['PMDBS', 'CONDITION', 'CLINPATH', 'SUBJECT', 'ASSAY_RNAseq', 'SAMPLE', 'DATA', 'STUDY', 'PROTOCOL']
     """
-    
-    pmdbs_tables = ['STUDY', 'PROTOCOL','SUBJECT', 'ASSAY_RNAseq', 'SAMPLE', 'PMDBS', 'CONDITION', 'CLINPATH', 'DATA']
+
+    if pmdbs_tables is None:
+        pmdbs_tables = ['STUDY', 'PROTOCOL','SUBJECT', 'ASSAY_RNAseq', 'SAMPLE', 'PMDBS', 'CONDITION', 'CLINPATH', 'DATA']
+
+    # pmdbs_tables = ['STUDY', 'PROTOCOL','SUBJECT', 'ASSAY_RNAseq', 'SAMPLE', 'PMDBS', 'CONDITION', 'CLINPATH', 'DATA']
+    # pmdbs_tables = asap_ids_schema['Table'].to_list()
+
     ASAP_sample_id_tables = asap_ids_schema[asap_ids_schema['Field'] == 'ASAP_sample_id']['Table'].to_list()
     ASAP_subject_id_tables = asap_ids_schema[asap_ids_schema['Field'] == 'ASAP_subject_id']['Table'].to_list()
        

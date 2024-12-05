@@ -238,7 +238,7 @@ def create_metadata_package(metadata_source:Path, package_destination:Path):
             else:
                 dest = package_destination / folder.name
                 # dest.mkdir(exist_ok=True)
-                shutil.copytree(folder, dest, dirs_exist_ok=True)
+                shutil.copy2tree(folder, dest, dirs_exist_ok=True)
 
                 print(f"Copied {folder} to {dest}")
                 copied.append(folder)
