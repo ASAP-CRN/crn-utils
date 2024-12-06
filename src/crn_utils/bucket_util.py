@@ -19,10 +19,11 @@ def gsutil_ls( bucket_name, prefix):
     cmd = f"gsutil -u {project} ls gs://{bucket_name}/{prefix}"
 
     prefix = prefix + "/" if not prefix.endswith("/") else prefix
-    print(cmd)
+    # print(cmd)
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
     if result.returncode == 0:
-        print(f"gsutil command succeeded: {result.stdout}")
+        # print(f"gsutil command succeeded: {result.stdout}")
+        pass
     else:
         # raise RuntimeError(f"gsutil command failed: {result.stderr}")
         print(f"gsutil command failed: {result.stderr}")
@@ -50,8 +51,9 @@ def gsutil_ls2( bucket_name:str, prefix:str, project: str|None = None):
     # print(cmd)
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
     if result.returncode == 0:
-        print(f"gsutil command succeeded")
         # print(f"gsutil command succeeded: {result.stdout}")
+        print(f"gsutil command succeeded: {cmd}")
+
     else:
         # raise RuntimeError(f"gsutil command failed: {result.stderr}")
         print(f"gsutil command failed: {result.stderr}")
@@ -80,10 +82,11 @@ def gsutil_cp( source, destination, directory=False):
     else:
         cmd = f"gsutil -u {project} cp {source} {destination}"
 
-    print(cmd)
+    # print(cmd)
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
     if result.returncode == 0:
-        print(f"gsutil command succeeded: {result.stdout}")
+        # print(f"gsutil command succeeded: {result.stdout}")
+        print(f"gsutil command succeeded: {cmd}")
     else:
         # raise RuntimeError(f"gsutil command failed: {result.stderr}")
         print(f"gsutil command failed: {result.stderr}")
@@ -114,10 +117,11 @@ def gsutil_cp2( source, destination, directory:bool=False, project: str|None = N
     else:
         cmd = f"gsutil {project_flag} cp {source} {destination}"
 
-    print(cmd)
+    # print(cmd)
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
     if result.returncode == 0:
-        print(f"gsutil command succeeded: {result.stdout}")
+        # print(f"gsutil command succeeded: {result.stdout}")
+        print(f"gsutil command succeeded: {cmd}")
     else:
         # raise RuntimeError(f"gsutil command failed: {result.stderr}")
         print(f"gsutil command failed: {result.stderr}")
@@ -145,12 +149,12 @@ def gsutil_mv( source, destination, directory=False):
     else:
         cmd = f"gsutil -u {project} mv {source} {destination}"
     
-    print(cmd)
+    # print(cmd)
 
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
     if result.returncode == 0:
-        print(f"gsutil command succeeded: {result.stdout}")
-
+        # print(f"gsutil command succeeded: {result.stdout}")
+        print(f"gsutil command succeeded: {cmd}")
     else:
         # raise RuntimeError(f"gsutil command failed: {result.stderr}")
         print(f"gsutil command failed: {result.stderr}")
@@ -173,12 +177,12 @@ def gsutil_rsync( source, destination):
     
 
     cmd = f"gsutil -u {project} -m rsync -d {source} {destination}"
-    print(cmd)
+    # print(cmd)
 
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
     if result.returncode == 0:
-        print(f"gsutil command succeeded: {result.stdout}")
-
+        # print(f"gsutil command succeeded: {result.stdout}")
+        print(f"gsutil command succeeded: {cmd}")
     else:
         # raise RuntimeError(f"gsutil command failed: {result.stderr}")
         print(f"gsutil command failed: {result.stderr}")
@@ -202,12 +206,12 @@ def gsutil_rsync2( source, destination):
     
 
     cmd = f"gsutil -u {project} -m rsync -r -d {source} {destination}"
-    print(cmd)
+    # print(cmd)
 
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
     if result.returncode == 0:
-        print(f"gsutil command succeeded: {result.stdout}")
-
+        # print(f"gsutil command succeeded: {result.stdout}")
+        print(f"gsutil command succeeded: {cmd}")
     else:
         # raise RuntimeError(f"gsutil command failed: {result.stderr}")
         print(f"gsutil command failed: {result.stderr}")
@@ -234,8 +238,8 @@ def test_gsutil_rsync2( source, destination):
 
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
     if result.returncode == 0:
-        print(f"gsutil command succeeded: {result.stdout}")
-
+        # print(f"gsutil command succeeded: {result.stdout}")
+        print(f"gsutil command succeeded: {cmd}")
     else:
         # raise RuntimeError(f"gsutil command failed: {result.stderr}")
         print(f"gsutil command failed: {result.stderr}")
@@ -278,10 +282,11 @@ def gsutil_rm( destination, directory=False):
     else:
         cmd = f"gsutil -u {project} rm  {destination}"
 
-    print(cmd)
+    # print(cmd)
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
     if result.returncode == 0:
-        print(f"gsutil command succeeded: {result.stdout}")
+        # print(f"gsutil command succeeded: {result.stdout}")
+        print(f"gsutil command succeeded: {cmd}")
     else:
         # raise RuntimeError(f"gsutil command failed: {result.stderr}")
         print(f"gsutil command failed: {result.stderr}")

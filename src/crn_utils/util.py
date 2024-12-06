@@ -198,7 +198,7 @@ def prep_table(df_in:pd.DataFrame, CDE:pd.DataFrame) -> pd.DataFrame:
 def load_tables(table_path, tables):
     dfs = {}
     for tab in tables:
-        print(f"loading {tab}")
+        # print(f"loading {tab}")
         dfs[tab] = read_meta_table(table_path / f"{tab}.csv")
     return dfs
 
