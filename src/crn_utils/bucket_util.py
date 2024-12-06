@@ -49,6 +49,10 @@ def gsutil_ls2( bucket_name:str, prefix:str, project: str|None = None):
         cmd = f"gsutil -u {project} ls \"gs://{bucket_name}/{prefix}\""
 
     # print(cmd)
+    # NOTE: probably worth updating from .run to .checkoutput e.g.
+	# command = f"gsutil ls {path} | sort | tail -1"
+	# file_loc = subprocess.check_output(command, shell=True, text=True, stderr=subprocess.PIPE)
+
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
     if result.returncode == 0:
         # print(f"gsutil command succeeded: {result.stdout}")
@@ -178,6 +182,7 @@ def gsutil_rsync( source, destination):
 
     cmd = f"gsutil -u {project} -m rsync -d {source} {destination}"
     # print(cmd)
+
 
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
     if result.returncode == 0:
