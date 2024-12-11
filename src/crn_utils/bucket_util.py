@@ -208,7 +208,8 @@ def gsutil_rsync2( source, destination):
     """
 
     project = "dnastack-asap-parkinsons"
-    
+    project = "terra-perky-eggplant-3797"
+
 
     cmd = f"gsutil -u {project} -m rsync -r -d {source} {destination}"
     # print(cmd)
@@ -236,10 +237,10 @@ def test_gsutil_rsync2( source, destination):
     """
 
     project = "dnastack-asap-parkinsons"
-    
+    project = "terra-perky-eggplant-3797"
 
     cmd = f"gsutil -u {project} -m rsync -r -d -n {source} {destination}"
-    print(cmd)
+    # print(cmd)
 
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
     if result.returncode == 0:
@@ -249,7 +250,7 @@ def test_gsutil_rsync2( source, destination):
         # raise RuntimeError(f"gsutil command failed: {result.stderr}")
         print(f"gsutil command failed: {result.stderr}")
 
-    return result.stdout
+    return result
 
 
 def authenticate_with_service_account(key_file_path):

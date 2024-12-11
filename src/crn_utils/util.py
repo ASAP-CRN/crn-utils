@@ -38,7 +38,6 @@ def read_CDE(metadata_version:str="v3.0", local_path:str|bool|Path=False):
         print(f"metadata_version: {sheet_name}")
     else:
         print(f"Unsupported metadata_version: {sheet_name}")
-        return 0,0
     
     cde_url = f"https://docs.google.com/spreadsheets/d/{GOOGLE_SHEET_ID}/gviz/tq?tqx=out:csv&sheet={metadata_version}"
     print(cde_url)
