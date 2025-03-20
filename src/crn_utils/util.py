@@ -20,43 +20,56 @@ def read_CDE(metadata_version:str="v3.0", local_path:str|bool|Path=False):
     # Construct the path to CSD.csv
     GOOGLE_SHEET_ID = "1c0z5KvRELdT2AtQAH2Dus8kwAyyLrR0CROhKOjpU4Vc"
 
+    column_list = [
+        "Table",
+        "Field",
+        "Description",
+        "DataType",
+        "Required",
+        "Validation",
+    ]
     if metadata_version == "v1":
-        sheet_name = "ASAP_CDE_v1"
+        resource_fname = "ASAP_CDE_v1"
     elif metadata_version == "v2":
-        sheet_name = "ASAP_CDE_v2"
+        resource_fname = "ASAP_CDE_v2"
     elif metadata_version == "v2.1":
-        sheet_name = "ASAP_CDE_v2.1"
+        resource_fname = "ASAP_CDE_v2.1"
     elif metadata_version == "v3.0-beta":
-        sheet_name = "ASAP_CDE_v3.0-beta"
+        resource_fname = "ASAP_CDE_v3.0-beta"
     elif metadata_version in ["v3","v3.0", "v3.0.0"]:
-        sheet_name = "ASAP_CDE_v3.0"
+        resource_fname = "ASAP_CDE_v3.0"
+    elif metadata_version in ["v3.1"]:
+        resource_fname = "ASAP_CDE_v3.1"
     else:
-        sheet_name = "ASAP_CDE_v3.0"
+        resource_fname = "ASAP_CDE_v3.1"
 
+    # add the Shared_key column for v3
+    if metadata_version in ["v3.1", "v3", "v3.0", "v3.0-beta"]:
+        column_list += ["Shared_key"]
 
-    if metadata_version in ["v1","v2","v2.1","v3","v3.0","v3.0-beta"]:
-        print(f"metadata_version: {sheet_name}")
+    if metadata_version in ["v1", "v2", "v2.1", "v3", "v3.0", "v3.0-beta", "v3.1"]:
+        print(f"metadata_version: {resource_fname}")
     else:
-        print(f"Unsupported metadata_version: {sheet_name}")
-    
+        print(f"Unsupported metadata_version: {resource_fname}")
+   
     cde_url = f"https://docs.google.com/spreadsheets/d/{GOOGLE_SHEET_ID}/gviz/tq?tqx=out:csv&sheet={metadata_version}"
     print(cde_url)
-    if local_path:
-        cde_url = Path(local_path) / f"{sheet_name}.csv"
-        print(cde_url)
 
+    if local_path:
+        cde_url = Path(local_path) / f"{resource_fname}.csv"
+        print(cde_url)
     
     try:
         CDE_df = pd.read_csv(cde_url)
         read_source = "url" if not local_path else "local file"
         print(f"read {read_source}")
     except:
-        CDE_df = pd.read_csv(f"{sheet_name}.csv")
+        CDE_df = pd.read_csv(f"{resource_fname}.csv")
         print("read local file")
 
     # drop rows with no table name (i.e. ASAP_ids)
-    CDE_df = CDE_df[["Table", "Field", "Description", "DataType", "Required", "Validation", "Shared_key"]]
-    CDE_df = CDE_df.dropna(subset=['Table'])
+    CDE_df = CDE_df[column_list]
+    CDE_df = CDE_df.dropna(subset=["Table"])
     CDE_df = CDE_df.reset_index(drop=True)
     CDE_df = CDE_df.drop_duplicates()
     # force extraneous columns to be dropped.
@@ -71,13 +84,13 @@ def read_CDE_asap_ids( local_path:str|bool|Path=False):
     # Construct the path to CSD.csv
     GOOGLE_SHEET_ID = "1c0z5KvRELdT2AtQAH2Dus8kwAyyLrR0CROhKOjpU4Vc"
 
-    sheet_name = "ASAP_assigned_keys"
+    resource_fname = "ASAP_assigned_keys"
 
-    cde_url = f"https://docs.google.com/spreadsheets/d/{GOOGLE_SHEET_ID}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
+    cde_url = f"https://docs.google.com/spreadsheets/d/{GOOGLE_SHEET_ID}/gviz/tq?tqx=out:csv&sheet={resource_fname}"
     print(cde_url)
     if local_path:
         # ASAP_assigned_keys only in v3.0
-        cde_url = Path(local_path) / f"ASAP_CDE_v3.0_{sheet_name}.csv"
+        cde_url = Path(local_path) / f"ASAP_CDE_v3.0_{resource_fname}.csv"
         print(cde_url)
    
     try:
@@ -85,7 +98,7 @@ def read_CDE_asap_ids( local_path:str|bool|Path=False):
         read_source = "url" if not local_path else "local file"
         print(f"read {read_source}")
     except:
-        df = pd.read_csv(f"ASAP_CDE_v3.0_{sheet_name}.csv")
+        df = pd.read_csv(f"ASAP_CDE_v3.0_{resource_fname}.csv")
         print("read local file")
 
     # drop rows with no table name (i.e. ASAP_ids)
