@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 import argparse
 
-from util import read_CDE, read_meta_table, read_CDE_asap_ids, load_tables, export_meta_tables
+from .util import read_CDE, read_meta_table, read_CDE_asap_ids, load_tables, export_meta_tables
 import shutil
 
 __all__ = ['load_id_mapper', 

@@ -6,7 +6,7 @@ import argparse
 
 import requests
 
-from util import read_CDE, read_meta_table
+from .util import read_CDE, read_meta_table
 
 ##  HARD CODED VARIABLES
 

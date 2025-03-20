@@ -4,8 +4,8 @@ import argparse
 import datetime
 
 # local helpers
-from util import read_CDE, read_meta_table, NULL, export_table
-from validate import validate_table, create_valid_table
+from .util import read_CDE, read_meta_table, NULL, export_table
+from .validate import validate_table, create_valid_table
 
 
 # def v1_to_v2(tables_path: str|Path, out_dir: str, CDEv1: pd.DataFrame, CDEv2: pd.DataFrame):
