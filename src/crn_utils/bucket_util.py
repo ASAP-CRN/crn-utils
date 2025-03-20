@@ -8,16 +8,10 @@ def gsutil_ls( bucket_name, prefix):
     Args:
         bucket_name (str): The name of the GCS bucket.
         prefix (str): The prefix to filter objects.
-        project_id (str): Your Google Cloud Project ID. depricated to force "dnastack-asap-parkinsons"
+
 
     Returns:
-       None.
-    # # Example usage:
-    # project_id = "your-project-id"
-    # bucket_name = "your-bucket-name"
-    # prefix = "path/to/your/files/*.gz"
-
-    # gsutil_ls(project_id, bucket_name, prefix)
+       list of files
 
     """
 
@@ -25,10 +19,45 @@ def gsutil_ls( bucket_name, prefix):
     cmd = f"gsutil -u {project} ls gs://{bucket_name}/{prefix}"
 
     prefix = prefix + "/" if not prefix.endswith("/") else prefix
-    print(cmd)
+    # print(cmd)
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
     if result.returncode == 0:
-        print(f"gsutil command succeeded: {result.stdout}")
+        # print(f"gsutil command succeeded: {result.stdout}")
+        pass
+    else:
+        # raise RuntimeError(f"gsutil command failed: {result.stderr}")
+        print(f"gsutil command failed: {result.stderr}")
+
+    return result.stdout.split("\n")
+
+def gsutil_ls2( bucket_name:str, prefix:str, project: str|None = None):
+    """
+    prints the files in a GCS bucket matching a given prefix. 
+
+    Args:
+        bucket_name (str): The name of the GCS bucket.
+        prefix (str): The prefix to filter objects.
+
+    Returns:
+        list of files
+    """
+
+    # project = "dnastack-asap-parkinsons"
+    if project is None:
+        cmd = f"gsutil ls \"gs://{bucket_name}/{prefix}\""
+    else:
+        cmd = f"gsutil -u {project} ls \"gs://{bucket_name}/{prefix}\""
+
+    # print(cmd)
+    # NOTE: probably worth updating from .run to .checkoutput e.g.
+	# command = f"gsutil ls {path} | sort | tail -1"
+	# file_loc = subprocess.check_output(command, shell=True, text=True, stderr=subprocess.PIPE)
+
+    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    if result.returncode == 0:
+        # print(f"gsutil command succeeded: {result.stdout}")
+        print(f"gsutil command succeeded: {cmd}")
+
     else:
         # raise RuntimeError(f"gsutil command failed: {result.stderr}")
         print(f"gsutil command failed: {result.stderr}")
@@ -57,10 +86,46 @@ def gsutil_cp( source, destination, directory=False):
     else:
         cmd = f"gsutil -u {project} cp {source} {destination}"
 
-    print(cmd)
+    # print(cmd)
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
     if result.returncode == 0:
-        print(f"gsutil command succeeded: {result.stdout}")
+        # print(f"gsutil command succeeded: {result.stdout}")
+        print(f"gsutil command succeeded: {cmd}")
+    else:
+        # raise RuntimeError(f"gsutil command failed: {result.stderr}")
+        print(f"gsutil command failed: {result.stderr}")
+    return result.stdout
+
+def gsutil_cp2( source, destination, directory:bool=False, project: str|None = None):
+    """
+    copies the files to a GCS bucket path
+
+    Args:
+        source (str): local file path or GCS bucket path
+        destination (str): local file path or GCS bucket path
+        directory (bool): is the source or destination a directory
+        project (str): GCP project name
+
+    Returns:
+       None.
+    """
+
+    if project is None:
+        project_flag = ""
+    else:
+        project_flag = f"-u {project}"
+
+
+    if directory:
+        cmd = f"gsutil {project_flag} cp -r {source} {destination}"
+    else:
+        cmd = f"gsutil {project_flag} cp {source} {destination}"
+
+    # print(cmd)
+    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    if result.returncode == 0:
+        # print(f"gsutil command succeeded: {result.stdout}")
+        print(f"gsutil command succeeded: {cmd}")
     else:
         # raise RuntimeError(f"gsutil command failed: {result.stderr}")
         print(f"gsutil command failed: {result.stderr}")
@@ -88,17 +153,104 @@ def gsutil_mv( source, destination, directory=False):
     else:
         cmd = f"gsutil -u {project} mv {source} {destination}"
     
-    print(cmd)
+    # print(cmd)
 
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
     if result.returncode == 0:
-        print(f"gsutil command succeeded: {result.stdout}")
-
+        # print(f"gsutil command succeeded: {result.stdout}")
+        print(f"gsutil command succeeded: {cmd}")
     else:
         # raise RuntimeError(f"gsutil command failed: {result.stderr}")
         print(f"gsutil command failed: {result.stderr}")
 
     return result.stdout
+
+def gsutil_rsync( source, destination):
+    """
+    rsync the files between paths / GCS bucket path
+
+
+    Args:
+        source (str): local file path or GCS bucket path
+        destination (str): local file path or GCS bucket path
+    Returns:
+       stdout.=
+    """
+
+    project = "dnastack-asap-parkinsons"
+    
+
+    cmd = f"gsutil -u {project} -m rsync -d {source} {destination}"
+    # print(cmd)
+
+
+    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    if result.returncode == 0:
+        # print(f"gsutil command succeeded: {result.stdout}")
+        print(f"gsutil command succeeded: {cmd}")
+    else:
+        # raise RuntimeError(f"gsutil command failed: {result.stderr}")
+        print(f"gsutil command failed: {result.stderr}")
+
+    return result.stdout
+
+
+def gsutil_rsync2( source, destination):
+    """
+    rsync the files between paths / GCS bucket path
+
+
+    Args:
+        source (str): local file path or GCS bucket path
+        destination (str): local file path or GCS bucket path
+    Returns:
+       stdout.=
+    """
+
+    project = "dnastack-asap-parkinsons"
+    project = "terra-perky-eggplant-3797"
+
+
+    cmd = f"gsutil -u {project} -m rsync -r -d {source} {destination}"
+    # print(cmd)
+
+    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    if result.returncode == 0:
+        # print(f"gsutil command succeeded: {result.stdout}")
+        print(f"gsutil command succeeded: {cmd}")
+    else:
+        # raise RuntimeError(f"gsutil command failed: {result.stderr}")
+        print(f"gsutil command failed: {result.stderr}")
+
+    return result.stdout
+
+def test_gsutil_rsync2( source, destination):
+    """
+    rsync the files between paths / GCS bucket path
+
+
+    Args:
+        source (str): local file path or GCS bucket path
+        destination (str): local file path or GCS bucket path
+    Returns:
+       stdout.=
+    """
+
+    project = "dnastack-asap-parkinsons"
+    project = "terra-perky-eggplant-3797"
+
+    cmd = f"gsutil -u {project} -m rsync -r -d -n {source} {destination}"
+    # print(cmd)
+
+    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    if result.returncode == 0:
+        # print(f"gsutil command succeeded: {result.stdout}")
+        print(f"gsutil command succeeded: {cmd}")
+    else:
+        # raise RuntimeError(f"gsutil command failed: {result.stderr}")
+        print(f"gsutil command failed: {result.stderr}")
+
+    return result
 
 
 def authenticate_with_service_account(key_file_path):
@@ -113,3 +265,35 @@ def authenticate_with_service_account(key_file_path):
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
 
     return result 
+
+
+# %%
+
+def gsutil_rm( destination, directory=False):
+    """
+    copies the files to a GCS bucket path
+
+    Args:
+        destination (str): local file path or GCS bucket path
+        directory (bool): is the source or destination a directory
+
+    Returns:
+       None.
+    """
+
+    project = "dnastack-asap-parkinsons"
+
+    if directory:
+        cmd = f"gsutil -u {project} rm -r {destination}"
+    else:
+        cmd = f"gsutil -u {project} rm  {destination}"
+
+    # print(cmd)
+    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    if result.returncode == 0:
+        # print(f"gsutil command succeeded: {result.stdout}")
+        print(f"gsutil command succeeded: {cmd}")
+    else:
+        # raise RuntimeError(f"gsutil command failed: {result.stderr}")
+        print(f"gsutil command failed: {result.stderr}")
+    return result.stdout

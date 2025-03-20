@@ -38,7 +38,6 @@ def read_CDE(metadata_version:str="v3.0", local_path:str|bool|Path=False):
         print(f"metadata_version: {sheet_name}")
     else:
         print(f"Unsupported metadata_version: {sheet_name}")
-        return 0,0
     
     cde_url = f"https://docs.google.com/spreadsheets/d/{GOOGLE_SHEET_ID}/gviz/tq?tqx=out:csv&sheet={metadata_version}"
     print(cde_url)
@@ -190,7 +189,7 @@ def prep_table(df_in:pd.DataFrame, CDE:pd.DataFrame) -> pd.DataFrame:
     columns_to_convert = {col: 'str' for col in string_enum_fields if col in df.columns}
     df = df.astype(columns_to_convert)
     for col in string_enum_fields:
-        if col in df.columns and col not in ["sample_id", "source_subject_id", "subject_id", "source_sample_id","assay", "file_type", "file_name", "file_MD5", 'replicate', 'batch']:
+        if col in df.columns and col not in ["sample_id", "source_subject_id", "subject_id", "source_sample_id","assay", "file_type", "file_name", "file_MD5", 'replicate', 'batch','path_brak']:
             df[col] = df[col].apply(capitalize_first_letter) 
     return df
 
@@ -198,7 +197,7 @@ def prep_table(df_in:pd.DataFrame, CDE:pd.DataFrame) -> pd.DataFrame:
 def load_tables(table_path, tables):
     dfs = {}
     for tab in tables:
-        print(f"loading {tab}")
+        # print(f"loading {tab}")
         dfs[tab] = read_meta_table(table_path / f"{tab}.csv")
     return dfs
 
@@ -238,7 +237,7 @@ def create_metadata_package(metadata_source:Path, package_destination:Path):
             else:
                 dest = package_destination / folder.name
                 # dest.mkdir(exist_ok=True)
-                shutil.copytree(folder, dest, dirs_exist_ok=True)
+                shutil.copy2tree(folder, dest, dirs_exist_ok=True)
 
                 print(f"Copied {folder} to {dest}")
                 copied.append(folder)

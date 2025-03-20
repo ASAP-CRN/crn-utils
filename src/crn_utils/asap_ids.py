@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 import argparse
 
-from crn_utils.util import read_CDE, read_meta_table, read_CDE_asap_ids, load_tables, export_meta_tables
+from .util import read_CDE, read_meta_table, read_CDE_asap_ids, load_tables, export_meta_tables
 import shutil
 
 __all__ = ['load_id_mapper', 
@@ -18,7 +18,7 @@ __all__ = ['load_id_mapper',
             'load_pmdbs_id_mappers', 
             'export_pmdbs_id_mappers', 
             'update_pmdbs_id_mappers',
-            'update_pmdbs_meta_tables',
+            'update_pmdbs_meta_tables_with_asap_ids',
             'load_tables',
             'export_meta_tables', 
             'process_meta_files',
@@ -74,7 +74,7 @@ def write_id_mapper(id_mapper:dict, id_mapper_path:Path):
         # Get the current date and time
 
         backup_path = Path(f"{id_mapper_path.parent}/backup/{pd.Timestamp.now().strftime('%Y%m%d')}_{id_mapper_path.name}")
-        shutil.copy(id_mapper_path, backup_path)
+        shutil.copy2(id_mapper_path, backup_path)
         print(f"backed up old id_mapper to {backup_path}")
 
     mode = 'w'
@@ -435,22 +435,28 @@ def update_pmdbs_id_mappers(clinpath_df,
 
 
 # 
-def update_pmdbs_meta_tables(dfs, 
-                        long_dataset_name,
-                        asap_ids_schema,
-                        datasetid_mapper,
-                        subjectid_mapper,
-                        sampleid_mapper,
-                        gp2id_mapper,
-                        sourceid_mapper):
+def update_pmdbs_meta_tables_with_asap_ids(dfs:dict, 
+                        long_dataset_name:str,
+                        asap_ids_schema:pd.DataFrame,
+                        datasetid_mapper:dict,
+                        subjectid_mapper:dict,
+                        sampleid_mapper:dict,
+                        gp2id_mapper:dict,
+                        sourceid_mapper:dict,
+                        pmdbs_tables:list|None = None) -> dict:
     """
     process the metadata tables to add ASAP_IDs to the tables with the mappers
 
     PMDBS tables:
         ['PMDBS', 'CONDITION', 'CLINPATH', 'SUBJECT', 'ASSAY_RNAseq', 'SAMPLE', 'DATA', 'STUDY', 'PROTOCOL']
     """
-    
-    pmdbs_tables = ['STUDY', 'PROTOCOL','SUBJECT', 'ASSAY_RNAseq', 'SAMPLE', 'PMDBS', 'CONDITION', 'CLINPATH', 'DATA']
+
+    if pmdbs_tables is None:
+        pmdbs_tables = ['STUDY', 'PROTOCOL','SUBJECT', 'ASSAY_RNAseq', 'SAMPLE', 'PMDBS', 'CONDITION', 'CLINPATH', 'DATA']
+
+    # pmdbs_tables = ['STUDY', 'PROTOCOL','SUBJECT', 'ASSAY_RNAseq', 'SAMPLE', 'PMDBS', 'CONDITION', 'CLINPATH', 'DATA']
+    # pmdbs_tables = asap_ids_schema['Table'].to_list()
+
     ASAP_sample_id_tables = asap_ids_schema[asap_ids_schema['Field'] == 'ASAP_sample_id']['Table'].to_list()
     ASAP_subject_id_tables = asap_ids_schema[asap_ids_schema['Field'] == 'ASAP_subject_id']['Table'].to_list()
        
@@ -546,7 +552,7 @@ def update_mouse_id_mappers( sample_df,
 
 
 ###############################################
-### multi-source wrapper functions
+### multi-source wrapper functions WIP
 ###############################################
 def process_meta_files(long_dataset_name,
                         table_path, 
@@ -576,8 +582,8 @@ def process_meta_files(long_dataset_name,
         update_id_mappers = update_pmdbs_id_mappers
         datasetid_mapper, subjectid_mapper, sampleid_mapper, gp2id_mapper, sourceid_mapper = update_id_mappers(dfs[table1], dfs[table2], long_dataset_name, datasetid_mapper, subjectid_mapper, sampleid_mapper, gp2id_mapper, sourceid_mapper)
         # update the tables
-        update_meta_dables = update_pmdbs_meta_tables
-        dfs = update_meta_dables(dfs, long_dataset_name, asap_ids_schema, datasetid_mapper, subjectid_mapper, sampleid_mapper, gp2id_mapper, sourceid_mapper)
+        update_meta_tables = update_pmdbs_meta_tables_with_asap_ids
+        dfs = update_meta_tables(dfs, long_dataset_name, asap_ids_schema, datasetid_mapper, subjectid_mapper, sampleid_mapper, gp2id_mapper, sourceid_mapper)
 
         # export the tables
         if export_path is not None:
