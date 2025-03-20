@@ -1,23 +1,18 @@
-// Purpose: Configuration file for the project
-// Creator: Andy Henrie
-// Created: 2025-02-01
-// Last Updated: 2025-03-18
+# // Purpose: Configuration file for the project
+# // Creator: Andy Henrie
+# // Created: 2025-02-01
+# // Last Updated: 2025-03-18
 
 
 [build-system]
-requires = [
-  "setuptools>=61.0",
-  "wheel",
-]
+requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 
 [project]
-name =  "crn-utils"
+name = "crn-utils"
 version = "0.1.0-beta"
-authors = [
-    {name = "Andy Henrie", email = "ergonyc@gmail.com"},
-]
+authors = [{ name = "Andy Henrie", email = "ergonyc@gmail.com" }]
 description = "Collection of tools and utilities for ASAP CRN Cloud Datasets"
 readme = "README.md"
 classifiers = [
@@ -27,10 +22,10 @@ classifiers = [
     "Programming Language :: Python :: 3 :: Only",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11"
+    "Programming Language :: Python :: 3.11",
 ]
 requires-python = ">=3.10"
-license = {text = "MIT"}
+license = { text = "MIT" }
 
 
 [project.urls]
@@ -41,4 +36,3 @@ Tracker = "https://github.com/ASAP-CRN/crn-utils"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-
