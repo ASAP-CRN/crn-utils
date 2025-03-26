@@ -79,7 +79,7 @@ def write_id_mapper(id_mapper:dict, id_mapper_path:Path):
 
     if not id_mapper_path.parent.exists():
         id_mapper_path.parent.mkdir(parents=True, exist_ok=True)
-        print(f"created directory for id_mapper export at {id_mapper_path}")
+        print(f"created directory for id_mapper export at {id_mapper_path.parent}")
     mode = 'w'
     with open(id_mapper_path, mode) as f:
         try:
