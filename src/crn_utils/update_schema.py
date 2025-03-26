@@ -171,7 +171,7 @@ def v1_to_v2(tables_path: str | Path, out_dir: str|None, CDEv1: pd.DataFrame, CD
     return v2_tables, aux_tables
 
 
-
+# this is replaced by gp2_phenotype for v3.1
 # Update function for CDEv3 (transforming from v2.1 to v3)
 def intervention_typer(x):
     control_types = set(("Healthy Control", 

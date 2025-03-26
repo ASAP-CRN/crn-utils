@@ -77,10 +77,18 @@ def write_id_mapper(id_mapper:dict, id_mapper_path:Path):
         shutil.copy2(id_mapper_path, backup_path)
         print(f"backed up old id_mapper to {backup_path}")
 
+    if not id_mapper_path.exists():
+        id_mapper_path.mkdir(parents=True, exist_ok=True)
+        print(f"created directory for id_mapper export at {id_mapper_path}")
     mode = 'w'
     with open(id_mapper_path, mode) as f:
-        json.dump(id_mapper, f, indent=4)
-
+        try:
+            json.dump(id_mapper, f, indent=4)
+        except TypeError:
+            print(f"error writing id_mapper to {id_mapper_path}")
+            print(f"check that the id_mapper is a dictionary")
+            return 1
+        print(f"saved id_mapper to {id_mapper_path}")
     return 0
 
 
@@ -235,7 +243,7 @@ def generate_human_subject_ids(subjectid_mapper:dict,
 
         if len(testset) == 0:  # generate a new asap_subj_id
             # print(samp_n)
-            asap_subject_id = f"{source.upper()}_{samp_n:06}"
+            asap_subject_id = f"ASAP_{source.upper()}_{samp_n:06}"
             # df_dups_subset.insert(0, 'ASAP_subject_id', asap_subject_id, inplace=True)
         else: # testset should have the asap_subj_id
             asap_subject_id = testset.pop() # but where did it come from?
