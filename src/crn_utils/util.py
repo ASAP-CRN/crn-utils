@@ -149,7 +149,6 @@ def export_tables_versioned(tables_path:str, out_dir:str, tables:dict):
         export_table(name, table, export_root)
         # table.to_csv(export_root / f"{name}.csv", index=False)
 
-
 def export_table(table_name:str, df:pd.DataFrame, out_dir:str):
     """
     Export a table to a csv file, with nulls/empty entries replaced by "NA"
@@ -160,7 +159,6 @@ def export_table(table_name:str, df:pd.DataFrame, out_dir:str):
 
     df = df.replace({"":NULL, pd.NA:NULL, "none":NULL, "nan":NULL, "Nan":NULL})
     df.to_csv(out_dir / f"{table_name}.csv", index=False)
-
 
 
 def read_meta_table(table_path):

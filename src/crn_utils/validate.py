@@ -123,6 +123,38 @@ class ReportCollector:
     def print_log(self):
         print(self.get_log())
 
+def process_table(df, table_name, cde_schema):
+    """Process a table according to CDE schema and extract auxiliary fields.
+    
+    Args:
+        df (pd.DataFrame): Input dataframe to process
+        table_name (str): Name of the table being processed
+        cde_schema (pd.DataFrame): CDE schema dataframe
+        
+    Returns:
+        tuple: (processed_df, auxiliary_df, report)
+            - processed_df: DataFrame with only valid CDE fields
+            - auxiliary_df: DataFrame with shared keys and extra fields
+            - report: Validation report
+    """
+    schema = cde_schema[cde_schema['Table'] == table_name]
+    report = ReportCollector(destination="NA")
+    full_table, report = validate_table(df.copy(), table_name, schema, report)
+    report.print_log()
+
+    # Extract valid CDE fields
+    processed_df = full_table[schema['Field'].tolist()]
+    
+    # Get auxiliary fields (shared keys + extra columns)s
+    aux_fields = list(set(df.columns) - set(schema['Field'].tolist()))
+    if len(aux_fields) == 0:
+        return processed_df, pd.DataFrame(), report
+    else:
+        auxiliary_df = df[aux_fields]
+        aux_fields = (schema[schema["Shared_key"]==1]["Field"].to_list() + 
+                 aux_fields)
+        auxiliary_df = df[aux_fields]
+        return processed_df, auxiliary_df, report
 
 def validate_table(df: pd.DataFrame, table_name: str, specific_cde_df: pd.DataFrame, out: ReportCollector ):
     """

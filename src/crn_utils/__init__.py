@@ -11,4 +11,5 @@ from .resource_tools import *
 from .util import *
 from .validate import *
 from .update_schema import *
+from .zenodo_util import *
 

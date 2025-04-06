@@ -165,6 +165,7 @@ def gsutil_mv( source, destination, directory=False):
 
     return result.stdout
 
+
 def gsutil_rsync( source, destination):
     """
     rsync the files between paths / GCS bucket path
@@ -181,6 +182,36 @@ def gsutil_rsync( source, destination):
     
 
     cmd = f"gsutil -u {project} -m rsync -d {source} {destination}"
+    # print(cmd)
+
+
+    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    if result.returncode == 0:
+        # print(f"gsutil command succeeded: {result.stdout}")
+        print(f"gsutil command succeeded: {cmd}")
+    else:
+        # raise RuntimeError(f"gsutil command failed: {result.stderr}")
+        print(f"gsutil command failed: {result.stderr}")
+
+    return result.stdout
+
+
+def gsutil_rsync_r( source, destination):
+    """
+    rsync the files between paths / GCS bucket path
+
+
+    Args:
+        source (str): local file path or GCS bucket path
+        destination (str): local file path or GCS bucket path
+    Returns:
+       stdout.=
+    """
+
+    project = "dnastack-asap-parkinsons"
+    
+
+    cmd = f"gsutil -u {project} -m rsync -d -r {source} {destination}"
     # print(cmd)
 
 
