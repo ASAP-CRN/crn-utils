@@ -296,7 +296,7 @@ def create_valid_table(df: pd.DataFrame, table_name: str, cde_df: pd.DataFrame):
 
 
 
-def calculate_missingness(df: pd.DataFrame, table_name: str, schema: pd.DataFrame, missing_threshold: float=0.5):
+def calculate_missingness(df: pd.DataFrame, table_name: str, schema: pd.DataFrame, missing_threshold: float=0.5, metadata_version: str="v3.1.0":
     """
     get missingness for each column in the table
 
