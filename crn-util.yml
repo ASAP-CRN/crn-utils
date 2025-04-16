@@ -1,0 +1,17 @@
+#conda env create -f crn-util.yml 
+# versions wrong...
+name: crn-util
+channels:
+- conda-forge
+dependencies:
+- python=3.12
+- ipykernel
+- ipywidgets
+- notebook
+- pandas
+- matplotlib
+- pip
+- pip:
+  - google-cloud-storage
+  - dnastack-client-library
+

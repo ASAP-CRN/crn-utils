@@ -23,6 +23,8 @@ __all__ = [
     "generate_asap_dataset_id",
     "generate_human_subject_ids",
     "generate_human_sample_ids",
+    "generate_mouse_subject_ids",
+    "generate_mouse_sample_ids",
     "load_pmdbs_id_mappers",
     "export_pmdbs_id_mappers",
     "update_pmdbs_id_mappers",
@@ -33,9 +35,7 @@ __all__ = [
     "load_mouse_id_mappers",
     "export_mouse_id_mappers",
     "update_mouse_id_mappers",
-    "update_mouse_meta_tables",
-    "load_mouse_id_mappers",
-    "export_mouse_id_mappers",
+    "update_mouse_meta_tables_with_asap_ids",
 ]
 
 
@@ -734,107 +734,6 @@ def export_mouse_id_mappers(
     write_id_mapper(sampleid_mapper, sample_mapper_path)
 
 
-def generate_subject_ids(
-    subjectid_mapper: dict, subject_df: pd.DataFrame, source: str = "mouse"
-) -> tuple[dict, dict, dict]:
-    """
-    generate new unique_ids for new subject_ids (tecnically mouse IDs) in subject_df (mouse_df)table,
-    update the id_mapper with the new ids from the data table
-
-    return updated id_mappers
-    """
-    # force NA to be Nan
-    subject_df = subject_df.replace("NA", pd.NA)
-
-    # extract the max value of the mapper's third (last) section ([2] or [-1]) to get our n
-    if bool(subjectid_mapper):
-        n = max([int(v.split("_")[2]) for v in subjectid_mapper.values() if v]) + 1
-    else:
-        n = 1
-    nstart = n
-
-    # ids_df = subject_df[['subject_id','source_subject_id', 'AMPPD_id', 'GP2_id']].copy()
-    ids_df = subject_df.copy()
-
-    # might want to use 'source_subject_id' instead of 'subject_id' since we want to find matches across teams
-    # shouldn't actually matter but logically cleaner
-    uniq_subj = ids_df["subject_id"].unique()
-    dupids_mapper = dict(
-        zip(uniq_subj, [num + nstart for num in range(len(uniq_subj))])
-    )
-
-    n_asap_id_add = 0
-
-    df_dup_chunks = []
-    id_source = []
-    for subj_id, samp_n in dupids_mapper.items():
-        df_dups_subset = ids_df[ids_df.subject_id == subj_id].copy()
-
-        # check if gp2_id is known
-        # NOTE:  the gp2_id _might_ not be the GP2ID, but instead the GP2sampleID
-        #        we might want to check for a trailing _s\d+ and remove it
-        #        need to check w/ GP2 team about this.  The RepNo might be sample timepoint...
-        #        and hence be a "subject" in our context
-        #    # df['GP2ID'] = df['GP2sampleID'].apply(lambda x: ("_").join(x.split("_")[:-1]))
-        #    # df['SampleRepNo'] = df['GP2sampleID'].apply(lambda x: x.split("_")[-1])#.replace("s",""))
-        # check if subj_id is known
-        add_subj_id = False
-        # check if subj_id (subject_id) is known
-        if subj_id in set(subjectid_mapper.keys()):  # duplicate!!
-            # TODO: log this
-            # TODO: check for `subject_id` naming collisions with other teams
-            asap_subj_id = subjectid_mapper[subj_id]
-        else:
-            add_subj_id = True
-            asap_subj_id = None
-
-        # TODO:  improve the logic here so gp2 is the default if it exists.?
-        #        we need to check the team_id to make sure it's not a naming collision on subject_id
-        #        we need to check the biobank_name to make sure it's not a naming collision on source_subject_id
-
-        testset = set(asap_subj_id)
-        if None in testset:
-            testset.remove(None)
-
-        # check that asap_subj_id is not disparate between the maps
-        if len(testset) > 1:
-            print(f"collission between our ids: {(asap_subj_id)=}")
-            print(
-                f"this is BAAAAD. could be a naming collision with another dataset on `subject_id` "
-            )
-
-        if len(testset) == 0:  # generate a new asap_subj_id
-            # print(samp_n)
-            asap_subject_id = f"ASAP_{source.upper()}_{samp_n:06}"
-            # df_dups_subset.insert(0, 'ASAP_subject_id', asap_subject_id, inplace=True)
-        else:  # testset should have the asap_subj_id
-            asap_subject_id = testset.pop()  # but where did it come from?
-            # print(f"found {subj_id }:{asap_subject_id} in the maps")
-
-        src = []
-        if add_subj_id:
-            # TODO:  instead of just adding we should check if it exists...
-            subjectid_mapper[subj_id] = asap_subject_id
-            n_asap_id_add += 1
-            src.append("asap")
-
-        df_dup_chunks.append(df_dups_subset)
-        id_source.append(src)
-
-    df_dups_wids = pd.concat(df_dup_chunks)
-    assert df_dups_wids.sort_index().equals(subject_df)
-    print(f"added {n_asap_id_add} new asap_subject_ids")
-    # print(id_source)
-
-    return subjectid_mapper
-
-
-def generate_sample_ids(
-    subjectid_mapper: dict, sample_df: pd.DataFrame, source: str = "mouse"
-) -> dict:
-    return generate_sample_ids(subjectid_mapper, sample_df, source="mouse")
-
-
 def generate_sample_ids(
     subjectid_mapper: dict, sample_df: pd.DataFrame, source: str = "mouse"
 ) -> dict:
@@ -909,7 +808,10 @@ def generate_sample_ids(
     return sampleid_mapper
 
 
-### IPSCS
+###############################################
+### IPSC specific functions
+###############################################
+### IPSCs
 # isolate generation of the IDs and adding to mappers from updating the tables.
 def update_ipsc_id_mappers(sample_df, long_dataset_name, datasetid_mapper):
     pass
