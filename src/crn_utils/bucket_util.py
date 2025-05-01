@@ -124,7 +124,7 @@ def gsutil_cp2(
     else:
         cmd = f"gsutil {project_flag} cp {source} {destination}"
 
-    # print(cmd)
+    print(cmd)
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
     if result.returncode == 0:
         # print(f"gsutil command succeeded: {result.stdout}")
@@ -211,7 +211,8 @@ def gsutil_rsync_r(source, destination):
 
     project = "dnastack-asap-parkinsons"
 
-    cmd = f"gsutil -u {project} -m rsync -d -r {source} {destination}"
+    # cmd = f"gsutil -u {project} -m rsync -d -r {source} {destination}"
+    cmd = f"gsutil -u {project} -m rsync -r {source} {destination}"
     # print(cmd)
 
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
@@ -238,10 +239,12 @@ def gsutil_rsync2(source, destination):
     """
 
     project = "dnastack-asap-parkinsons"
-    project = "terra-perky-eggplant-3797"
+    # project = "terra-perky-eggplant-3797"
+    project = "wb-lucent-beet-9811"
 
-    cmd = f"gsutil -u {project} -m rsync -r -d {source} {destination}"
-    # print(cmd)
+    # cmd = f"gsutil -u {project} rsync -r -d {source} {destination}"
+    cmd = f"gsutil -u {project} rsync -r {source} {destination}"
+    print(cmd)
 
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
     if result.returncode == 0:
