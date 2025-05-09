@@ -1,13 +1,13 @@
 Table,Field,Description,DataType,Required,Validation,Shared_key,V0,comment,denormalized,source relavent
-,ASAP_dataset_id,ASAP Dataset ID. Unique ID issued by ASAP CRN Cloud. ,String,Assigned,,1,,,,
-,ASAP_team_id,ASAP Team ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,
-STUDY,ASAP_team_name,"ASAP Team Name:   Name of the ASAP CRN Team. i.e. ""TEAM-LEE"",""TEAM-HAFLER"",""TEAM-HARDY"",etc.",Enum,Required,"[""TEAM-LEE"",""TEAM-HAFLER"",""TEAM-HARDY"", ""TEAM-JAKOBSSON"", ""TEAM-SCHERZER"", ""TEAM-SULZER"", ""TEAM-VOET"", ""TEAM-WOOD"",""TEAM-RIO"", ""TEAM-EDWARDS"",""TEAM-VILA"",""TEAM-KIRIK"", ""TEAM-BIEDERER""]",0,,,,
+STUDY,ASAP_dataset_id,ASAP Dataset ID. Unique ID issued by ASAP CRN Cloud. ,String,Assigned,,1,,,,
+STUDY,ASAP_team_id,ASAP Team ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,
+STUDY,ASAP_team_name,"ASAP Team Name:   Name of the ASAP CRN Team. i.e. ""TEAM-LEE"",""TEAM-HAFLER"",""TEAM-HARDY"",etc.",Enum,Required,"[""TEAM-LEE"",""TEAM-HAFLER"",""TEAM-HARDY"", ""TEAM-JAKOBSSON"", ""TEAM-SCHERZER"", ""TEAM-SULZER"", ""TEAM-VOET"", ""TEAM-WOOD"",""TEAM-RIO"", "" TEAM-EDWARDS"",""TEAM-VILA"",""TEAM-KIRIK""]",0,,,,
 STUDY,ASAP_lab_name,Lab Name. :   Lab name that is submitting dataset for the ASAP CRN Team.,String,Required,,0,,,,
 STUDY,project_name,Project Name:   A Title of the overall project. A unique and clear title of the Team's project.,String,Required,,0,,,,
 STUDY,project_description,Project Description:   Brief description of the goals and objectives of the project.,String,Required,,0,,,,
-STUDY,dataset_title,Dataset Title:   Title for this dataset.,String,Required,,0,,new for v3.1,,
-STUDY,dataset_description,Dataset Description:   Brief description specific to the dataset.,String,Required,,0,,new for v3.1,,
-STUDY,dataset_name,"Dataset Name:   A unique name is required for each data submission, as one project can generate and submit multiple datasets.  snakecase.",String,Required,,0,,name change for v3.1 (was 'project_dataset'),,
+STUDY,dataset_title,Dataset Title:   Title for this dataset.,String,Required,,0,,,,
+STUDY,dataset_description,Dataset Description:   Brief description specific to the dataset.,String,Required,,0,,,,
+STUDY,dataset_name,"Dataset Name:   A unique name is required for each data submission, as one project can generate and submit multiple datasets.  snakecase.",String,Required,,0,,,,
 STUDY,PI_full_name,"Principal Investigator Name.:   Full name of the lab Principal Investigator. Format:  First name, Initial, Last name",String,Required,,0,,,,
 STUDY,PI_email,Principal Investigator E-mail.:   E-mail address of the Principle Investigator of the Lab submitting the data.,String,Required,,0,,,,
 STUDY,contributor_names,"Contributor(s).:   Names of all contributors to the dataset. Format:  First name, Initial, Last name ; First name, Initial, Last name ; ...",String,Required,,0,,,,
@@ -28,8 +28,8 @@ STUDY,PI_google_scholar_id,PI Google Scholar ID.:   ,String,Optional,,0,,,,
 STUDY,preprocessing_references,Preprocessing References.:   Github repository link or similar code reference plus electronic lab notes detailing all data generation steps and quality control summaries.  Analysis scripts for additional processing will also create valuable context.,String,Optional,,0,,,,
 STUDY,metadata_version_date,Metadata Version and Date.  :   Metadata Version and Date,String,Optional,,0,OTHER,,,
 STUDY,alternate_dataset_id,Alternate dataset identifier,String,Optional,,0,,,,
-,ASAP_dataset_id,ASAP Dataset ID. Unique ID issued by ASAP CRN Cloud. ,String,Assigned,,1,,,,
-,ASAP_team_id,ASAP Team ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,
+PROTOCOL,ASAP_dataset_id,ASAP Dataset ID. Unique ID issued by ASAP CRN Cloud. ,String,Assigned,,1,,,,
+PROTOCOL,ASAP_team_id,ASAP Team ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,
 PROTOCOL,sample_collection_summary,Sample Collection Summary.:   Short summary detailing how samples were collected.  ,String,Required,,0,,,,
 PROTOCOL,cell_extraction_summary,Cell Extraction Summary.:   Short summary detailing the protocols used for cell extraction. ,String,Required,,0,,,,
 PROTOCOL,lib_prep_summary,Library Preparation Summary.:   Short summary detailing how the library was prepared.,String,Required,,0,,,,
@@ -37,35 +37,35 @@ PROTOCOL,data_processing_summary,Data Processing Summary.:   Short summary of ho
 PROTOCOL,github_url,Github Repository Link.:   URL for lab github repo conatining the code and scripts for processing data in this dataset.,String,Required,,0,,,,
 PROTOCOL,protocols_io_DOI,Protocols.io DOI.:   Digital Object Identifier (DOI) for protocols.io,String,Required,,0,,,,
 PROTOCOL,other_reference,Other Reference.:   Link to technology/platform protocol(s) if not available in protocols.io,String,Optional,,0,,,,
-,ASAP_dataset_id,ASAP Dataset ID. Unique ID issued by ASAP CRN Cloud. ,String,Assigned,,1,,,,HUMAN
-,ASAP_team_id,ASAP Team ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,HUMAN
-,ASAP_subject_id,ASAP Subject ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,HUMAN
+SUBJECT,ASAP_dataset_id,ASAP Dataset ID. Unique ID issued by ASAP CRN Cloud. ,String,Assigned,,1,,,,HUMAN
+SUBJECT,ASAP_team_id,ASAP Team ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,HUMAN
+SUBJECT,ASAP_subject_id,ASAP Subject ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,HUMAN
 SUBJECT,subject_id,The Subject ID.  This will be a unique ID for the subject.  Please submit the subject ID used internally.  In the harmonized dataset this may be modified by the ASAP team to prevent naming collisions.  ,String,Required,,1,,,,HUMAN
 SUBJECT,source_subject_id,Source Subject ID.:   Subject ID issued by providing brain bank.,String,Required,,1,,,,HUMAN
 SUBJECT,biobank_name,Biobank Name.:   Name of the biobank from which the samples were sourced.,String,Required,,0,,,,HUMAN
 SUBJECT,sex,Sex.:   Genetically derived sex. ,Enum,Required,"[""Male"", ""Female"",""Intersex"",""Unnown""]",0,,,,HUMAN
 SUBJECT,age_at_collection,Age at Collection.:   Numerical age of subject at sample collection. Unit of years in decimal format.,Float,Required,,0,,,,HUMAN
 SUBJECT,race,Race.:   Reported race of subject. NINDS CDE for race. NOT genetic race.,Enum,Required,"[""American Indian or Alaska Native"", ""Asian"", ""White"", ""Black or African American"", ""Multi-racial"", ""Native Hawaiian or Other Pacific Islander"", ""Other"", ""Unknown"", ""Not Reported""]",0,,,,HUMAN
-SUBJECT,gp2_phenotype,"GP2 Parkinson's phenotype:   GP2 aligned diagnosis phenotype of the subject. PD - parkinsons disease, Control - no NDD diagnosis, Prodromal - prodromal parkinsons, Other - encompasses anything not in the above list for example diagnoses llike huntingtons, NA - missing, MSA - multiple system atrophy, PSP - progressive supranuclear palsy, DLB - dementia with lewey bodies, CBS - corticobasal degeneration, AD - alzheimers disease",Enum,Required,"[""PD"", ""Control"", ""Prodromal"", ""Other"", ""Not Reported"", ""MSA"", ""PSP"", ""DLB"", ""CBS"", ""AD""]",0,,new for v3.1,,HUMAN
 SUBJECT,primary_diagnosis,"Primary Diagnosis.:   The diagnosis of the subject.  Because subjucts could have multple diagnoses, this is the PRIMARY diagnosis. ",Enum,Required,"[""Healthy Control"", ""Idiopathic PD"", ""Alzheimer's disease"", ""Frontotemporal dementia"", ""Corticobasal syndrome"", ""Dementia with Lewy bodies"", ""Dopa-responsive dystonia"", ""Essential tremor"", ""Hemiparkinson/hemiatrophy syndrome"", ""Juvenile autosomal recessive parkinsonism"", ""Motor neuron disease with parkinsonism"", ""Multiple system atrophy"", ""Neuroleptic-induced parkinsonism"", ""Normal pressure hydrocephalus"", ""Progressive supranuclear palsy"", ""Psychogenic parkinsonism"", ""Vascular parkinsonism"", ""No PD nor other neurological disorder"", ""Spinocerebellar Ataxia (SCA)"", ""Prodromal non-motor PD"", ""Prodromal motor PD"", ""Other neurological disorder""]",0,,,,HUMAN
+SUBJECT,gp2_phenotype,"GP2 Parkinson's phenotype:   GP2 aligned diagnosis phenotype of the subject. PD - parkinsons disease, Control - no NDD diagnosis, Prodromal - prodromal parkinsons, Other - encompasses anything not in the above list for example diagnoses llike huntingtons, Not reported - missing, MSA - multiple system atrophy, PSP - progressive supranuclear palsy, DLB - dementia with lewey bodies, CBS - corticobasal degeneration, AD - alzheimers disease",Enum,Required,"[""PD"", ""Control"", ""Prodromal"", ""Other"", ""Not Reported"", ""MSA"", ""PSP"", ""DLB"", ""CBS"", ""AD""]",0,,,,HUMAN
 SUBJECT,primary_diagnosis_text,"Primary Diagnosis Text.:   If the primary_diagnosis is ""Other neurological disorders"" diagnosis must be specified here. ",string,Optional,,0,,change for v3,,PMDBS
-,ASAP_sample_id,ASAP Sample ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,
-,ASAP_subject_id,ASAP Subject ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,can be assigned NULL for datasets where subject doesn't make sense,1,,,,
-,ASAP_dataset_id,ASAP Dataset ID. Unique ID issued by ASAP CRN Cloud. ,String,Assigned,,1,,,,
-,ASAP_team_id,ASAP Team ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,
-SAMPLE,sample_id,"Sample ID.:   ID of each individual sample used in the study (e.g. cortex of anterior cingulate gyrus); if from the same brain several regions are included in the study, each region (i.e. each sample) has different ID and listed as a separate entry. Please replace spaces ("" "") with underscores (""_"").",String,Required,,1,,,,
-SAMPLE,subject_id,"Subject ID.:   Can be multiple samples from each Subject. Please replace spaces ("" "") with underscores (""_"").",String,Required,,1,,,,
-SAMPLE,source_sample_id,"Source Sample ID.:   ID provided by Brain bank or other source. Please replace spaces ("" "") with underscores (""_"").",String,Required,,1,,,,
-SAMPLE,replicate,"Replicate.:   Indicator for replicates of the sample.  Replicates could be biological or technical.  Indicate biological replicates as capitalized ""Rep"" + replicated number (i.e. Rep1, Rep2, etc) and technical replicates with lowercase ""rep"" + replicate number (i.e., rep1, rep2 etc.)",String,Required,,0,,,,
+SAMPLE,ASAP_sample_id,ASAP Sample ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,
+SAMPLE,ASAP_subject_id,ASAP Subject ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,can be assigned NULL for datasets where subject doesn't make sense,1,,,,
+SAMPLE,ASAP_dataset_id,ASAP Dataset ID. Unique ID issued by ASAP CRN Cloud. ,String,Assigned,,1,,,,
+SAMPLE,ASAP_team_id,ASAP Team ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,
+SAMPLE,sample_id,"Sample ID.:   ID of each individual sample used in the study (e.g. cortex of anterior cingulate gyrus); if from the same brain several regions are included in the study, each region (i.e. each sample) has different ID and listed as a separate entry",String,Required,,1,,,,
+SAMPLE,subject_id,Subject ID.:   Can be multiple samples from each Subject. Avoid spaces.,String,Required,,1,,,,
+SAMPLE,source_sample_id,Source Sample ID.:   ID provided by Brain bank or other source,String,Required,,1,,,,
+SAMPLE,replicate,"Replicate.:   Indicator for replicates of the sample.  Replicates could be biological or tecnical.  Indicate biological replicates as capitalized ""Rep"" + replicated number (i.e. Rep1, Rep2, etc) and technical replicates with lowercase ""rep"" + replicate number (i.e., rep1, rep2 etc.)",String,Required,,0,,,,
 SAMPLE,replicate_count,"Replicate Count.:   Number of replicates of this sample.  Typically this will be 1, but if replicates have been collected indicate how many total.",Integer,Required,,0,,,,
 SAMPLE,repeated_sample,Repeated Sample.:   Repeated Sample indicator.  This will be treated as a boolean.  i.e. enter 0 unless sample is a replicate.,Integer,Required,,0,,,,
-SAMPLE,batch,"Batch.:   Label to enumerate the batch. This will probablby numerica, but could be coded as letters. Please replace spaces ("" "") with underscores (""_"").",String,Required,,1,,,,
-SAMPLE,organism,Organism.:   Organism of the subject. ,Enum,Required,"[""Human"", ""Mouse"",""Dog"",""Fly"",""Other""]",0,,change for v3,,
+SAMPLE,batch,"Batch.:   Label to enumerate the batch. This will probablby numerica, but could be coded as letters.",String,Required,,1,,,,
+SAMPLE,organism,"Organism.:   Organism of the subject. Currently this is ONLY: ""Human""",Enum,Required,"[""Human"", ""Mouse"",""Dog"",""Fly"",""Other""]",0,,change for v3,,
 SAMPLE,tissue,"Tissue.:   Type of tissue.  e.g. ""Brain"" or other organ.  For this PMDBS database it should always be ""Brain"".  ""Colon"", ""iPSC"", ""Blood"",  ""CSF"", etc.",String,Required,,0,,,,
-SAMPLE,assay_type,Type of Assay. Refers to the ASSAY_* table. Expand as nescessary,Enum,Required,"['scRNAseq','snRNAseq','bulkRNAseq']",0,,new for v3,,
+SAMPLE,assay_type,Type of Assay. Refers to the ASSAY_* table. Expand as nescessary,Enum,Required,"['scRNAseq','snRNAseq','bulkRNAseq','spatialRNAseq']",0,,new for v3,,
 SAMPLE,condition_id,"experimental condition. e.g. ""PD"", ""Control"", ""Prodromal"", ""Other"".  Defined further in CONDITION table.",String,Required,,0,,new for v3,,
 SAMPLE,organism_ontology_term_id,"Organism Ontology Term ID.:   NCBITaxon e.g. 9606 for Homo Sapiens, 10090 for mouse",Enum,Required,"[""NCBITaxon:9606"",""NCBITaxon:10090""]",0,,change for v3,,
-SAMPLE,age_at_collection,"Age at Collection.:   Numerical age of subject/animal at sample collection. Matches SUBJECT.'age_at_collection' for Human/PMDBS, magches MOUSE.age for Mouse datasets.",Float,Required,,0,,,,
+SAMPLE,age_at_collection,"Age at Collection.:   Numerical age of subject/animal at sample collection. Matches SUBJECT.'age_at_collection' for Human/PMDBS, magches MOUSE.age for Mouse datasets. ",Float,Required,,0,,,,
 SAMPLE,time,"Time.:   Time from baseline in days. Units in days, 0 is baseline to facilitate longitudinal analysis.",Float,Optional,,0,,change for v3,,
 SAMPLE,alternate_id,Alternate ID.:  alternate sample identifier. e.g. cell line,String,Optional,,0,,new for v3,,
 SAMPLE,development_stage_ontology_term_id,Development Stage Ontology Term.:   HsapDv if human. Included for compatibilty with CELLxGENE. https://www.ebi.ac.uk/ols/ontologies/hsapdv,String,Optional,,0,,change for v3,,
@@ -80,24 +80,25 @@ SAMPLE,cell_type_ontology_term_id,Cell Type Ontology Term ID.:   CL. Included fo
 SAMPLE,source_RIN,"Source RIN.:  RIN provided by Tissue/Brain/Biobank, if applicable.",Float,Optional,,0,,,,
 SAMPLE,DV200,DV200.:   Value is the percentage of RNA fragments larger than 200 nucleotides.,Float,Optional,,0,,,,
 SAMPLE,suspension_type,"Suspension Type.:   Cell, nucleus, or na, as corresponding to assay. Included for compatibilty with CELLxGENE. Use https://github.com/chanzuckerberg/single-cell-curation/blob/main/schema/3.0.0/schema.md#suspension_type defined in the data schema for additional guidance.",String,Optional,,0,,change for v3,,
-,ASAP_sample_id,ASAP Sample ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,
-,ASAP_dataset_id,ASAP Dataset ID. Unique ID issued by ASAP CRN Cloud. ,String,Assigned,,1,,,,
-,ASAP_team_id,ASAP Team ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,
-ASSAY_RNAseq,sample_id,"Sample ID.:   ID of each individual sample used in the study (e.g. cortex of anterior cingulate gyrus); if from the same brain several regions are included in the study, each region (i.e. each sample) has different ID and listed as a separate entry. Please replace spaces ("" "") with underscores (""_"").",String,Required,,1,,,,
+ASSAY_RNAseq,ASAP_sample_id,ASAP Sample ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,
+ASSAY_RNAseq,ASAP_dataset_id,ASAP Dataset ID. Unique ID issued by ASAP CRN Cloud. ,String,Assigned,,1,,,,
+ASSAY_RNAseq,ASAP_team_id,ASAP Team ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,
+ASSAY_RNAseq,sample_id,"Sample ID.:   ID of each individual sample used in the study (e.g. cortex of anterior cingulate gyrus); if from the same brain several regions are included in the study, each region (i.e. each sample) has different ID and listed as a separate entry",String,Required,,1,,,,
 ASSAY_RNAseq,tissue,"Tissue.:   Type of tissue.  e.g. ""Brain"" or other organ.  For this PMDBS database it should always be ""Brain"". ",String,Required,,0,,,,
 ASSAY_RNAseq,technology,Technology.:   Technology used for the assay.  e.g. 'sN' for single Nuclei or 'sC' for single Cell.,Enum,Required,"['SN','SC','Spatial','Bulk','Seq','Array']",0,,,,
 ASSAY_RNAseq,omic,"Omic.:   Readout type. This will be ""RNA"" for most of the ASAP CRN data.",Enum,Required,"['RNA','DNA','Hi-C','ATAC','Protein']",0,,,,
 ASSAY_RNAseq,RIN,RIN.:  RNA integrity number (RIN) is an algorithm for assigning integrity values to RNA measurements. RIN on sample received (performed by team/lab/3rd party)?,Float,Required,,0,,,,
 ASSAY_RNAseq,molecular_source,"Molecular Source.:   The molecular source of the data could be DNA, RNA or protein, for example.  Initially this will be RNA.",Enum,Required,"[""Total RNA"", ""PolyA RNA"", ""Cytoplasmic RNA"", ""Nuclear RNA"", ""Genomic DNA"", ""Protein"", ""Other""]",0,,,,
 ASSAY_RNAseq,input_cell_count,Input Cell Count.:   Total count of cells (single cell or single nuclei) that were originally isolated and processed for capture. I.e. cell suspension concentration * volume injected.,Integer,Required,,0,,,,
-ASSAY_RNAseq,assay,Assay.:   Assay performed and Version. Other for non-10x,Enum,Required,"[""v3.1 - Dual Index"",""v3.1 - Single Index"",""v2 - Dual Index"", ""v1"", ""Xenium In Situ"",""v1.1 - Single Index"", ""v2"", ""Other""]",0,,,,
+ASSAY_RNAseq,assay,"Assay.:   Assay performed and Version. Other for non-10x, or add apropriate designation",Enum,Required,"[""v3.1 - Dual Index"",""v3.1 - Single Index"",""v2 - Dual Index"", ""v1"", ""Xenium In Situ"",""v1.1 - Single Index"", ""v2"", ""Other"",""GeoMx Hu WTA""]",0,,,,
 ASSAY_RNAseq,sequencing_end,Sequencing End.:   Specification sequencing type: Single End vs. Paired-End.,Enum,Required,"[""Single"", ""Paired-end""]",0,,,,
 ASSAY_RNAseq,sequencing_length,Sequencing Length.:   Nominal Number of base pairs sequenced.  ,Integer,Required,,0,,change for v3,,
 ASSAY_RNAseq,sequencing_instrument,Sequencing Instrument.:   The instrument used to perform sequencing.   Illumina NovaSeq 6000 recommended by protocols alignment group leads.,Enum,Required,"[""Illumina NovaSeq 6000"", ""llumina HiSeq 2500"", ""Illumina HiSeq 3000"", ""Illumina HiSeq 4000"", ""Illumina NextSeq 550"", ""Illumina HiSeq X Ten"", ""Illumina HiSeq X Five"", ""Illumina MiSeq"", ""on Torrent PGM"", ""Ion Torrent Proton"", ""Ion Torrent S5"", ""Ion Torrent S5 XL"", ""PacBio RS"", ""PacBio RS II"", ""Other""]",0,,,,
-,ASAP_sample_id,ASAP Sample ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,
-,ASAP_dataset_id,ASAP Dataset ID. Unique ID issued by ASAP CRN Cloud. ,String,Assigned,,1,,,,
-,ASAP_team_id,ASAP Team ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,
-DATA,sample_id,"Sample ID.:   ID of each individual sample used in the study (e.g. cortex of anterior cingulate gyrus); if from the same brain several regions are included in the study, each region (i.e. each sample) has different ID and listed as a separate entry. Please replace spaces ("" "") with underscores (""_"").",String,Required,,1,,,,
+DATA,ASAP_sample_id,ASAP Sample ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,
+DATA,ASAP_dataset_id,ASAP Dataset ID. Unique ID issued by ASAP CRN Cloud. ,String,Assigned,,1,,,,
+DATA,ASAP_team_id,ASAP Team ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,
+DATA,gcp_uri,location of raw data file in the raw google bucket,String,Assigned,,,,,,
+DATA,sample_id,"Sample ID.:   ID of each individual sample used in the study (e.g. cortex of anterior cingulate gyrus); if from the same brain several regions are included in the study, each region (i.e. each sample) has different ID and listed as a separate entry",String,Required,,1,,,,
 DATA,replicate,"Replicate.:   Indicator for replicates of the sample.  Replicates could be biological or tecnical.  Indicate biological replicates as capitalized ""Rep"" + replicated number (i.e. Rep1, Rep2, etc) and technical replicates with lowercase ""rep"" + replicate number (i.e., rep1, rep2 etc.)",String,Required,,0,,,,
 DATA,replicate_count,"Replicate Count.:   Number of replicates of this sample.  Typically this will be 1, but if replicates have been collected indicate how many total.",Integer,Required,,0,,,,
 DATA,repeated_sample,Repeated Sample.:   Repeated Sample indicator.  This will be treated as a boolean.  i.e. enter 0 unless sample is a replicate.,Integer,Required,,0,,,,
@@ -111,20 +112,20 @@ DATA,content,Content.:   What is the variable measurement values? ,Enum,Required
 DATA,header,Header.:   What are the primary header labels?,String,Optional,,0,,change for v3,,
 DATA,annotation,"Annotation.:   Additional annotation columns present in file. I.e. 'tissue','UMI','barcode','cluster', or'cell location' ... Additional colunns in the annData or HDF files when relevant to technologies like single cell or spatial. ['SNP','ENSG','interval'] SNP is rsID or positional annotation. Interval is in chr_start_stop format. ENSG is ensemble ID.",String,Optional,,0,,change for v3,,
 DATA,configuration_file,"Configuration File.:   Incl. software version, reference assembly, parameters for analysis, in YAML format",String,Optional,,0,,change for v3,,
-,ASAP_sample_id,ASAP Sample ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,
-,ASAP_dataset_id,ASAP Dataset ID. Unique ID issued by ASAP CRN Cloud. ,String,Assigned,,1,,,,
-,ASAP_team_id,ASAP Team ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,
-PMDBS,sample_id,"Sample ID.:   ID of each individual sample used in the study (e.g. cortex of anterior cingulate gyrus); if from the same brain several regions are included in the study, each region (i.e. each sample) has different ID and listed as a separate entry. Please replace spaces ("" "") with underscores (""_"").",String,Required,,1,,,,
-PMDBS,brain_region,Brain Region.:   The anatomical origin of brain sample.,String,Required,,0,,v3.1 encoding change to conform to Ding et al. 2016 ontology for brain regions,,PMDBS
+PMDBS,ASAP_sample_id,ASAP Sample ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,
+PMDBS,ASAP_dataset_id,ASAP Dataset ID. Unique ID issued by ASAP CRN Cloud. ,String,Assigned,,1,,,,
+PMDBS,ASAP_team_id,ASAP Team ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,
+PMDBS,sample_id,"Sample ID.:   ID of each individual sample used in the study (e.g. cortex of anterior cingulate gyrus); if from the same brain several regions are included in the study, each region (i.e. each sample) has different ID and listed as a separate entry",String,Required,,1,,,,
+PMDBS,brain_region,Brain Region.:   The anatomical origin of brain sample.,String,Required,,0,,,,PMDBS
 PMDBS,hemisphere,Side of the hemisphere (i.e. right or left) from which the sample is acquired:   Side of the hemisphere (i.e. right or left) from which the sample is acquired,Enum,Optional,"[""Right"",""Left"",""Unknown""]",0,,change for v3,,PMDBS
 PMDBS,region_level_1,Region Level 1.:   General (Level 1) anatomical location.  ,Enum,Required,"[""Frontal lobe"", ""Temporal lobe"", ""Parietal lobe"", ""Occipital lobe"", ""Cingulate gyrus"", ""Striatum"", ""Thalamus"", ""Midbrain"", ""Pons"", ""Medulla"", ""Cerebellum"", ""Intestine"", ""Unknown""]",0,,change for v3,,PMDBS
-PMDBS,region_level_2,"Region Level 2.:   More specific (Level 2) anatomical subdivision. Note that ""CA1-CA4"" indicates Hippocampus origin.",Enum,Required,"[""Prefrontal cortex"",""Superior frontal gyrus"",""Middle frontal gyrus"",""Inferior frontal gyrus"",""Superior temporal gyrus"",""Middle temporal gyrus"",""Inferior temporal gyrus"",""Fusiform gyrus"",""Transentorhinal region"",""Entorinal region"",""Subiculum"",""CA1-CA4"",""Amygdala"",""Periamygdala cortex"",""Anterior cingulate gyrus"",""Posterior cingulate gyrus"",""Superior parietal lobule"",""Inferior parietal lobule"",""Parastriate cortex"",""Peristriate cortex"",""Striate cortex"",""Insular cortex"",""Caudate nucleus"",""Putamen"",""Globus pallidus"",""Thalamus"",""Subthalamic nucleus"",""Substantia nigra"",""Pontine tegmentum"",""Pontine base"",""Medulla tegmentum"",""Medulla base"",""Cerebellar vermis"",""Cerebellar hemisphere"",""Dentate nucleus"",""Unknown""]",0,,change for v3,,PMDBS
+PMDBS,region_level_2,"Region Level 2.:   More specific (Level 2) anatomical subdivision. Note that ""CA1-CA4"" indicates Hippocampus origin.",Enum,Required,"[""Prefrontal cortex"",""Superior frontal gyrus"",""Middle frontal gyrus"",""Inferior frontal gyrus"",""Superior temporal gyrus"",""Middle temporal gyrus"",""Inferior temporal gyrus"",""Fusiform gyrus"",""Transentorhinal region"",""Entorinal region"",""Subiculum"",""CA1-CA4"",""Amygdala"",""Periamygdala cortex"",""Anterior cingulate gyrus"",""Posterior cingulate gyrus"",""Superior parietal lobule"",""Inferior parietal lobule"",""Parastriate cortex"",""Peristriate cortex"",""Striate cortex"",""Insular cortex"",""Caudate nucleus"",""Putamen"",""Globus pallidus"",""Thalamus"",""Subthalamic nucleus"",""Substantia nigra"",""Pontine tegmentum"",""Pontine base"",""Medulla tegmentum"",""Medulla base"",""Cerebellar vermis"",""Cerebellar hemisphere"",""Dentate nucleus"",""Right colon"",""Left colon"",""Unknown""]",0,,change for v3,,PMDBS
 PMDBS,region_level_3,Region Level 3.:   Specification if the sample is from the grey or white matter. ,Enum,Required,"[""Grey matter"", ""White matter"", ""Grey and white matter"", ""Unknown""]",0,,change for v3,,PMDBS
-,ASAP_dataset_id,ASAP Dataset ID. Unique ID issued by ASAP CRN Cloud. ,String,Assigned,,1,,,,
-,ASAP_team_id,ASAP Team ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,
-,ASAP_subject_id,ASAP Subject ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,
-CLINPATH,subject_id,"Subject ID.:   Can be multiple samples from each Subject. Please replace spaces ("" "") with underscores (""_"").",String,Required,,1,SUBJECT,,,
-CLINPATH,source_subject_id,"Source Sample ID.:   ID provided by Brain bank or other source. Please replace spaces ("" "") with underscores (""_"").",String,Required,,1,SUBJECT,,,
+CLINPATH,ASAP_dataset_id,ASAP Dataset ID. Unique ID issued by ASAP CRN Cloud. ,String,Assigned,,1,,,,
+CLINPATH,ASAP_team_id,ASAP Team ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,
+CLINPATH,ASAP_subject_id,ASAP Subject ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,
+CLINPATH,subject_id,Subject ID.:   Can be multiple samples from each Subject,String,Required,,1,SUBJECT,,,
+CLINPATH,source_subject_id,Source Sample ID.:   ID provided by Brain bank or other source,String,Required,,1,SUBJECT,,,
 CLINPATH,duration_pmi,Duration of Pmi.:   Post Mortem Interval (PMI) between death and autopsy start. Units in hours,Float,Required,,0,SUBJECT,,,
 CLINPATH,age_at_death,Age at Death.:   Age in years when the donor from which the sample is derived died,String,Required,,0,,,,
 CLINPATH,AMPPD_id,AMP-PD ID.:   The AMP-PD ID if subhect has samples in AMP-PD. NULL if not in AMP-PD,String,Optional,,0,,change for v3,,PMDBS
@@ -159,7 +160,7 @@ CLINPATH,brain_weight,Brain Weight.:   Post-mortem brain weight in grams.,Float,
 CLINPATH,path_braak_nft,Pathology Braak NFT.:   Braak&Braak neurofibrillary tangle tau stage.  ,Enum,Optional,"[""0"", ""I"", ""II"", ""III"", ""IV"", ""V"", ""VI"", ""I/II"", ""III/IV"", ""IV/V"", ""V/VI""]",0,,change for v3,,PMDBS
 CLINPATH,path_braak_asyn,Pathology Braak asyn:   Braak&Braak lewie body stage.  ,Enum,Optional,"[""0"", ""1"", ""2"", ""3"", ""4"", ""5"", ""6"", ""1/2"", ""3/4"", ""4/5"", ""5/6""]",0,,change for v3,,PMDBS
 CLINPATH,path_cerad,Pathology CERAD:   Semiquantitative assessment of neuritic plaques.,Enum,Optional,"[""None"", ""Sparse"", ""Moderate"", ""Frequent""]",0,,change for v3,,PMDBS
-CLINPATH,path_thal,Pathology Thal :   Thal stage of Amyloid beta. ,Enum,Optional,"[""0"", ""1"", ""2"", ""3"", ""4"", ""5"", ""1/2"", ""3"", ""4/5""]",0,,change for v3,,PMDBS
+CLINPATH,path_thal,Pathology Thal :   Thal stage of Amyloid beta. ,Enum,Optional,"[""0"", ""1"", ""2"", ""3"", ""4"", ""5"", ""1/2"",""4/5""]",0,,change for v3,,PMDBS
 CLINPATH,known_pathogenic_mutation,"Known Pathogenic Mutation.:   Does the donor from which the sample is acquired is known to have a pathogenic Parkinson's disease -causing mutation as known to the brain bank, including GBA?  ",Enum,Optional,"[""None"", ""Present"", ""Unknown""]",0,,,,PMDBS
 CLINPATH,PD_pathogenic_mutation,"PD Pathogenic Mutation.:   To specify as a free text which pathogenic mutation the donor has (e.g., LRRK2 G2019S, GBA L444P)",String,Optional,,0,,,,PMDBS
 CLINPATH,path_mckeith,Pathology McKeith.:   McKeith and USSLBD Stage.  ,Enum,Optional,"[""Neocortical"", ""Limbic (transitional)"" ,""Brainstem"", ""Amygdala Predominant"", ""Olfactory bulb only"",""Limbic, transitional (brainstem and limbic involvement)"", ""Diffuse, neocortical (brainstem, limbic and neocortical involvement)"", ""Olfactory Bulb-Only"", ""Limbic (amygdala) predominant"", ""Absent"", ""Present, but extent unknown""]",0,,,,PMDBS
@@ -175,29 +176,37 @@ CLINPATH,amyloid_angiopathy_severity_scale,Amyloid Angiopathy Severity Scale:   
 CLINPATH,path_ad_level,"Patholgy AD Level.:   Specifies the level of Alzheimer's disease neuropathological change, based on 2012 NIA-AA criteria using the options in the dropdown menu: this information to be provided by the brain bank, based on the examination of the whole or half of the brain.",Enum,Optional,"[""No evidence of Alzheimer's disease neuropathological change"", ""Low level Alzheimer's disease neuropathological change"", ""At least low level Alzheimer's disease neuropathological change"", ""Intermediate level Alzheimer's disease neuropathological change"", ""At least intermediate level Alzheimer's disease neuropathological change"", ""High level Alzheimer's disease neuropathological change"", ""Unknown""]",0,,,,PMDBS
 CLINPATH,dig_slide_avail,Digital Slide Available: Indicates if a digital image of the pathology slides are available.,Enum,Optional,"[""Yes"", ""No""]",0,,,,PMDBS
 CLINPATH,quant_path_avail,Quantitative Pathology Available:  Indicates if quantative pathology is available.,Enum,Optional,"[""Yes"", ""No""]",0,,,,PMDBS
-,ASAP_dataset_id,ASAP Dataset ID. Unique ID issued by ASAP CRN Cloud. ,String,Assigned,,1,,,,
-,ASAP_team_id,ASAP Team ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,
+CONDITION,ASAP_dataset_id,ASAP Dataset ID. Unique ID issued by ASAP CRN Cloud. ,String,Assigned,,1,,,,
+CONDITION,ASAP_team_id,ASAP Team ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,
 CONDITION,condition_id,"Sample experimental condition, from SAMPLE",String,Required,,1,,new for v3,,
-CONDITION,intervention_name,Description of the top experimental conditions,String,Required,,0,,new for v3,,MOUSE
-CONDITION,intervention_id,ID for specifying the experimental condition,String,Required,,0,,new for v3,,MOUSE
-CONDITION,protocol_id,ID for referencing the protocols for interventions defining the experimental conditions,String,Required,,0,,new for v3,,MOUSE
-CONDITION,intervention_aux_table,Table which defines all experimental conditions for each sample,String,Optional,,0,,new for v3,,MOUSE
-,ASAP_dataset_id,ASAP Dataset ID. Unique ID issued by ASAP CRN Cloud. ,String,Assigned,,1,,,,
-,ASAP_team_id,ASAP Team ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,
-,ASAP_subject_id,ASAP Subject ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,
-MOUSE,subject_id,"The Subject ID.  This will be a unique ID for the subject.  Please submit the subject ID used internally.  In the harmonized dataset this may be modified by the ASAP team to prevent naming collisions.   Please replace spaces ("" "") with underscores (""_"").",String,Required,,1,,new for v3.1,,MOUSE
-MOUSE,strain,Strain:   Mouse strain details,String,Required,,0,,new for v3.1,,MOUSE
-MOUSE,sex,Sex: sex of animal,String,Required,"[""Male"",""Female""]",0,,new for v3.1,,
-MOUSE,age,Age: age of animal in days,Int,Requirded,,0,,new for v3.1,,MOUSE
-MOUSE,aux_table,"Table which defines additional mouse ""subject"" information",String,Optional,,0,,,,
-,ASAP_sample_id,ASAP Sample ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,
-,ASAP_dataset_id,ASAP Dataset ID. Unique ID issued by ASAP CRN Cloud. ,String,Assigned,,1,,,,
-,ASAP_team_id,ASAP Team ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,
-SPATIAL,sample_id,"Sample ID.:   ID of each individual sample used in the study (e.g. cortex of anterior cingulate gyrus); if from the same brain several regions are included in the study, each region (i.e. each sample) has different ID and listed as a separate entry",String,Required,,1,,new for v3.1,,
-SPATIAL,geomx_config,GeoMx .ini config file ref.  Pipeline processing parameters that are used by the GeoMx NGS pipeline to assist in converting the FASTQ files to DCC files. It is from the GeoMx instrument study readout package.   Files should be in /spatial.,String,Optional,,0,,new for v3.1,,
-SPATIAL,geomx_dsp_config,GeoMx DSP config file (.pkc) reference.  Leave blank if visium. Files should be in /spatial.,String,Optional,,0,,new for v3.1,,
-SPATIAL,geomx_annotation_file,Reference to the lab worksheet from the GeoMx instrument study readout package. Leave blank if visium.,String,Optional,,0,,new for v3.1,,
-SPATIAL,visium_cytassist,CytAssist image (.TIFF). A brightfield image that provides spatial orientation.  Leave blank if GeoMx. Files should be in /spatial.,String,Optional,,0,,new for v3.1,,
+CONDITION,intervention_name,Description of the top experimental conditions,String,Required,,0,,,,MOUSE
+CONDITION,intervention_id,ID for specifying the experimental condition,String,Required,,0,,,,MOUSE
+CONDITION,protocol_id,ID for referencing the protocols for interventions defining the experimental conditions,String,Required,,0,,,,MOUSE
+CONDITION,intervention_aux_table,Table which defines all experimental conditions for each sample,String,Optional,,0,,,,MOUSE
+MOUSE,ASAP_dataset_id,ASAP Dataset ID. Unique ID issued by ASAP CRN Cloud. ,String,Assigned,,1,,,,
+MOUSE,ASAP_team_id,ASAP Team ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,
+MOUSE,ASAP_mouse_id,ASAP Team ID. Unique ID issued by ASAP CRN Cloud.  ,,,,,,,,
+MOUSE,subject_id,The Subject ID.  This will be a unique ID for the mouse.  Note: is is clearly wrong to call it subject_ but lets us use the same key as the SAMPLE table. Maybe replace with an alias to subject_id? Or have different SAMPLE tables.,String,Required,,1,,,,MOUSE
+MOUSE,strain,Strain:   Mouse strain details,String,Required,,0,,,,MOUSE
+MOUSE,sex,Sex: sex of animal,String,Required,"[""Male"",""Female""]",0,,v3.1 late add,,MOUSE
+MOUSE,age,Age: age of animal in days,Int,Required,,0,,v3.1 late add,,
+MOUSE,aux_table,"Table which defines additional mouse ""subject"" information",String,Optional,,0,,,,MOUSE
+SPATIAL,ASAP_sample_id,ASAP Sample ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,
+SPATIAL,ASAP_dataset_id,ASAP Dataset ID. Unique ID issued by ASAP CRN Cloud. ,String,Assigned,,1,,,,
+SPATIAL,ASAP_team_id,ASAP Team ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,
+SPATIAL,sample_id,"Sample ID.: ID of each individual sample used in the study (e.g. cortex of anterior cingulate gyrus); if from the same brain several regions are included in the study, each region (i.e. each sample) has different ID and listed as a separate entry.",String,Required,,1,,new for v3.1,,
+SPATIAL,geomx_config,GeoMx (.ini) config file ref. Pipeline processing parameters that are used by the GeoMx NGS pipeline to assist in converting the FASTQ files to DCC files. It is from the GeoMx instrument study readout package. Leave blank if Visium. Files should be in /spatial.,String,Optional,,0,,new for v3.1,,
+SPATIAL,geomx_dsp_config,GeoMx DSP config file (.pkc) reference. Leave blank if Visium. Files should be in /spatial.,String,Optional,,0,,new for v3.1,,
+SPATIAL,geomx_annotation_file,Reference to the lab worksheet (.xlsx) from the GeoMx instrument study readout package. Leave blank if Visium. Files should be in /spatial.,String,Optional,,0,,new for v3.1,,
+SPATIAL,visium_cytassist,CytAssist image (.TIFF). A brightfield image that provides spatial orientation. Leave blank if GeoMx. Files should be in /spatial.,String,Optional,,0,,new for v3.1,,
 SPATIAL,visium_probe_set,"Probe set / panel used. For example, “#panel_name=Visium Human Transcriptome Probe Set v2.0”. Leave blank if GeoMx.",String,Optional,,0,,new for v3.1,,
-SPATIAL,visium_slide_ref,visium. Slide ref / number. Visium Leave blank if GeoMx.,String,Optional,,0,,new for v3.1,,
-SPATIAL,visium_capture_area,Visium Capture area. Visium Leave blank if GeoMx.,String,Optional,,0,,new for v3.1,,
+SPATIAL,visium_slide_ref,Visium slide ref / number. Leave blank if GeoMx.,String,Optional,,0,,new for v3.1,,
+SPATIAL,visium_capture_area,Visium Capture area. Leave blank if GeoMx.,String,Optional,,0,,new for v3.1,,
+CELL,ASAP_dataset_id,ASAP Dataset ID. Unique ID issued by ASAP CRN Cloud. ,String,Assigned,,1,,,,
+CELL,ASAP_team_id,ASAP Team ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,
+CELL,ASAP_cell_id,ASAP Cell ID. Unique ID issued by AsAP CRN,String,Assigned,,1,,,,
+CELL,subject_id,The Subject ID.  This will be a unique ID for each cell_line.  Please submit the ID used internally.  In the harmonized dataset this may be modified by the ASAP team to prevent naming collisions.  Note: is is clearly wrong to call it subject_ but lets us use the same key as the SAMPLE table. Maybe replace with an alias to subject_id? Or have different SAMPLE tables.,String,Required,,1,,,,
+CELL,cell_line,Cell Line Name.,String,Required,,0,,,,
+CELL,perturbation,"Perturbation.  ""NA"" if none",String,Required,,0,,v3.1 late add,,
+CELL,clone_level,Clone or sub-clone.  generation?,Enum,Required,['tbd'],0,,v3.1 late add,,
+CELL,aux_table,"Table which defines additional mouse ""subject"" information",String,Optional,,0,,,,
