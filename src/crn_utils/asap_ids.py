@@ -14,6 +14,8 @@ from .util import (
 )
 import shutil
 
+from .constants import *
+
 __all__ = [
     "load_id_mapper",
     "write_id_mapper",
@@ -36,6 +38,7 @@ __all__ = [
     "export_mouse_id_mappers",
     "update_mouse_id_mappers",
     "update_mouse_meta_tables_with_asap_ids",
+    "generate_mouse_ids",
 ]
 
 
@@ -523,17 +526,7 @@ def update_pmdbs_meta_tables_with_asap_ids(
     """
 
     if pmdbs_tables is None:
-        pmdbs_tables = [
-            "STUDY",
-            "PROTOCOL",
-            "SUBJECT",
-            "ASSAY_RNAseq",
-            "SAMPLE",
-            "PMDBS",
-            "CONDITION",
-            "CLINPATH",
-            "DATA",
-        ]
+        pmdbs_tables = PMDBS_TABLES + ["SPATIAL"]
 
     # pmdbs_tables = ['STUDY', 'PROTOCOL','SUBJECT', 'ASSAY_RNAseq', 'SAMPLE', 'PMDBS', 'CONDITION', 'CLINPATH', 'DATA']
     # pmdbs_tables = asap_ids_schema['Table'].to_list()
@@ -559,11 +552,6 @@ def update_pmdbs_meta_tables_with_asap_ids(
             print(f"Table {tab} not found in dataset {long_dataset_name}")
             continue
 
-        # insert the DATASET_ID at the beginning of the dataframe
-        dfs[tab].insert(0, "ASAP_dataset_id", DATASET_ID)
-        # insert the TEAM_ID at the beginning of the dataframe
-        dfs[tab].insert(0, "ASAP_team_id", TEAM_ID)
-
         if tab in ASAP_subject_id_tables:
             # first do the ASAP_subject_id
             ASAP_subject_id = dfs[tab]["subject_id"].map(subjectid_mapper)
@@ -574,6 +562,11 @@ def update_pmdbs_meta_tables_with_asap_ids(
             ASAP_sample_id = dfs[tab]["sample_id"].map(sampleid_mapper)
             dfs[tab].insert(0, "ASAP_sample_id", ASAP_sample_id)
 
+        # insert the DATASET_ID at the beginning of the dataframe
+        dfs[tab].insert(0, "ASAP_dataset_id", DATASET_ID)
+        # insert the TEAM_ID at the beginning of the dataframe
+        dfs[tab].insert(0, "ASAP_team_id", TEAM_ID)
+
     return dfs
 
 
@@ -582,13 +575,149 @@ def update_pmdbs_meta_tables_with_asap_ids(
 ###############################################
 
 
+#####################
+# source typed id utils
+#####################
+
+
+def generate_mouse_ids(
+    mouseid_mapper: dict, subject_df: pd.DataFrame, source: str = "mouse"
+):
+    """
+    Generate ASAP_subject_ids for mouse subjects.
+
+    Args:
+        mouseid_mapper (dict): Existing subject ID mapper
+        subject_df (pd.DataFrame): DataFrame containing subject information
+        source (str): Source identifier for the IDs
+
+    Returns:
+        dict: Updated subject ID mapper
+    """
+    # Initialize the mapper if it's None
+    if mouseid_mapper is None:
+        mouseid_mapper = {}
+
+    # Make a copy to avoid modifying the original
+    mapper = mouseid_mapper.copy()
+
+    # Get the next available ID number
+    existing_ids = [
+        id for id in mapper.values() if id.startswith(f"ASAP_{source.upper()}_")
+    ]
+    if existing_ids:
+        # Extract numbers from existing IDs and find the max
+        max_num = (
+            max([int(id.split("_")[-1]) for id in existing_ids]) if existing_ids else 0
+        )
+        next_num = max_num + 1
+    else:
+        next_num = 1
+
+    # Process each subject
+    for _, row in subject_df.iterrows():
+        subject_id = row.get("subject_id")
+        if subject_id and subject_id not in mapper:
+            # Generate new ID
+            asap_id = f"ASAP_{source.upper()}_{next_num:06d}"
+            mapper[subject_id] = asap_id
+            next_num += 1
+
+    return mapper
+
+
+def generate_mouse_ids_(
+    mouseid_mapper: dict,
+    subject_df: pd.DataFrame,
+    source: str = "mouse",
+) -> dict:
+    """
+    generate new unique_ids for new subject_ids in mouse_df (subject_df) table,
+    update the id_mapper with the new ids from the data table
+
+    return updated id_mappers
+    """
+    if mouseid_mapper is None:
+        mouseid_mapper = {}
+    # force NA to be Nan
+    subject_df = subject_df.replace("NA", pd.NA)
+
+    # extract the max value of the mapper's third (last) section ([2] or [-1]) to get our n
+    if bool(mouseid_mapper):
+        n = max([int(v.split("_")[2]) for v in mouseid_mapper.values() if v]) + 1
+    else:
+        n = 1
+    nstart = n
+
+    # ids_df = subject_df[['subject_id','source_subject_id', 'AMPPD_id', 'GP2_id']].copy()
+    ids_df = subject_df.copy()
+
+    # might want to use 'source_subject_id' instead of 'subject_id' since we want to find matches across teams
+    # shouldn't actually matter but logically cleaner
+    uniq_subj = ids_df["subject_id"].unique()
+    dupids_mapper = dict(
+        zip(uniq_subj, [num + nstart for num in range(len(uniq_subj))])
+    )
+
+    n_asap_id_add = 0
+
+    df_dup_chunks = []
+    id_source = []
+    for subj_id, samp_n in dupids_mapper.items():
+        df_dups_subset = ids_df[ids_df.subject_id == subj_id].copy()
+
+        # check if subj_id is known
+        add_subj_id = False
+        # check if subj_id (subject_id) is known
+        if subj_id in set(mouseid_mapper.keys()):  # duplicate!!
+            # TODO: log this
+            # TODO: check for `subject_id` naming collisions with other teams
+            asap_subj_id = mouseid_mapper[subj_id]
+        else:
+            add_subj_id = True
+            asap_subj_id = None
+
+        # TODO:  improve the logic here so gp2 is the default if it exists.?
+        #        we need to check the team_id to make sure it's not a naming collision on subject_id
+        #        we need to check the biobank_name to make sure it's not a naming collision on source_subject_id
+
+        testset = set(asap_subj_id)
+        if None in testset:
+            testset.remove(None)
+
+        if len(testset) == 0:  # generate a new asap_subj_id
+            # print(samp_n)
+            asap_subject_id = f"ASAP_{source.upper()}_{samp_n:06}"
+            # df_dups_subset.insert(0, 'ASAP_subject_id', asap_subject_id, inplace=True)
+        else:  # testset should have the asap_subj_id
+            asap_subject_id = testset.pop()  # but where did it come from?
+            # print(f"found {subj_id }:{asap_subject_id} in the maps")
+
+        src = []
+        if add_subj_id:
+            # TODO:  instead of just adding we should check if it exists...
+            mouseid_mapper[subj_id] = asap_subject_id
+            n_asap_id_add += 1
+            src.append("asap")
+
+        df_dup_chunks.append(df_dups_subset)
+        id_source.append(src)
+
+    df_dups_wids = pd.concat(df_dup_chunks)
+    assert df_dups_wids.sort_index().equals(subject_df)
+    print(f"added {n_asap_id_add} new asap_subject_ids")
+
+    # print(id_source)
+    return mouseid_mapper
+
+
 def update_mouse_meta_tables_with_asap_ids(
     dfs: dict,
     long_dataset_name: str,
     asap_ids_schema: pd.DataFrame,
     datasetid_mapper: dict,
+    mouseid_mapper: dict,
     sampleid_mapper: dict,
-    subjectid_mapper: dict,
     mouse_tables: list | None = None,
 ) -> dict:
     """
@@ -604,23 +733,16 @@ def update_mouse_meta_tables_with_asap_ids(
         "DATA",
         ]
     """
-
+    # default to mouse scPMDBS / bulkPMDBS
     if mouse_tables is None:
-        mouse_tables = [
-            "STUDY",
-            "PROTOCOL",
-            "ASSAY_RNAseq",  # this is missing... try to construct...
-            "SAMPLE",
-            "MOUSE",
-            "CONDITION",
-            "DATA",
-        ]
+        mouse_tables = MOUSE_TABLES + ["SPATIAL"]
 
     ASAP_sample_id_tables = asap_ids_schema[
         asap_ids_schema["Field"] == "ASAP_sample_id"
     ]["Table"].to_list()
     ASAP_subject_id_tables = asap_ids_schema[
-        asap_ids_schema["Field"] == "ASAP_subject_id"
+        (asap_ids_schema["Field"] == "ASAP_subject_id")
+        | (asap_ids_schema["Field"] == "ASAP_mouse_id")
     ]["Table"].to_list()
 
     DATASET_ID = datasetid_mapper[long_dataset_name]
@@ -637,73 +759,226 @@ def update_mouse_meta_tables_with_asap_ids(
             print(f"Table {tab} not found in dataset {long_dataset_name}")
             continue
 
-        # insert the DATASET_ID at the beginning of the dataframe
-        dfs[tab].insert(0, "ASAP_dataset_id", DATASET_ID)
-        # insert the TEAM_ID at the beginning of the dataframe
-        dfs[tab].insert(0, "ASAP_team_id", TEAM_ID)
-
         if tab in ASAP_subject_id_tables:
             # first do the ASAP_subject_id
-            ASAP_subject_id = dfs[tab]["subject_id"].map(subjectid_mapper)
-            dfs[tab].insert(0, "ASAP_subject_id", ASAP_subject_id)
+            if "subject_id" in dfs[tab].columns:
+                ASAP_subject_id = dfs[tab]["subject_id"].map(mouseid_mapper)
+            elif "mouse_id" in dfs[tab].columns:
+                ASAP_subject_id = dfs[tab]["mouse_id"].map(mouseid_mapper)
+            else:
+                print(f"subject_id or mouse_id not found in {tab}")
+                continue
+            dfs[tab].insert(0, "ASAP_mouse_id", ASAP_subject_id)
 
         if tab in ASAP_sample_id_tables:
             # second do the ASAP_sample_id
             ASAP_sample_id = dfs[tab]["sample_id"].map(sampleid_mapper)
             dfs[tab].insert(0, "ASAP_sample_id", ASAP_sample_id)
 
+        # insert the DATASET_ID at the beginning of the dataframe
+        dfs[tab].insert(0, "ASAP_dataset_id", DATASET_ID)
+        # insert the TEAM_ID at the beginning of the dataframe
+        dfs[tab].insert(0, "ASAP_team_id", TEAM_ID)
+
+    return dfs
+
 
 def update_mouse_id_mappers(
-    subject_df,
-    sample_df,
-    long_dataset_name,
-    datasetid_mapper,
-    sampleid_mapper,
-    subjectid_mapper,
+    subject_df: pd.DataFrame,
+    sample_df: pd.DataFrame,
+    long_dataset_name: str,
+    datasetid_mapper: dict,
+    mouseid_mapper: dict,
+    sampleid_mapper: dict,
 ):
     """
     read in the MOUSE (subject_df) and SAMPLE (sample_df) data tables, generate new ids, update the id_mappers
 
     return updated id_mappers
     """
-
     _, datasetid_mapper = generate_asap_dataset_id(datasetid_mapper, long_dataset_name)
 
-    subjec_ids_df = subject_df[["subject_id"]]
+    subject_ids_df = subject_df[["subject_id"]]
 
     # add ASAP_subject_id to the SUBJECT tables
-    subjectid_mapper = generate_mouse_subject_ids(
-        subjectid_mapper, sampleid_mapper, subjec_ids_df
-    )
+    mouseid_mapper = generate_mouse_subject_ids(mouseid_mapper, subject_ids_df)
+
+    print(f"mouseid_mapper: {mouseid_mapper}")
 
     sample_ids_df = sample_df[["sample_id", "subject_id"]]
     sampleid_mapper = generate_mouse_sample_ids(
-        subjectid_mapper, sampleid_mapper, sample_ids_df
+        mouseid_mapper, sampleid_mapper, sample_ids_df
     )
 
-    return datasetid_mapper, subjectid_mapper, sampleid_mapper
+    return datasetid_mapper, mouseid_mapper, sampleid_mapper
 
 
 def generate_mouse_sample_ids(
-    subjectid_mapper: dict, sampleid_mapper: dict, sample_df: pd.DataFrame
+    mouseid_mapper: dict, sampleid_mapper: dict, sample_df: pd.DataFrame
 ) -> dict:
-    return generate_sample_ids(subjectid_mapper, sample_df, source="mouse")
+    """
+    generate new unique_ids for new sample_ids in sample_df table,
+    update the id_mapper with the new ids from the data table
+
+    Args:
+        mouseid_mapper (dict): Existing subject ID mapper
+        sampleid_mapper (dict): Existing sample ID mapper
+        sample_df (pd.DataFrame): DataFrame containing sample + subject information
+        source (str): Source identifier for the IDs
+
+    Returns:
+        dict: Updated sample ID mapper
+    """
+
+    ud_sampleid_mapper = sampleid_mapper.copy()
+
+    uniq_samp = sample_df.sample_id.unique()
+    if samp_intersec := set(uniq_samp) & set(ud_sampleid_mapper.keys()):
+        print(
+            f"found {len(samp_intersec)} sample_id's that have already been mapped!! BEWARE a sample_id naming collision!! If you are just reprocessing tables, it shoud be okay."
+        )
+
+    to_map = sample_df[
+        ~sample_df["sample_id"].apply(lambda x: x in samp_intersec)
+    ].copy()
+
+    if not bool(to_map.shape[0]):
+        print(
+            "Nothing to see here... move along... move along .... \nNo new sample_ids to map"
+        )
+        return ud_sampleid_mapper
+
+    uniq_subj = to_map.subject_id.unique()
+    # check for subject_id collisions in the sampleid_mapper
+    if subj_intersec := set(uniq_subj) & set(ud_sampleid_mapper.values()):
+        print(
+            f"found {len(subj_intersec)} subject_id collisions in the sampleid_mapper"
+        )
+
+    df_chunks = []
+    for subj_id in uniq_subj:
+
+        df_subset = to_map[to_map.subject_id == subj_id].copy()
+        asap_id = mouseid_mapper[subj_id]
+
+        dups = (
+            df_subset[df_subset.duplicated(keep=False, subset=["sample_id"])]
+            .sort_values("sample_id")
+            .reset_index(drop=True)
+            .copy()
+        )
+        nodups = (
+            df_subset[~df_subset.duplicated(keep=False, subset=["sample_id"])]
+            .sort_values("sample_id")
+            .reset_index(drop=True)
+            .copy()
+        )
+
+        asap_id = mouseid_mapper[subj_id]
+        if bool(ud_sampleid_mapper):
+            # see if there are any samples already with this asap_id
+            sns = [
+                get_sampr(v)
+                for v in ud_sampleid_mapper.values()
+                if get_id(v) == asap_id
+            ]
+            if len(sns) > 0:
+                rep_n = max(sns) + 1
+            else:
+                rep_n = 1  # start incrimenting from 1
+        else:  # empty dicitonary. starting from scratch
+            rep_n = 1
+
+        if nodups.shape[0] > 0:
+            # ASSIGN IDS
+            asap_nodups = [f"{asap_id}_s{rep_n+i:03}" for i in range(nodups.shape[0])]
+            # nodups['ASAP_sample_id'] = asap_nodups
+            nodups.loc[:, "ASAP_sample_id"] = asap_nodups
+            rep_n = rep_n + nodups.shape[0]
+            samples_nodups = nodups["sample_id"].unique()
+
+            nodup_mapper = dict(zip(nodups["sample_id"], asap_nodups))
+
+            df_chunks.append(nodups)
+        else:
+            samples_nodups = []
+
+        if dups.shape[0] > 0:
+            for dup_id in dups["sample_id"].unique():
+                # first peel of any sample_ids that were already named in nodups,
+
+                if dup_id in samples_nodups:
+                    asap_dup = nodup_mapper[dup_id]
+                else:
+                    # then assign ids to the rest.
+                    asap_dup = f"{asap_id}_s{rep_n:03}"
+                    dups.loc[dups.sample_id == dup_id, "ASAP_sample_id"] = asap_dup
+                    rep_n += 1
+            df_chunks.append(dups)
+
+    df_wids = pd.concat(df_chunks)
+    id_mapper = dict(zip(df_wids["sample_id"], df_wids["ASAP_sample_id"]))
+
+    ud_sampleid_mapper.update(id_mapper)
+    # print(ud_sampleid_mapper)
+    return ud_sampleid_mapper
 
 
-def generate_mouse_subject_ids(
-    subjectid_mapper: dict, sampleid_mapper: dict, sample_df: pd.DataFrame
-) -> dict:
-    return generate_subject_ids(subjectid_mapper, sample_df, source="mouse")
+def generate_mouse_subject_ids(mouseid_mapper: dict, subject_df: pd.DataFrame) -> dict:
+    """
+    generate new unique_ids for new subject_ids in subject_df table,
+    update the id_mapper with the new ids from the data table
+
+    Args:
+        mouseid_mapper (dict): Existing subject ID mapper
+        subject_df (pd.DataFrame): DataFrame containing subject information
+        source (str): Source identifier for the IDs
+
+    Returns:
+        dict: Updated subject ID mapper"""
+    # Initialize the mapper if it's None
+    if mouseid_mapper is None:
+        mouseid_mapper = {}
+
+    source = "mouse"
+    # Make a copy to avoid modifying the original
+    mapper = mouseid_mapper.copy()
+
+    # Get the next available ID number
+    existing_ids = [
+        id for id in mapper.values() if id.startswith(f"ASAP_{source.upper()}_")
+    ]
+    if existing_ids:
+        # Extract numbers from existing IDs and find the max
+        max_num = (
+            max([int(id.split("_")[-1]) for id in existing_ids]) if existing_ids else 0
+        )
+        next_num = max_num + 1
+    else:
+        next_num = 1
+
+    # Process each subject
+    for _, row in subject_df.iterrows():
+        subject_id = row.get("subject_id")
+        if subject_id and subject_id not in mapper:
+            # Generate new ID
+            asap_id = f"ASAP_{source.upper()}_{next_num:06d}"
+            mapper[subject_id] = asap_id
+            next_num += 1
+
+    return mapper
 
 
 def load_mouse_id_mappers(map_path, suffix):
     source = "MOUSE"
-    prototypes = ["dataset", "samp", "subj"]
+    prototypes = ["dataset", "subj", "samp"]
 
     outputs = ()
     for prot in prototypes:
         if prot == "dataset":
             fname = f"ASAP_{prot}_{suffix}.json"
+        elif prot == "subj":
+            fname = f"ASAP_{source}_{suffix}.json"
         else:
             fname = f"ASAP_{source}_{prot}_{suffix}.json"
 
@@ -712,30 +987,31 @@ def load_mouse_id_mappers(map_path, suffix):
         except FileNotFoundError:
             id_mapper = {}
             print(f"{map_path / fname} not found... starting from scratch")
-            outputs += (id_mapper,)
+
+        print(f"loaded {fname}")
+        outputs += (id_mapper,)
 
     return outputs
 
 
 def export_mouse_id_mappers(
-    map_path,
-    suffix,
-    datasetid_mapper,
-    subjectid_mapper,
-    sampleid_mapper,
-    gp2id_mapper,
-    sourceid_mapper,
+    map_path, suffix, datasetid_mapper, mouseid_mapper, sampleid_mapper
 ):
     source = "MOUSE"
     sample_mapper_path = map_path / f"ASAP_{source}_samp_{suffix}.json"
+    mouse_mapper_path = map_path / f"ASAP_{source}_{suffix}.json"
     dataset_mapper_path = map_path / f"ASAP_dataset_{suffix}.json"
     # update the dataset_id_mapper
     write_id_mapper(datasetid_mapper, dataset_mapper_path)
+    write_id_mapper(mouseid_mapper, mouse_mapper_path)
     write_id_mapper(sampleid_mapper, sample_mapper_path)
 
 
 def generate_sample_ids(
-    subjectid_mapper: dict, sample_df: pd.DataFrame, source: str = "mouse"
+    subjectid_mapper: dict,
+    sampleid_mapper: dict,
+    sample_df: pd.DataFrame,
+    source: str = "mouse",
 ) -> dict:
     """
     Generate new unique sample IDs for new samples in sample_df table,
@@ -749,24 +1025,16 @@ def generate_sample_ids(
     Returns:
         Updated sampleid_mapper dict
     """
-    # Initialize empty sample ID mapper if not provided
-    sampleid_mapper = {}
 
     # Force NA to be NaN
     sample_df = sample_df.replace("NA", pd.NA)
 
     # Get starting n value from existing mapper
     if bool(sampleid_mapper):
-        n = (
-            max(
-                [
-                    int(v.split("_")[3].replace("s", ""))
-                    for v in sampleid_mapper.values()
-                    if v
-                ]
-            )
-            + 1
-        )
+        all_samp_ns = [
+            int(v.split("_")[3].replace("s", "")) for v in sampleid_mapper.values()
+        ]
+        n = max(all_samp_ns) + 1
     else:
         n = 1
     nstart = n
@@ -782,10 +1050,8 @@ def generate_sample_ids(
     df_dup_chunks = []
     for samp_id, samp_n in sampids_mapper.items():
         df_samp_subset = sample_df[sample_df.sample_id == samp_id].copy()
-
         # Get subject ID for this sample
         subj_id = df_samp_subset["subject_id"].values[0]
-
         # Look up ASAP subject ID
         if subj_id in subjectid_mapper:
             asap_subj_id = subjectid_mapper[subj_id]
@@ -855,6 +1121,7 @@ def process_meta_files(
         # load the id mappers
         table1 = "CLINPATH"
         table2 = "SAMPLE"
+
         load_id_mappers = load_pmdbs_id_mappers
         (
             datasetid_mapper,

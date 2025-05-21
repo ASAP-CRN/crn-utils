@@ -24,6 +24,30 @@ __all__ = [
     "write_version",
 ]
 
+SUPPORTED_METADATA_VERSIONS = [
+    "v1",
+    "v2",
+    "v2.1",
+    "v3",
+    "v3.0",
+    "v3.0-beta",
+    "v3.1",
+    "v3.2",
+    "v3.2-beta",
+]
+
+
+def sanitize_validation_string(validation_str):
+    """Sanitize validation strings by replacing smart quotes with straight quotes."""
+    if not isinstance(validation_str, str):
+        return validation_str
+    return (
+        validation_str.replace('"', '"')
+        .replace('"', '"')
+        .replace(""", "'").replace(""", "'")
+        .replace("…", "...")
+    )
+
 
 def read_CDE(metadata_version: str = "v3.0", local_path: str | bool | Path = False):
     """
@@ -52,14 +76,16 @@ def read_CDE(metadata_version: str = "v3.0", local_path: str | bool | Path = Fal
         resource_fname = "ASAP_CDE_v3.0"
     elif metadata_version in ["v3.1"]:
         resource_fname = "ASAP_CDE_v3.1"
+    elif metadata_version in ["v3.2"]:
+        resource_fname = "ASAP_CDE_v3.2"
     else:
         resource_fname = "ASAP_CDE_v3.1"
 
     # add the Shared_key column for v3
-    if metadata_version in ["v3.1", "v3", "v3.0", "v3.0-beta"]:
+    if metadata_version in ["v3.2", "v3.2-beta", "v3.1", "v3", "v3.0", "v3.0-beta"]:
         column_list += ["Shared_key"]
 
-    if metadata_version in ["v1", "v2", "v2.1", "v3", "v3.0", "v3.0-beta", "v3.1"]:
+    if metadata_version in SUPPORTED_METADATA_VERSIONS:
         print(f"metadata_version: {resource_fname}")
     else:
         print(f"Unsupported metadata_version: {resource_fname}")
@@ -84,9 +110,56 @@ def read_CDE(metadata_version: str = "v3.0", local_path: str | bool | Path = Fal
     CDE_df = CDE_df.dropna(subset=["Table"])
     CDE_df = CDE_df.reset_index(drop=True)
     CDE_df = CDE_df.drop_duplicates()
+    if metadata_version in ["v3.2", "v3.2-beta", "v3.1", "v3", "v3.0", "v3.0-beta"]:
+        CDE_df["Shared_key"] = CDE_df["Shared_key"].fillna(0).astype(int)
     # force extraneous columns to be dropped.
 
-    return CDE_df
+    # CDE_df["Validation"] = CDE_df["Validation"].apply(sanitize_validation_string)
+
+    return clean_cde_schema(CDE_df)
+
+
+def sanitize_string(s):
+    """Replace smart quotes with straight quotes and other problematic characters."""
+    if not isinstance(s, str):
+        return s
+    return (
+        s.replace('"', '"')
+        .replace('"', '"')
+        .replace(
+            """, "'")
+             .replace(""",
+            "'",
+        )
+        .replace("…", "...")
+    )
+
+
+def clean_cde_schema(cde_schema):
+    """
+    Clean the CDE schema by sanitizing validation strings.
+
+    Args:
+        cde_schema (pd.DataFrame): The CDE schema dataframe
+
+    Returns:
+        pd.DataFrame: A cleaned copy of the CDE schema
+    """
+    # Make a copy to avoid modifying the original
+    cleaned_schema = cde_schema.copy()
+
+    # Sanitize the Validation column
+    if "Validation" in cleaned_schema.columns:
+        cleaned_schema["Validation"] = cleaned_schema["Validation"].apply(
+            sanitize_string
+        )
+
+    # Also sanitize any other columns that might contain validation expressions
+    for col in ["Description", "Notes", "Example"]:
+        if col in cleaned_schema.columns:
+            cleaned_schema[col] = cleaned_schema[col].apply(sanitize_string)
+
+    return cleaned_schema
 
 
 def read_CDE_asap_ids(
@@ -108,9 +181,12 @@ def read_CDE_asap_ids(
     if local_path:
         # ASAP_assigned_keys only in >v3.0
         cde_url = Path(local_path) / f"ASAP_CDE_{schema_version}_{resource_fname}.csv"
-        print(cde_url)
+        print(f"local_path: {cde_url}")
 
     try:
+        # add version to cde_url
+        cde_url = f"{cde_url}_{schema_version}"
+        print(f"cde_url: {cde_url}")
         df = pd.read_csv(cde_url)
         read_source = "url" if not local_path else "local file"
         print(f"read {read_source}")
@@ -186,6 +262,7 @@ def read_meta_table(table_path):
     try:
         table_df = pd.read_csv(table_path, dtype=str)
     except UnicodeDecodeError:
+        print(f"UnicodeDecodeError: {table_path}")
         table_df = pd.read_csv(table_path, encoding="latin1", dtype=str)
 
     for col in table_df.select_dtypes(include="object").columns:
@@ -194,6 +271,9 @@ def read_meta_table(table_path):
             .str.encode("latin1", errors="replace")
             .str.decode("utf-8", errors="replace")
         )
+
+    for col in table_df.columns:
+        table_df[col] = table_df[col].apply(sanitize_validation_string)
 
     # drop the first column if it is just the index incase it was saved with index = True
     if table_df.columns[0] == "Unnamed: 0":
@@ -254,7 +334,7 @@ def load_tables(table_path, tables):
 
 def export_meta_tables(dfs, export_path):
     for tab in dfs.keys():
-        if tab not in dfs:
+        if tab not in dfs:  # BUG:?  can this ever be true
             print(f"Table {tab} not found in dataset tables")
             continue
         dfs[tab].to_csv(export_path / f"{tab}.csv")

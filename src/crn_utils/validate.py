@@ -237,7 +237,9 @@ def validate_table(
 
                 # test that all are float or NULL, flag NULL entries
             elif datatype.item() == "Enum":
-
+                # val = specific_cde_df.loc[entry_idx, "Validation"].values[0]
+                # print(val)
+                # valid_values = eval(val)
                 valid_values = eval(specific_cde_df.loc[entry_idx, "Validation"].item())
                 valid_values += [NULL]
                 entries = df[field]
@@ -250,7 +252,7 @@ def validate_table(
                     invalid_entries.append(
                         (opt_req, field, n_invalid, valstr, invalstr)
                     )
-            else:  # dtype == String
+            else:  # dtype == String or Alias
                 pass
 
             n_null = (df[field] == NULL).sum()
