@@ -1,4 +1,3 @@
-
 import pandas as pd
 from pathlib import Path
 import os
@@ -14,7 +13,7 @@ import argparse
 #     !pip install git+https://github.com/ASAP-CRN/crn-utils.git  # pip install  --force-reinstall --no-deps git+https://github.com/ASAP-CRN/crn-utils.git
 #     from crn_utils.util import read_CDE, NULL, prep_table, read_meta_table, read_CDE_asap_ids, export_meta_tables, load_tables
 
-from crn_utils.util import (
+from .util import (
     read_CDE,
     NULL,
     prep_table,
@@ -24,21 +23,143 @@ from crn_utils.util import (
     load_tables,
     write_version,
 )
-from crn_utils.asap_ids import *
-from crn_utils.validate import validate_table, ReportCollector, process_table
 
+from .asap_ids import *
+from .validate import validate_table, ReportCollector, process_table
+from .file_metadata import *
 
 # %%
-from crn_utils.update_schema import v1_to_v2, v2_to_v3_PMDBS, intervention_typer
-from crn_utils.checksums import extract_md5_from_details2, get_md5_hashes
-from crn_utils.bucket_util import (
+from .checksums import extract_md5_from_details2, get_md5_hashes
+from .bucket_util import (
     authenticate_with_service_account,
     gsutil_ls,
     gsutil_cp,
     gsutil_mv,
 )
+from crn_utils.constants import *
 
-def load_and_process_table(table_name:str, tables_path:Path, cde_df: pd.DataFrame, print_log:bool=False):
+__all__ = [
+    "prep_release_metadata_mouse",
+    "load_and_process_table",
+    "process_schema",
+    "create_metadata_package",
+]
+
+
+def create_metadata_package(
+    dfs: dict[str, pd.DataFrame], metadata_path: Path, schema_version: str
+):
+
+    final_metadata_path = metadata_path / schema_version
+    if not final_metadata_path.exists():
+        final_metadata_path.mkdir()
+
+    export_meta_tables(dfs, final_metadata_path)
+    # export_meta_tables(dfs, metadata_path)
+    write_version(schema_version, metadata_path / "cde_version")
+    write_version(schema_version, final_metadata_path / "cde_version")
+
+
+def prep_release_metadata_mouse(
+    ds_path: Path,
+    schema_version: str,
+    map_path: Path,
+    suffix: str,
+    spatial: bool = False,
+):
+    # source
+    # spatial
+
+    dataset_name = ds_path.name
+    print(f"Processing {ds_path.name}")
+    ds_parts = dataset_name.split("-")
+    team = ds_parts[0]
+    source = ds_parts[1]
+    short_dataset_name = "-".join(ds_parts[2:])
+    raw_bucket_name = f"asap-raw-team-{team}-{source}-{short_dataset_name}"
+
+    CDE = read_CDE(schema_version)
+    asap_ids_df = read_CDE_asap_ids()
+    asap_ids_schema = asap_ids_df[["Table", "Field"]]
+
+    # # %%
+    datasetid_mapper, mouseid_mapper, sampleid_mapper = load_mouse_id_mappers(
+        map_path, suffix
+    )
+
+    # ds_path.mkdir(parents=True, exist_ok=True)
+    mdata_path = ds_path / "metadata" / schema_version
+    tables = [
+        table
+        for table in mdata_path.iterdir()
+        if table.is_file() and table.suffix == ".csv"
+    ]
+
+    req_tables = MOUSE_TABLES
+    if spatial:
+        req_tables.append("SPATIAL")
+    table_names = [table.stem for table in tables if table.stem in req_tables]
+
+    dfs = load_tables(mdata_path, table_names)
+
+    datasetid_mapper, mouseid_mapper, sampleid_mapper = update_mouse_id_mappers(
+        dfs["MOUSE"],
+        dfs["SAMPLE"],
+        dataset_name,
+        datasetid_mapper,
+        mouseid_mapper,
+        sampleid_mapper,
+    )
+
+    dfs = update_mouse_meta_tables_with_asap_ids(
+        dfs,
+        dataset_name,
+        asap_ids_schema,
+        datasetid_mapper,
+        mouseid_mapper,
+        sampleid_mapper,
+        table_names,
+    )
+
+    # TODO: need to make this read an env variable or something safe.
+    #### CREATE file metadata summaries
+    key_file_path = Path.home() / f"Projects/ASAP/{team}-credentials.json"
+    res = authenticate_with_service_account(key_file_path)
+
+    file_metadata_path = ds_path / "file_metadata"
+    if not file_metadata_path.exists():
+        file_metadata_path.mkdir(parents=True, exist_ok=True)
+
+    get_raw_bucket_summary(raw_bucket_name, file_metadata_path, dataset_name)
+
+    make_file_metadata(ds_path, file_metadata_path, dfs["DATA"])
+
+    dfs["STUDY"] = update_study_table_with_doi(dfs["STUDY"], ds_path)
+    dfs["DATA"] = update_data_table_with_gcp_uri(dfs["DATA"], ds_path)
+    if spatial:
+        dfs["SPATIAL"] = update_spatial_table_with_gcp_uri(
+            dfs["SPATIAL"], ds_path, visium=False
+        )
+
+    # export the tables to the metadata directory in a release subdirectory
+    out_dir = ds_path / "metadata/release"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    export_meta_tables(dfs, out_dir)
+    write_version(schema_version, out_dir / "cde_version")
+    export_map_path = map_path  # root_path / "asap-ids/temp"
+    export_mouse_id_mappers(
+        export_map_path,
+        suffix,
+        datasetid_mapper,
+        mouseid_mapper,
+        sampleid_mapper,
+    )
+
+
+def load_and_process_table(
+    table_name: str, tables_path: Path, cde_df: pd.DataFrame, print_log: bool = False
+):
     """
     Load and process a table from a given path according to a schema.
 
@@ -52,7 +173,7 @@ def load_and_process_table(table_name:str, tables_path:Path, cde_df: pd.DataFram
         pd.DataFrame: Processed table.
 
     """
-    
+
     table_path = tables_path / f"{table_name}.csv"
     schema = cde_df[cde_df["Table"] == table_name]
     report = ReportCollector(destination="NA")
@@ -63,13 +184,19 @@ def load_and_process_table(table_name:str, tables_path:Path, cde_df: pd.DataFram
         print(f"{table_name} table not found.  need to construct")
         df = pd.DataFrame(columns=schema["Field"])
 
-    if print_log:        
+    if print_log:
         report.print_log()
     df, df_aux, _ = process_table(df, table_name, CDE)
     return df, df_aux
 
 
-def process_schema(tables: list[str], cde_version:str|Path, source_path:Path, export_path:Path|None=None, print_log:bool=False):
+def process_schema(
+    tables: list[str],
+    cde_version: str | Path,
+    source_path: Path,
+    export_path: Path | None = None,
+    print_log: bool = False,
+):
     """
     Load and process tables from a given path according to a schema.
 
@@ -84,12 +211,12 @@ def process_schema(tables: list[str], cde_version:str|Path, source_path:Path, ex
         dict: Dictionary containing the auxiliary tables.
     """
     # load CDE
-    if isinstance(cde_version, str):
-        if cde_version in ["v3.1", "v3.2"]:"v3.1":
-            cde_df = CDEv3
-        else:
-            cde_df = read_CDE(cde_version)
-    else:
+    # if isinstance(cde_version, str):
+    #     if cde_version in ["v3.1", "v3.2", "v3.1"]:
+    #         cde_df = CDEv3
+    #     else:
+    #         cde_df = read_CDE(cde_version)
+    # else:
     cde_df = read_CDE(cde_version)
 
     # load and process tables
@@ -107,11 +234,12 @@ def process_schema(tables: list[str], cde_version:str|Path, source_path:Path, ex
 
     return tables_dict, aux_tables_dict
 
+
 # if __name__ == "__main__":
 #     # Set up the argument parser
 
 #     parser = argparse.ArgumentParser(description="A command-line tool  to update tables to a new schema version ")
-    
+
 #     # Add arguments
 #     parser.add_argument("--tables", default=Path.cwd(),
 #                         help="Path to the directory containing meta TABLES. Defaults to the current working directory.")
@@ -119,7 +247,7 @@ def process_schema(tables: list[str], cde_version:str|Path, source_path:Path, ex
 #                         help="Input version.  Defaults to v1.")
 #     parser.add_argument("--vout", default="v3",
 
-    
+
 #     tables = MOUSE_TABLES + ["SPATIAL"]
 #     cde_version = "v3.1"
 #     source_path = metadata_path / "og"
@@ -127,31 +255,16 @@ def process_schema(tables: list[str], cde_version:str|Path, source_path:Path, ex
 #     tables_dict, aux_tables_dict = process_schema(tables, cde_version, source_path, export_path, print_log=True)
 
 
-# %% [markdown]
-long_dataset_name = f"{team}-{source}-{dataset_name}"
-
-# read the docx
-root_path = Path.home() / ("Projects/ASAP/asap-crn-cloud-dataset-metadata")
-datasets_path = root_path / "datasets"
-ds_path = datasets_path / long_dataset_name
-intake_doc = (
-    ds_path
-    / "artifacts/Dataset Information Template_MartaGraziano_teamCragg_spatial.docx"
-)
-
-
-def ingest_ds_info_doc(intake_doc:Path|str, ds_path:Path, doc_path:Path):
+def ingest_ds_info_doc(intake_doc: Path | str, ds_path: Path, doc_path: Path):
     """
     Ingest the dataset information from the docx file and export to json for zenodo upload.
     """
-
 
     # should read this from ds_path/version
     # just read in as text
     with open(ds_path / "version", "r") as f:
         ds_ver = f.read().strip()
     # ds_ver = "v2.0"
-
 
     # Load the document
     document = docx.Document(intake_doc)
@@ -297,7 +410,9 @@ def ingest_ds_info_doc(intake_doc:Path|str, ds_path:Path, doc_path:Path):
         md_content += f"* {creator['name']}"
         if "orcid" in creator:
             # format as link
-            md_content += f"; [ORCID:{creator['orcid'].split("/")[-1]}]({creator['orcid']})"
+            md_content += (
+                f"; [ORCID:{creator['orcid'].split("/")[-1]}]({creator['orcid']})"
+            )
         if "affiliation" in creator:
             md_content += f"; {creator['affiliation']}"
         md_content += "\n"
@@ -328,8 +443,9 @@ def ingest_ds_info_doc(intake_doc:Path|str, ds_path:Path, doc_path:Path):
 
     df.to_csv(doi_path / f"{long_dataset_name}.csv", index=False)
 
+
 # fix STUDY
-def fix_study_table(metadata_path:Path, doi_path:Path|None=None):
+def fix_study_table(metadata_path: Path, doi_path: Path | None = None):
     """
     Update the STUDY table with the information from the DOI folder.
     """
@@ -341,7 +457,7 @@ def fix_study_table(metadata_path:Path, doi_path:Path|None=None):
         doi_path = metadata_path.parent / "DOI"
     else:
         doi_path = Path(doi_path)
-    
+
     STUDY_fix = pd.read_csv(doi_path / f"{metadata_path.parent.name}.csv")
 
     STUDY["project_name"] = STUDY_fix["project_name"]
@@ -351,4 +467,3 @@ def fix_study_table(metadata_path:Path, doi_path:Path|None=None):
 
     # export STUDY
     STUDY.to_csv(metadata_path / "STUDY.csv", index=False)
-

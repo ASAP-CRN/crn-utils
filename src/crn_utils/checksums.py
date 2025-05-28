@@ -1,11 +1,11 @@
-
 # from google.oauth2.service_account import Credentials
 # from google.cloud import storage
 
 import subprocess
 
+
 # # create functions to login to GCP and get hashes....
-def get_md5_hashes( bucket_name, prefix):
+def get_md5_hashes(bucket_name, prefix):
     """
     Fetches MD5 hashes of objects in a GCS bucket matching a given prefix.
 
@@ -29,7 +29,6 @@ def get_md5_hashes( bucket_name, prefix):
 
     # md5_hashes = {}
 
-
     # for blob in bucket.list_blobs(prefix=prefix):
     #     md5_hashes[blob.name] = blob.md5_hash
 
@@ -46,10 +45,27 @@ def get_md5_hashes( bucket_name, prefix):
         print(f"gsutil command failed: {result.stderr}")
         return result
 
+
+def get_md5_hashes_full(bucket_name, prefix):
+
+    project = "dnastack-asap-parkinsons"
+    cmd = f"gsutil -u {project} hash -h gs://{bucket_name}/{prefix}"
+    print(cmd)
+
+    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    if result.returncode == 0:
+        md5_hashes = extract_md5_from_details2_lines_full(result.stdout.splitlines())
+        return md5_hashes
+    else:
+        # raise RuntimeError(f"gsutil command failed: {result.stderr}")
+        print(f"gsutil command failed: {result.stderr}")
+        return result
+
+
 # def download_blob(bucket_name, source_blob_name, destination_file_name):
 #     """
 #     Downloads a blob from the bucket.
-    
+
 #     Args:
 #     bucket_name (str): The name of the bucket.
 #     source_blob_name (str): The name of the blob in the bucket.
@@ -68,8 +84,6 @@ def get_md5_hashes( bucket_name, prefix):
 #     blob.download_to_filename(destination_file_name)
 
 #     print(f"Blob {source_blob_name} downloaded to {destination_file_name}.")
-
-
 
 
 # Function to parse the file to extract MD5 and filenames
@@ -98,6 +112,39 @@ def extract_md5_from_details2(md5_file):
                 current_file = line.strip().rstrip(":")
                 current_file = current_file.split("/")[-1]
             if "Hash (md5)" in line:
+                md5s[current_file] = line.split(":")[1].strip()
+    return md5s
+
+
+def extract_md5_from_details2ful(md5_file):
+    md5s = {}
+    with open(md5_file, "r") as f:
+        lines = f.readlines()
+        current_file = None
+        for line in lines:
+            if line.startswith("Hashes [hex]"):
+                current_file = line.strip().rstrip(":")
+                current_file = current_file.split("/")[-1]
+            if "Hash (md5)" in line:
+                md5s[current_file] = line.split(":")[1].strip()
+    return md5s
+
+
+# Function to parse the file to extract MD5 and filenames
+def extract_md5_from_details2_df(md5_file):
+    md5s = pd.DataFrame(columns=["file_name", "md5"])
+    with open(md5_file, "r") as f:
+        lines = f.readlines()
+        current_file = None
+        for line in lines:
+            if line.startswith("Hashes [hex]"):
+                current_file = line.strip().rstrip(":")
+                current_file = current_file.split("/")[-1]
+            if "Hash (md5)" in line:
+                md5s = md5s.append(
+                    {"file_name": current_file, "md5": line.split(":")[1].strip()},
+                    ignore_index=True,
+                )
                 md5s[current_file] = line.split(":")[1].strip()
     return md5s
 
@@ -136,6 +183,20 @@ def extract_md5_from_details2_lines(lines):
     return md5s
 
 
+def extract_md5_from_details2_lines_full(lines):
+    md5s = {}
+    current_file = None
+    for line in lines:
+        if line.startswith("Hashes [hex]"):
+            current_file = line.strip().rstrip(":")
+            # current_file = current_file.split("/")[-1]
+            current_file = current_file.lstrip("Hashes [hex]: ")
+            current_file = current_file.split(" ")[1].strip()
+        if "Hash (md5)" in line:
+            md5s[current_file] = line.split(":")[1].strip()
+    return md5s
+
+
 # Function to parse the file to extract crc32c and filenames
 def extract_crc32c_from_details2(md5_file):
     crcs = {}
@@ -151,7 +212,6 @@ def extract_crc32c_from_details2(md5_file):
     return crcs
 
 
-
 # Function to parse the file to extract crc32c and filenames
 def extract_hashes_from_gcloudstorage(source_hash):
 
@@ -162,12 +222,12 @@ def extract_hashes_from_gcloudstorage(source_hash):
         lines = f.readlines()
         current_file = None
         for line in lines:
-            
+
             if line.startswith("crc32c_hash:"):
-                curr_crc =  line.split(":")[1].strip()
+                curr_crc = line.split(":")[1].strip()
 
             elif line.startswith("md5_hash:"):
-                curr_md5 =  line.split(":")[1].strip()
+                curr_md5 = line.split(":")[1].strip()
 
             elif line.startswith("url:"):
                 current_file = line.split("/")[-1].strip()
@@ -176,9 +236,7 @@ def extract_hashes_from_gcloudstorage(source_hash):
             # else:
             #     print(f'cruff:{line.strip()}')
 
-
     return crcs, md5s
-
 
 
 # Function to parse the file to extract crc32c and filenames

@@ -8,25 +8,56 @@ import pandas as pd
 from .zenodo_util import *
 from .util import read_meta_table
 
+# import markdown
+# from html import escape
+
+
 # %load_ext dotenv
 # %dotenv
 
 
 __all__ = [
+    "setup_DOI_info",
     "ingest_DOI_doc",
-    "make_md_file",
+    "make_readme_file",
     "make_pdf_file",
-    "update_study_table",
-    "setup_DOI",
-    "mint_DOI",
-    "create_DOI",
-    "finalize_DOI",
+    "create_draft_doi",
+    "add_anchor_file_to_doi",
+    "update_doi",
+    "publish_doi",
     "archive_deposition_local",
+    "update_study_table_with_doi",
 ]
+
+# def md_to_html(text):
+#     """Convert markdown text to HTML"""
+#     if not text:
+#         return ""
+#     # First escape any HTML to prevent injection
+#     escaped_text = escape(str(text))
+#     # Then convert markdown to HTML
+#     html = markdown.markdown(escaped_text)
+#     return html
+
+
+def setup_DOI_info(
+    ds_path: str | Path,
+    doi_doc_path: str | Path,
+    publication_date: None | str = None,
+):
+
+    study_df = read_meta_table(ds_path / "metadata/STUDY.csv")
+    ingest_DOI_doc(ds_path, doi_doc_path, study_df, publication_date=publication_date)
+    make_readme_file(ds_path)
+    # make_pdf_file(ds_path)
+    update_study_table(ds_path)
 
 
 def ingest_DOI_doc(
-    ds_path: str | Path, doi_doc_path: str | Path, publication_date: None | str = None
+    ds_path: str | Path,
+    doi_doc_path: str | Path,
+    study_df: pd.DataFrame,
+    publication_date: None | str = None,
 ):
     """
     read docx, extract the information, and save in dataset/DOI subdirectory
@@ -34,6 +65,18 @@ def ingest_DOI_doc(
     ds_path = Path(ds_path)
     doi_doc_path = Path(doi_doc_path)
     long_dataset_name = ds_path.name
+
+    # get details from the study df
+    ASAP_lab_name = study_df["ASAP_lab_name"].values[0]
+    PI_full_name = study_df["PI_full_name"].values[0]
+    PI_email = study_df["PI_email"].values[0]
+    submitter_name = study_df["submitter_name"].values[0]
+    submitter_email = study_df["submitter_email"].values[0]
+    publication_DOI = study_df["publication_DOI"].values[0]
+    grant_ids = study_df["ASAP_grant_id"].values[0]
+    team_name = (
+        study_df["ASAP_team_name"].values[0].lower().replace("team-", "").capitalize()
+    )
 
     # read the docx
 
@@ -150,7 +193,22 @@ def ingest_DOI_doc(
 
     # description
     # string (allows HTML)	Yes	Abstract or description for deposition.
-    description = dataset_description
+    # description = dataset_description
+
+    description = f"""
+This Zenodo deposit contains a publicly available description of the dataset: 
+
+    “{title}". ({ds_path.name}, v{ds_ver}) submitted by ASAP Team: {team_name}.
+
+This dataset will be made available to researchers via the ASAP CRN Cloud in approximately one month. Once available, the dataset will be accessible by going to https://cloud.parkinsonsroadmap.org.
+This research was funded by the Aligning Science Across Parkinson’s Collaborative Research Network (ASAP CRN), through the Michael J. Fox Foundation for Parkinson’s Research (MJFF).
+
+This Zenodo deposit was created by the ASAP CRN Cloud staff on behalf of the dataset Authors. It provides a citable reference for a CRN Cloud Dataset
+
+- Aligning Science Across Parkinson’s 
+
+"""
+
     # ASAP
     communities = [{"identifier": "asaphub"}]
     # version
@@ -162,19 +220,23 @@ def ingest_DOI_doc(
             "%Y-%m-%d"
         )  # "2.0"?  also do "v1.0"
 
-    export_data = {
-        "metadata": {
-            "title": title,
-            "upload_type": upload_type,
-            "description": description,
-            "creators": creators,
-            "communities": communities,
-            "version": version,
-            "publication_type": "other",
-            "resource_type": "dataset",
-            "publication_date": publication_date,
-        }
+    metadata = {
+        "title": title,
+        "upload_type": upload_type,
+        "description": description,
+        "publication_date": publication_date,
+        "version": version,
+        # "access_right": "open",
+        "creators": creators,
+        "publication_type": "other",
+        "resource_type": "dataset",
+        "communities": communities,
     }
+
+    if not pd.isna(grant_ids):
+        metadata["grants"] = [{"id": f"10.13039/100018231::{grant_ids}"}]
+
+    export_data = {"metadata": metadata}
 
     # dump json
     doi_path = ds_path / "DOI"
@@ -196,6 +258,15 @@ def ingest_DOI_doc(
         "publication_date": publication_date,
         "version": version,
         "title": title,
+        ### add the additional stuff from the study df
+        "ASAP_lab_name": ASAP_lab_name,
+        "PI_full_name": PI_full_name,
+        "PI_email": PI_email,
+        "submitter_name": submitter_name,
+        "submitter_email": submitter_email,
+        "publication_DOI": publication_DOI,
+        "grant_ids": grant_ids,
+        "team_name": team_name,
     }
 
     with open(doi_path / f"project.json", "w") as f:
@@ -203,15 +274,18 @@ def ingest_DOI_doc(
 
     # df = pd.DataFrame(project_dict, index=[0])
     # df.to_csv(doi_path / f"{long_dataset_name}.csv", index=False)
+    # write the files.
 
 
-def make_md_file(ds_path: Path):
+def make_readme_file(ds_path: Path):
     """
     Make the stereotyped .md from the
 
     """
-    if not "/Library/TeX/texbin:" in os.environ["PATH"]:
-        os.environ["PATH"] = "/Library/TeX/texbin:" + os.environ["PATH"]
+    # TODO:  add grant_ids
+
+    # Aligning Science Across Parkinson’s: 10.13039/100018231
+    # grants = [{'id': f"10.13039/100018231::{grant_id}"}]
 
     long_dataset_name = ds_path.name
 
@@ -230,6 +304,14 @@ def make_md_file(ds_path: Path):
     creators = data.get("creators")
     publication_date = data.get("publication_date")
     version = data.get("version")
+    ASAP_lab_name = data.get("ASAP_lab_name")
+    PI_full_name = data.get("PI_full_name")
+    PI_email = data.get("PI_email")
+    submitter_name = data.get("submitter_name")
+    submitter_email = data.get("submitter_email")
+    publication_DOI = data.get("publication_DOI")
+    grant_ids = data.get("grant_ids")
+    team_name = data.get("team_name")
 
     # fix description to enable the numbered and bulletted lists...
     for i in range(10):
@@ -240,31 +322,66 @@ def make_md_file(ds_path: Path):
     project_description = project_description.strip().replace("* ", "\n\t* ")
     dataset_description = dataset_description.strip().replace("* ", "\n\t* ")
 
-    md_content = f"# {title}\n\n __Dataset Description:__  {dataset_description}\n\n"
-    md_content += f" ### ASAP Team: Team {team.capitalize()}:\n\n > *Project:* __{project_title}__:{project_description}\n\n"
-    md_content += f"\n\n_____________________\n\n"
-    md_content += f"*ASAP CRN Cloud Dataset Name:* {long_dataset_name}, v{version}\n"
-    ## add creators as "Authors:"
-    md_content += f"\n\n### Authors:\n\n"
+    # # avoid unicodes that mess up latex
+    # rep_from = "α"
+    # rep_to = "alpha"
+    # project_description = project_description.strip().replace(rep_from, rep_to)
+    # dataset_description = dataset_description.strip().replace(rep_from, rep_to)
+    # rep_from = "₂"
+    # rep_to = "2"
+    # project_description = project_description.strip().replace(rep_from, rep_to)
+    # dataset_description = dataset_description.strip().replace(rep_from, rep_to)
+
+    readme_content = (
+        f"TITLE: {title}\n\nDataset Description:  {dataset_description}\n\n"
+    )
+    readme_content += f"ASAP Team: Team {team.capitalize()}\n"
+    readme_content += f"ASAP CRN Cloud Dataset Name: {long_dataset_name}]\nDataset Version:v{version}\n"
+    readme_content += f"Authors:\n"
     for creator in creators:
-        md_content += f"* {creator['name']}"
+        readme_content += f"\t* {creator['name']}"
         if "orcid" in creator:
             # format as link
-            md_content += (
+            readme_content += (
                 f"; [ORCID:{creator['orcid'].split("/")[-1]}]({creator['orcid']})"
             )
         if "affiliation" in creator:
-            md_content += f"; {creator['affiliation']}"
-        md_content += "\n"
+            readme_content += f"; {creator['affiliation']}"
+        readme_content += "\n"
 
-    with open(doi_path / f"{long_dataset_name}.md", "w") as f:
-        f.write(md_content)
+    readme_content += f"\nPrincipal Investigator: {PI_full_name}, {PI_email}\n"
+    readme_content += f"Dataset Submitter: {submitter_name}, {submitter_email}\n"
+    readme_content += f"Publication DOI: {publication_DOI}\n"
+    readme_content += f"Grant IDs: {grant_ids}\n"
+    readme_content += f"ASAP Lab: {ASAP_lab_name}\n"
+    readme_content += (
+        f"ASAP Project: {project_title}\nProject Description: {project_description}\n\n"
+    )
+    readme_content += f"Submission Date: {publication_date}\n"
+    readme_content += f"__________________________________________\n"
+
+    readme_content += f"""
+    This Zenodo deposit contains a publicly available description of the dataset.
+
+    This dataset will be made available to researchers via the ASAP CRN Cloud in approximately one month. Once available, the dataset will be accessible by going to https://cloud.parkinsonsroadmap.org.
+    This research was funded by the Aligning Science Across Parkinson’s Collaborative Research Network (ASAP CRN), through the Michael J. Fox Foundation for Parkinson’s Research (MJFF).
+
+    This Zenodo deposit was created by the ASAP CRN Cloud staff on behalf of the dataset Authors. It provides a citable reference for a CRN Cloud Dataset
+
+    - Aligning Science Across Parkinson’s 
+
+    """
+
+    with open(doi_path / f"{long_dataset_name}_README.txt", "w") as f:
+        f.write(readme_content)
 
 
 def make_pdf_file(ds_path: Path):
     """
     Make the stereotyped .pdf from the .md file
     """
+    if not "/Library/TeX/texbin:" in os.environ["PATH"]:
+        os.environ["PATH"] = "/Library/TeX/texbin:" + os.environ["PATH"]
     long_dataset_name = ds_path.name
     doi_path = ds_path / "DOI"
     file_path = doi_path / f"{long_dataset_name}.md"
@@ -292,61 +409,124 @@ def update_study_table(ds_path: str | Path):
     STUDY.to_csv(metadata_path / "STUDY.csv", index=False)
 
 
-def mint_DOI(ds_path: Path) -> dict:
-    """
-    Mint a DOI for the dataset.
-    """
-    api_token = setup_zenodo()
-    metadata = setup_DOI(ds_path)
-    deposition, upload_response = create_DOI(ds_path, metadata, api_token)
-    published_deposition = finalize_DOI(ds_path, deposition, api_token)
-    return published_deposition, upload_response
+def create_draft_doi(zenodo: ZenodoClient, ds_path: Path, version: str = "0.1") -> dict:
+    """Create a draft DOI on zenodo.
 
+    Args:
+        zenodo (ZenodoClient): Zenodo client
+        ds_path (Path): Path to the dataset
+        version (str, optional): Version to use. Defaults to None. in which case force to be "0.1"
 
-def setup_DOI(ds_path: Path) -> dict:
-    # load json
+    Returns:
+        dict: Zenodo deposition
+    """
 
     with open(ds_path / f"DOI/{ds_path.name}.json", "r") as f:
         export_data = json.load(f)
+    metadata = ZenodoMetadata(**export_data["metadata"])
 
-    metadata = export_data["metadata"]
-    return metadata
+    if version == "0.1":
+        print(f"Warning Draft DOI is defaulting to v0.1")
 
+    metadata.version = version
+    zenodo.create_deposition(metadata)
 
-def create_DOI(ds_path: Path, metadata: dict, api_token: str) -> dict:
-    # Create a new deposition.
-    deposition = create_deposition(api_token)
-
-    # file_path = doi_path / f"{long_dataset_name}.md"
-    pdf_path = ds_path / f"DOI/{ds_path.name}.pdf"
-
-    # Upload the file.
-    upload_response = upload_file(deposition, pdf_path, api_token)
-    # Update the deposition metadata with the provided metadata.
-    deposition = update_metadata(deposition, api_token, metadata)
-    return deposition, upload_response
+    return zenodo.deposition, metadata
 
 
-def finalize_DOI(ds_path: Path, deposition: dict, api_token: str) -> dict:
-    # Publish the deposition to reserve a DOI.
-    print("Publishing deposition...")
-    published_deposition = publish_deposition(deposition, api_token)
-    # Print the final published deposition details.
-    print("\nFinal Published Deposition Details:")
-    print(json.dumps(published_deposition, indent=2))
-    doi = published_deposition["doi"]
-    doi_url = published_deposition["doi_url"]
-    # 10.5281/zenodo.15162835
-    doi_path = ds_path / "DOI"
-    with open(doi_path / "doi", "w") as f:
-        # write doi to file as text
-        f.write(doi)
+def add_anchor_file_to_doi(zenodo: ZenodoClient, ds_path: Path) -> dict:
+    # upload file to zenodo
+    file_path = ds_path / f"DOI/{ds_path.name}_README.txt"
+    zenodo.upload_file(file_path)
+    return zenodo.deposition
 
-    with open(doi_path / f"{doi.replace('/','_')}", "w") as f:
-        # write doi to file
-        f.write(doi_url)
 
-    return published_deposition
+def update_doi(zenodo: ZenodoClient, metadata: dict | ZenodoMetadata) -> dict:
+    """Create a draft DOI on zenodo.
+
+    Args:
+        zenodo (ZenodoClient): Zenodo client
+        metadata (dict, optional): Metadata to update. Defaults to None.
+
+    Returns:
+        dict: Zenodo deposition
+    """
+
+    if isinstance(metadata, dict):
+        metadata = ZenodoMetadata(**metadata)
+    zenodo.change_metadata(metadata)
+
+    return zenodo.deposition
+
+
+def publish_doi(zenodo: ZenodoClient) -> dict:
+    """Publish a DOI on zenodo.
+
+    Args:
+        zenodo (ZenodoClient): Zenodo client
+
+    Returns:
+        dict: Zenodo deposition
+    """
+
+    return zenodo.publish()
+
+
+# def mint_DOI(ds_path: Path) -> dict:
+#     """
+#     Mint a DOI for the dataset.
+#     """
+#     api_token = setup_zenodo()
+#     metadata = setup_DOI(ds_path)
+#     deposition, upload_response = create_DOI(ds_path, metadata, api_token)
+#     published_deposition = finalize_DOI(ds_path, deposition, api_token)
+#     return published_deposition, upload_response
+
+
+# def setup_DOI(ds_path: Path) -> dict:
+#     # load json
+
+#     with open(ds_path / f"DOI/{ds_path.name}.json", "r") as f:
+#         export_data = json.load(f)
+
+#     metadata = export_data["metadata"]
+#     return metadata
+
+
+# def create_DOI(ds_path: Path, metadata: dict, api_token: str) -> dict:
+#     # Create a new deposition.
+#     deposition = create_deposition(api_token)
+
+#     # file_path = doi_path / f"{long_dataset_name}.md"
+#     pdf_path = ds_path / f"DOI/{ds_path.name}.pdf"
+
+#     # Upload the file.
+#     upload_response = upload_file(deposition, pdf_path, api_token)
+#     # Update the deposition metadata with the provided metadata.
+#     deposition = update_metadata(deposition, api_token, metadata)
+#     return deposition, upload_response
+
+
+# def finalize_DOI(ds_path: Path, deposition: dict, api_token: str) -> dict:
+#     # Publish the deposition to reserve a DOI.
+#     print("Publishing deposition...")
+#     published_deposition = publish_deposition(deposition, api_token)
+#     # Print the final published deposition details.
+#     print("\nFinal Published Deposition Details:")
+#     print(json.dumps(published_deposition, indent=2))
+#     doi = published_deposition["doi"]
+#     doi_url = published_deposition["doi_url"]
+#     # 10.5281/zenodo.15162835
+#     doi_path = ds_path / "DOI"
+#     with open(doi_path / "doi", "w") as f:
+#         # write doi to file as text
+#         f.write(doi)
+
+#     with open(doi_path / f"{doi.replace('/','_')}", "w") as f:
+#         # write doi to file
+#         f.write(doi_url)
+
+#     return published_deposition
 
 
 def archive_deposition_local(ds_path: Path, arch_name: str, deposition: dict):
@@ -375,6 +555,34 @@ def update_study_table_with_doi(study_df: pd.DataFrame, ds_path: str | Path):
     # get dataset version from version file
     with open(ds_path / "version", "r") as f:
         ds_ver = f.read().strip()
+
     study_df["dataset_version"] = ds_ver
 
     return study_df
+
+
+# # always start by creating a Client object
+# zeno = zenodopy.Client(sandbox=True)
+
+# # list project id's associated to zenodo account
+# zeno.list_projects
+
+# # create a project
+# zeno.create_project(title="test_project", upload_type="other")
+# # your zeno object now points to this newly created project
+
+# # create a file to upload
+# with open("~/test_file.txt", "w+") as f:
+#     f.write("Hello from zenodopy")
+
+# # upload file to zenodo
+# zeno.upload_file("~/test.file.txt")
+
+# # list files of project
+# zeno.list_files
+
+# # set project to other project id's
+# zeno.set_project("<id>")
+
+# # delete project
+# zeno._delete_project(dep_id="<id>")

@@ -158,7 +158,10 @@ def process_table(df, table_name, cde_schema):
         return processed_df, pd.DataFrame(), report
     else:
         auxiliary_df = df[aux_fields]
-        aux_fields = schema[schema["Shared_key"] == 1]["Field"].to_list() + aux_fields
+        if "Shared_key" in schema.columns:  # post v2.0 CDE
+            aux_fields = (
+                schema[schema["Shared_key"] == 1]["Field"].to_list() + aux_fields
+            )
         auxiliary_df = df[aux_fields]
         return processed_df, auxiliary_df, report
 

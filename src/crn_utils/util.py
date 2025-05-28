@@ -98,6 +98,13 @@ def read_CDE(metadata_version: str = "v3.0", local_path: str | bool | Path = Fal
         print(cde_url)
 
     try:
+        print(f"reading from googledoc {cde_url}")
+        GOOGLE_SHEET_ID = "1c0z5KvRELdT2AtQAH2Dus8kwAyyLrR0CROhKOjpU4Vc"
+
+        if metadata_version == "v3.1":
+            metadata_version = "CDE_final"
+        cde_url = f"https://docs.google.com/spreadsheets/d/{GOOGLE_SHEET_ID}/gviz/tq?tqx=out:csv&sheet={metadata_version}"
+
         CDE_df = pd.read_csv(cde_url)
         read_source = "url" if not local_path else "local file"
         print(f"read {read_source}")
@@ -281,7 +288,7 @@ def read_meta_table(table_path):
 
     # drop rows with all null values
     table_df.dropna(how="all", inplace=True)
-
+    table_df.fillna(NULL, inplace=True)
     table_df.replace(
         {"": NULL, pd.NA: NULL, "none": NULL, "nan": NULL, "Nan": NULL}, inplace=True
     )
