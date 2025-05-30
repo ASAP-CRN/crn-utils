@@ -1,17 +1,8 @@
 import pandas as pd
 from pathlib import Path
 import os
-
 import docx
 import json
-
-import argparse
-
-# try:
-#     from crn_utils.util import read_CDE, NULL, prep_table, read_meta_table, read_CDE_asap_ids, export_meta_tables, load_tables
-# except:
-#     !pip install git+https://github.com/ASAP-CRN/crn-utils.git  # pip install  --force-reinstall --no-deps git+https://github.com/ASAP-CRN/crn-utils.git
-#     from crn_utils.util import read_CDE, NULL, prep_table, read_meta_table, read_CDE_asap_ids, export_meta_tables, load_tables
 
 from .util import (
     read_CDE,
@@ -28,18 +19,21 @@ from .asap_ids import *
 from .validate import validate_table, ReportCollector, process_table
 from .file_metadata import *
 
-# %%
 from .checksums import extract_md5_from_details2, get_md5_hashes
-from .bucket_util import (
-    authenticate_with_service_account,
-    gsutil_ls,
-    gsutil_cp,
-    gsutil_mv,
+from .bucket_util import authenticate_with_service_account
+from .file_metadata import (
+    get_raw_bucket_summary,
+    get_raw_bucket_summary_flat,
+    update_data_table_with_gcp_uri,
+    update_spatial_table_with_gcp_uri,
 )
-from crn_utils.constants import *
+from .constants import *
+from .doi import update_study_table_with_doi
+
 
 __all__ = [
     "prep_release_metadata_mouse",
+    "prep_release_metadata_pmdbs",
     "load_and_process_table",
     "process_schema",
     "create_metadata_package",
@@ -66,6 +60,7 @@ def prep_release_metadata_mouse(
     map_path: Path,
     suffix: str,
     spatial: bool = False,
+    flatten: bool = False,
 ):
     # source
     # spatial
@@ -130,13 +125,18 @@ def prep_release_metadata_mouse(
     if not file_metadata_path.exists():
         file_metadata_path.mkdir(parents=True, exist_ok=True)
 
-    get_raw_bucket_summary(raw_bucket_name, file_metadata_path, dataset_name)
+    if flatten:
+        get_raw_bucket_summary_flat(raw_bucket_name, file_metadata_path, dataset_name)
+    else:
+        get_raw_bucket_summary(raw_bucket_name, file_metadata_path, dataset_name)
 
     make_file_metadata(ds_path, file_metadata_path, dfs["DATA"])
 
     dfs["STUDY"] = update_study_table_with_doi(dfs["STUDY"], ds_path)
     dfs["DATA"] = update_data_table_with_gcp_uri(dfs["DATA"], ds_path)
     if spatial:
+        get_image_bucket_summary(raw_bucket_name, file_metadata_path, dataset_name)
+
         dfs["SPATIAL"] = update_spatial_table_with_gcp_uri(
             dfs["SPATIAL"], ds_path, visium=False
         )
@@ -154,6 +154,125 @@ def prep_release_metadata_mouse(
         datasetid_mapper,
         mouseid_mapper,
         sampleid_mapper,
+    )
+
+
+def prep_release_metadata_pmdbs(
+    ds_path: Path,
+    schema_version: str,
+    map_path: Path,
+    suffix: str,
+    spatial: bool = False,
+    flatten: bool = False,
+):
+    # source
+    # spatial
+
+    dataset_name = ds_path.name
+    print(f"Processing {ds_path.name}")
+    ds_parts = dataset_name.split("-")
+    team = ds_parts[0]
+    source = ds_parts[1]
+    short_dataset_name = "-".join(ds_parts[2:])
+    raw_bucket_name = f"asap-raw-team-{team}-{source}-{short_dataset_name}"
+
+    CDE = read_CDE(schema_version)
+    asap_ids_df = read_CDE_asap_ids()
+    asap_ids_schema = asap_ids_df[["Table", "Field"]]
+
+    # # %%
+    (
+        datasetid_mapper,
+        subjectid_mapper,
+        sampleid_mapper,
+        gp2id_mapper,
+        sourceid_mapper,
+    ) = load_pmdbs_id_mappers(map_path, suffix)
+
+    # ds_path.mkdir(parents=True, exist_ok=True)
+    mdata_path = ds_path / "metadata" / schema_version
+    tables = [
+        table
+        for table in mdata_path.iterdir()
+        if table.is_file() and table.suffix == ".csv"
+    ]
+
+    req_tables = PMDBS_TABLES
+    if spatial:
+        req_tables.append("SPATIAL")
+
+    table_names = [table.stem for table in tables if table.stem in req_tables]
+
+    dfs = load_tables(mdata_path, table_names)
+
+    (
+        datasetid_mapper,
+        subjectid_mapper,
+        sampleid_mapper,
+        gp2id_mapper,
+        sourceid_mapper,
+    ) = update_pmdbs_id_mappers(
+        dfs["CLINPATH"],
+        dfs["SAMPLE"],
+        dataset_name,
+        datasetid_mapper,
+        subjectid_mapper,
+        sampleid_mapper,
+        gp2id_mapper,
+        sourceid_mapper,
+    )
+
+    dfs = update_pmdbs_meta_tables_with_asap_ids(
+        dfs,
+        dataset_name,
+        asap_ids_schema,
+        datasetid_mapper,
+        subjectid_mapper,
+        sampleid_mapper,
+        gp2id_mapper,
+        sourceid_mapper,
+    )
+
+    # TODO: need to make this read an env variable or something safe.
+    #### CREATE file metadata summaries
+    key_file_path = Path.home() / f"Projects/ASAP/{team}-credentials.json"
+    res = authenticate_with_service_account(key_file_path)
+
+    file_metadata_path = ds_path / "file_metadata"
+    if not file_metadata_path.exists():
+        file_metadata_path.mkdir(parents=True, exist_ok=True)
+
+    # if flatten:
+    #     get_raw_bucket_summary_flat(raw_bucket_name, file_metadata_path, dataset_name)
+    # else:
+    #     get_raw_bucket_summary(raw_bucket_name, file_metadata_path, dataset_name)
+
+    make_file_metadata(ds_path, file_metadata_path, dfs["DATA"])
+
+    dfs["STUDY"] = update_study_table_with_doi(dfs["STUDY"], ds_path)
+
+    dfs["DATA"] = update_data_table_with_gcp_uri(dfs["DATA"], ds_path)
+    if spatial:
+        get_image_bucket_summary(raw_bucket_name, file_metadata_path, dataset_name)
+        dfs["SPATIAL"] = update_spatial_table_with_gcp_uri(
+            dfs["SPATIAL"], ds_path, visium=False
+        )
+
+    # export the tables to the metadata directory in a release subdirectory
+    out_dir = ds_path / "metadata/release"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    export_meta_tables(dfs, out_dir)
+    write_version(schema_version, out_dir / "cde_version")
+    export_map_path = map_path / "asap-ids/master"
+    export_pmdbs_id_mappers(
+        export_map_path,
+        suffix,
+        datasetid_mapper,
+        subjectid_mapper,
+        sampleid_mapper,
+        gp2id_mapper,
+        sourceid_mapper,
     )
 
 
@@ -268,8 +387,6 @@ def ingest_ds_info_doc(intake_doc: Path | str, ds_path: Path, doc_path: Path):
 
     # Load the document
     document = docx.Document(intake_doc)
-
-    # %%
     table_names = ["affiliations", "datasets", "projects", "extra1", "extra2"]
     for name, table in zip(table_names, document.tables):
         table_data = []

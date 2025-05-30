@@ -32,12 +32,12 @@ __all__ = [
     "gen_raw_bucket_summary",
     "get_raw_bucket_summary",
     "get_raw_bucket_summary_flat",
-    "get_image_bucket_summary",
+    "get_spatial_bucket_summary",
     "make_file_metadata",
     "get_data_df_",
     "get_fastqs_df",
     "get_artifacts_df",
-    "get_images_df",
+    "get_spatial_df",
 ]
 
 # define collections, collection names and datasets
@@ -84,7 +84,7 @@ def make_file_metadata(
     artifacts_df = get_artifacts_df(dl_path, dataset_id, team_id)
 
     # drop filename == ".DS_Store"
-    artifacts_df = artifacts_df[artifacts_df["filename"] != ".DS_Store"]
+    artifacts_df = artifacts_df[artifacts_df["file_name"] != ".DS_Store"]
 
     if artifacts_df.shape[0] > 0:
         artifacts_df.to_csv(dl_path / "artifacts.csv", index=False)
@@ -98,13 +98,19 @@ def make_file_metadata(
     samp_df = data_df
     samp_df["project_id"] = team_name
 
+    print(samp_df.columns)
     fastq_df = get_fastqs_df(dl_path)
     # fastq_df["file_name"] = fastq_df["raw_files"].apply(lambda x: x.split("/")[-1])
+    print(fastq_df.columns)
 
     if spatial:
-        img_df = get_images_df(dl_path)
-        # img_df["file_name"] = img_df["image_files"].apply(lambda x: x.split("/")[-1])
+        img_df = get_spatial_df(dl_path)
+        print(img_df.columns)
+
+        # img_df["file_name"] = img_df["spatial_files"].apply(lambda x: x.split("/")[-1])
         files_df = pd.concat([fastq_df, img_df])
+        print(files_df.columns)
+
     else:
         files_df = fastq_df
 
@@ -123,8 +129,19 @@ def make_file_metadata(
             "file_MD5",
             "file_type",
             "sample_name",
+            "bucket_md5",
         ]
     ]
+
+    # # check md5s
+    # md5_file = list(dl_path.glob("*raw_fastqs-md5s.json"))[0]
+    # bucket_files_md5 = extract_md5_from_details2(md5_file)
+    # df["check2"] = df["file_name"].map(bucket_files_md5)
+    # df["check1"] = df["file_MD5"]
+
+    # df = df[df.check1 == df.check2]
+    # df.drop(columns=["check1", "check2"], inplace=True)
+
     # now export the combined_df to a csv file
     df.to_csv(dl_path / "raw_files.csv", index=False)
 
@@ -267,7 +284,7 @@ def get_raw_bucket_summary_flat(raw_bucket_name: str, dl_path: Path, dataset_nam
             json.dump(bucket_files_md5, f)
 
 
-def get_image_bucket_summary(raw_bucket_name: str, dl_path: Path, dataset_name: str):
+def get_spatial_bucket_summary(raw_bucket_name: str, dl_path: Path, dataset_name: str):
     if "cohort" in dataset_name:
         print(f"No raw bucket for cohort datasets: {dataset_name}")
         # need to join with the cohort-pmdbs-sn-rnaseq raw files
@@ -275,19 +292,24 @@ def get_image_bucket_summary(raw_bucket_name: str, dl_path: Path, dataset_name: 
     else:
 
         # create a list of the files in the raw_bucket/fastqs
-        prefix = f"images/**/*"
+        prefix = f"spatial/**/*"
         bucket_path = (
             f"{raw_bucket_name.split('/')[-1]}"  # dev_bucket_name has gs:// prefix
         )
         images = gsutil_ls2(bucket_path, prefix, project="dnastack-asap-parkinsons")
         img_files = [f for f in images if f != ""]
         if len(img_files) > 0:
-            img_files_df = pd.DataFrame(img_files, columns=["image_files"])
+            img_files_df = pd.DataFrame(img_files, columns=["spatial_files"])
             img_files_df.to_csv(
-                dl_path / f"{dataset_name}-image_files.csv", index=False
+                dl_path / f"{dataset_name}-spatial_files.csv", index=False
             )
         else:
             print(f"No image files found for {dataset_name}")
+
+        bucket_files_md5 = get_md5_hashes(bucket_path, prefix)
+        # dump md5s to file
+        with open(dl_path / f"{dataset_name}-spatial_files-md5s.json", "w") as f:
+            json.dump(bucket_files_md5, f)
 
 
 def get_artifacts_df(dl_path, dataset_id, team_id):
@@ -295,7 +317,7 @@ def get_artifacts_df(dl_path, dataset_id, team_id):
         "ASAP_dataset_id",
         "ASAP_team_id",
         "artifact_type",
-        "filename",
+        "file_name",
         "file_path",
         "timestamp",
         "workflow",
@@ -304,28 +326,30 @@ def get_artifacts_df(dl_path, dataset_id, team_id):
     artifacts = list(dl_path.glob("*artifact_files.csv"))
     if len(artifacts) > 0:
         artifact = artifacts[0]
-        # print(f"Processing {artifact}")
+        print(f"Processing {artifact}")
         df = pd.read_csv(artifact)
         artifact_name = artifact.stem.split("-")[0]
+
         df["exclude"] = df["artifact_files"].apply(
             lambda x: "cellranger_counts" in x
         ) | df["artifact_files"].apply(lambda x: ".git" in x)
         # now concatenate the dataframes
         df = df[~df["exclude"]]
-        df["filename"] = df["artifact_files"].str.split("/").apply(lambda x: x[-1])
+
+        df["file_name"] = df["artifact_files"].str.split("/").apply(lambda x: x[-1])
         df["ASAP_dataset_id"] = dataset_id
         df["ASAP_team_id"] = team_id
         df["timestamp"] = "NA"
         df["workflow"] = "NA"
         df["workflow_version"] = "NA"
         df["artifact_type"] = "contributed"
-        df["file_path"] = (
-            df["artifact_files"].str.split("/").apply(lambda x: "/".join(x[3:]))
-        )
+        df["file_path"] = df["artifact_files"].apply(lambda x: x.split("/")[-1])
+        df = add_bucket_md5(df, dl_path)
+        return df[keep_cols]
     else:
         print(f"no artifact files found for {dl_path.parent.name}")
         df = pd.DataFrame(columns=keep_cols)
-    return df[keep_cols]
+        return df
 
 
 def get_data_df_(metadata_path: Path) -> pd.DataFrame:
@@ -350,31 +374,52 @@ def get_data_df_(metadata_path: Path) -> pd.DataFrame:
 
 
 def get_fastqs_df(dl_path: Path) -> pd.DataFrame:
+    """ """
     fastqs = list(dl_path.glob("*raw_fastqs.csv"))
     if len(fastqs) > 0:
         fastq = fastqs[0]
         # print(f"Processing {fastq}")
         fastq_df = pd.read_csv(fastq)
         fastq_df["file_name"] = fastq_df["raw_files"].apply(lambda x: x.split("/")[-1])
+        fastq_df = add_bucket_md5(fastq_df, dl_path)
+
         return fastq_df
     else:
         print(f"no fastq files found for {dl_path.parent.name}")
         return pd.DataFrame(columns=["raw_files"])
 
 
-def get_images_df(dl_path: Path) -> pd.DataFrame:
-    images = list(dl_path.glob("*image_files.csv"))
+def get_spatial_df(dl_path: Path) -> pd.DataFrame:
+    images = list(dl_path.glob("*spatial_files.csv"))
     if len(images) > 0:
         image = images[0]
         # print(f"Processing {fastq}")
         img_df = pd.read_csv(image)
-        img_df["file_name"] = img_df["image_files"].apply(lambda x: x.split("/")[-1])
-        # rename "image_files" to "raw_files"
-        img_df.rename(columns={"image_files": "raw_files"}, inplace=True)
+        img_df["file_name"] = img_df["spatial_files"].apply(lambda x: x.split("/")[-1])
+        # rename "spatial_files" to "raw_files"
+        img_df.rename(columns={"spatial_files": "raw_files"}, inplace=True)
+        img_df = add_bucket_md5(img_df, dl_path)
         return img_df
     else:
         print(f"no images files found for {dl_path.parent.name}")
         return pd.DataFrame(columns=["raw_files"])
+
+
+def add_bucket_md5(df: pd.DataFrame, dl_path: Path):
+    """ """
+    md5_files = list(dl_path.glob(f"*-md5s.json"))
+    if len(md5_files) == 0:
+        print(f"no md5 files found for {dl_path.parent.name}")
+        df["bucket_md5"] = "NA"
+        return df
+
+    md5_mapper = {}
+    for file in md5_files:
+        with open(file, "r") as f:
+            md5s = json.load(f)
+            md5_mapper.update(md5s)
+    df["bucket_md5"] = df["file_name"].map(md5_mapper)
+    return df
 
 
 ####################
@@ -404,6 +449,13 @@ def gen_raw_bucket_summary(raw_bucket_name: str, dl_path: Path, dataset_name: st
         else:
             print(f"No artifact files found for {dataset_name}")
 
+        bucket_files_md5 = get_md5_hashes(bucket_path, prefix)
+        # dump md5s to file
+        with open(dl_path / f"{dataset_name}-artifacts-md5s.json", "w") as f:
+            json.dump(bucket_files_md5, f)
+
+        return df[keep_cols]
+
         # create a list of the files in the raw_bucket/fastqs
         prefix = f"fastqs/**/*.fastq.gz"
         bucket_path = (
@@ -416,6 +468,13 @@ def gen_raw_bucket_summary(raw_bucket_name: str, dl_path: Path, dataset_name: st
             raw_files_df.to_csv(dl_path / f"{dataset_name}-raw_fastqs.csv", index=False)
         else:
             print(f"No raw files found for {dataset_name}")
+
+        bucket_files_md5 = get_md5_hashes(bucket_path, prefix)
+        # dump md5s to file
+        with open(dl_path / f"{dataset_name}-raw_fastqs-md5s.json", "w") as f:
+            json.dump(bucket_files_md5, f)
+
+        return df[keep_cols]
 
 
 ####################

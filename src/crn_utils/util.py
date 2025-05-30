@@ -98,19 +98,35 @@ def read_CDE(metadata_version: str = "v3.0", local_path: str | bool | Path = Fal
         print(cde_url)
 
     try:
-        print(f"reading from googledoc {cde_url}")
         GOOGLE_SHEET_ID = "1c0z5KvRELdT2AtQAH2Dus8kwAyyLrR0CROhKOjpU4Vc"
 
         if metadata_version == "v3.1":
             metadata_version = "CDE_final"
         cde_url = f"https://docs.google.com/spreadsheets/d/{GOOGLE_SHEET_ID}/gviz/tq?tqx=out:csv&sheet={metadata_version}"
 
+        print(f"reading from googledoc {cde_url}")
+
         CDE_df = pd.read_csv(cde_url)
-        read_source = "url" if not local_path else "local file"
-        print(f"read {read_source}")
+        print(f"read url")
+
+        # read_source = "url" if not local_path else "local file"
     except:
-        CDE_df = pd.read_csv(f"{resource_fname}.csv")
-        print("read local file")
+        # import requests
+
+        # # download the cde_url to a temp file
+        # print(f"downloading {cde_url} to {resource_fname}.csv")
+        # response = requests.get(cde_url)
+        # response.raise_for_status()  # Check if the request was successful
+        # # save to ../../resource/CDE/
+        # new_resource_fname = f"../../resource/CDE/_{resource_fname}.csv"
+        # with open(new_resource_fname, "wb") as file:
+        #     file.write(response.content)
+
+        # CDE_df = pd.read_csv(new_resource_fname)
+        # print(f"exception:read local file: {new_resource_fname}")
+        root = Path(__file__).parent.parent.parent
+        CDE_df = pd.read_csv(f"{root}/resource/CDE/{resource_fname}.csv")
+        print(f"exception:read local file: ../../resource/CDE/{resource_fname}.csv")
 
     # drop rows with no table name (i.e. ASAP_ids)
     CDE_df = CDE_df[column_list]
@@ -198,7 +214,13 @@ def read_CDE_asap_ids(
         read_source = "url" if not local_path else "local file"
         print(f"read {read_source}")
     except:
-        df = pd.read_csv(f"ASAP_CDE_{schema_version}_{resource_fname}.csv")
+
+        root = Path(__file__).parent.parent.parent
+        df = pd.read_csv(
+            f"{root}/resource/CDE/ASAP_CDE_{schema_version}_{resource_fname}.csv"
+        )
+
+        # df = pd.read_csv(f"ASAP_CDE_{schema_version}_{resource_fname}.csv")
         print("read local file")
 
     # drop rows with no table name (i.e. ASAP_ids)
