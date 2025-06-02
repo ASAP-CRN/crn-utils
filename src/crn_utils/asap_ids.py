@@ -413,9 +413,10 @@ def generate_human_sample_ids(
     ud_sampleid_mapper.update(id_mapper)
     # print(ud_sampleid_mapper)
 
-    assert df_wids.sort_index().equals(sample_df)
-
-    n_add = len({ud_sampleid_mapper}) - len({id_mapper})
+    # assert df_wids.sort_index().equals(sample_df)
+    # print(f"{df_wids.shape=}, {sample_df.shape=}")
+    # print(f"{df_wids.columns=}, {sample_df.columns=}")
+    n_add = len(ud_sampleid_mapper.keys()) - len(id_mapper.keys())
 
     print(f"added {n_add} new sample_ids")
 
@@ -1077,8 +1078,8 @@ def generate_sample_ids(
         df_dup_chunks.append(df_samp_subset)
 
     df_samp_wids = pd.concat(df_dup_chunks)
-    print(f"{df_samp_wids.shape=}, {sample_df.shape=}")
-    # assert df_samp_wids.sort_index().equals(sample_df)
+
+    assert df_samp_wids.sort_index().equals(sample_df)
     print(f"Added {n_sample_id_add} new sample IDs")
 
     return sampleid_mapper

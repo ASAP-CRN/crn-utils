@@ -5,28 +5,32 @@ from pathlib import Path
 import os
 import pandas as pd
 
+
 from .zenodo_util import *
 from .util import read_meta_table
 
 # import markdown
 # from html import escape
 
-
-# %load_ext dotenv
-# %dotenv
-
-
 __all__ = [
     "setup_DOI_info",
     "ingest_DOI_doc",
+    "finalize_DOI",
     "make_readme_file",
     "make_pdf_file",
     "create_draft_doi",
     "add_anchor_file_to_doi",
-    "update_doi",
+    "update_doi_metadata",
     "publish_doi",
     "archive_deposition_local",
     "update_study_table_with_doi",
+    "get_published_deposition",
+    "setup_zenodo",
+    "get_doi_from_dataset",
+    "bump_doi_version",
+    "create_draft_metadata",
+    "replace_anchor_file_in_doi",
+    "add_anchor_file_to_doi",
 ]
 
 # def md_to_html(text):
@@ -147,7 +151,7 @@ def ingest_DOI_doc(
 
     # title
     # string	Title of deposition (automatically set from metadata). Defaults to empty string.
-    title = dataset_title
+    title = dataset_title.strip().replace("Singel", "Single")
 
     # upload_type  string	Yes	Controlled vocabulary:
     # * publication: Publication
@@ -171,19 +175,19 @@ def ingest_DOI_doc(
     creators = []
     for indiv in data:
         name = f"{indiv[0].strip()}, {indiv[1].strip()}"  # , ".join(indiv[:2])
-        affiliation = indiv[2]
-        oricid = indiv[3]
+        affiliation = indiv[2].strip()
+        oricid = indiv[3].strip()
 
         if name == ", ":  # this should block empty names
             continue
 
         to_append = {"name": name}
-        if affiliation.strip() == "":
+        if affiliation == "":
             affiliation = None
         else:
             to_append["affiliation"] = affiliation
 
-        if oricid.strip() == "":
+        if oricid == "":
             oricid = None
         else:
             to_append["orcid"] = oricid
@@ -213,6 +217,8 @@ This Zenodo deposit was created by the ASAP CRN Cloud staff on behalf of the dat
     communities = [{"identifier": "asaphub"}]
     # version
     version = ds_ver  # "2.0"?  also do "v1.0"
+    # license
+    license = {"id": "cc-by-4.0"}
 
     # publication_date
     if publication_date is None:
@@ -228,7 +234,6 @@ This Zenodo deposit was created by the ASAP CRN Cloud staff on behalf of the dat
         "version": version,
         # "access_right": "open",
         "creators": creators,
-        "publication_type": "other",
         "resource_type": "dataset",
         "communities": communities,
     }
@@ -237,6 +242,8 @@ This Zenodo deposit was created by the ASAP CRN Cloud staff on behalf of the dat
         metadata["grants"] = [{"id": f"10.13039/100018231::{grant_ids}"}]
 
     export_data = {"metadata": metadata}
+
+    metadata["license"] = license
 
     # dump json
     doi_path = ds_path / "DOI"
@@ -295,6 +302,7 @@ def make_readme_file(ds_path: Path):
     doi_path = ds_path / "DOI"
     with open(doi_path / f"project.json", "r") as f:
         data = json.load(f)
+    # data = clean_json_read(doi_path / f"project.json")
 
     title = data.get("title")
     project_title = data.get("project_name")
@@ -400,6 +408,7 @@ def update_study_table(ds_path: str | Path):
     doi_path = ds_path / "DOI"
     with open(doi_path / f"project.json", "r") as f:
         data = json.load(f)
+    # data = clean_json_read(doi_path / f"project.json")
 
     STUDY["project_name"] = data["project_name"]
     STUDY["project_description"] = data["project_description"]
@@ -407,6 +416,76 @@ def update_study_table(ds_path: str | Path):
     STUDY["dataset_description"] = data["dataset_description"]
     # export STUDY
     STUDY.to_csv(metadata_path / "STUDY.csv", index=False)
+
+
+def setup_zenodo(sandbox: bool = None):
+    """Setup zenodo client.
+
+    Args:
+        sandbox (bool, optional): Whether to use the sandbox. Defaults to True.
+
+    Returns:
+        ZenodoClient: Zenodo client
+    """
+    zenodo = ZenodoClient(sandbox=sandbox)
+    return zenodo
+
+
+def get_published_deposition(zenodo: ZenodoClient, doi: str) -> dict:
+    """Get the published deposition for a DOI.
+
+    Args:
+        zenodo (ZenodoClient): Zenodo client
+        doi (str): DOI to get the deposition for
+
+    Returns:
+        dict: Zenodo deposition
+    """
+    record_id = zenodo._get_record_id_from_doi(doi)
+    print(f"Record ID: {record_id}")
+    deposition = zenodo._get_depositions_by_id(record_id)
+    return deposition
+
+
+def get_doi_from_dataset(ds_path: Path, version: bool = True):
+    """Get the doi from the dataset.
+
+    Args:
+        ds_path (Path): Path to the dataset
+        version (bool, optional): Whether to return the versioned doi. Defaults to False.
+
+    Returns:
+        str: DOI
+    """
+    doi_path = ds_path / "DOI"
+    doi_file = "version.doi" if version else "dataset.doi"
+    with open(doi_path / doi_file, "r") as f:
+        doi_id = f.read().strip()
+    doi_id = doi_id.split(".")[-1]
+    return doi_id
+
+
+def create_draft_metadata(ds_path: Path, version: str = "1.0") -> dict:
+    """Create a draft DOI on zenodo.
+
+    Args:
+        ds_path (Path): Path to the dataset
+        version (str, optional): Version to use. Defaults to None. in which case force to be "0.1"
+
+    Returns:
+        dict: Zenodo deposition
+    """
+    with open(ds_path / f"DOI/{ds_path.name}.json", "r") as f:
+        export_data = json.load(f)
+    # export_data = clean_json_read(ds_path / f"DOI/{ds_path.name}.json")
+    metadata = export_data["metadata"]
+
+    if "beta" not in version:
+        metadata["version"] = version + "-beta"
+    # metadata["license"] = {"id": "cc-by-4.0"}
+    # metadata["communities"] = [{"id": "asaphub"}]
+
+    return metadata
 
 
 def create_draft_doi(zenodo: ZenodoClient, ds_path: Path, version: str = "0.1") -> dict:
@@ -423,43 +502,127 @@ def create_draft_doi(zenodo: ZenodoClient, ds_path: Path, version: str = "0.1") 
 
     with open(ds_path / f"DOI/{ds_path.name}.json", "r") as f:
         export_data = json.load(f)
-    metadata = ZenodoMetadata(**export_data["metadata"])
+    metadata = export_data["metadata"]
 
     if version == "0.1":
         print(f"Warning Draft DOI is defaulting to v0.1")
 
     metadata.version = version
-    zenodo.create_deposition(metadata)
+    zenodo.create_new_deposition(metadata)
 
     return zenodo.deposition, metadata
 
 
-def add_anchor_file_to_doi(zenodo: ZenodoClient, ds_path: Path) -> dict:
+def add_anchor_file_to_doi(
+    zenodo: ZenodoClient, file_path: Path, doi_id: str | int | None = None
+) -> dict:
     # upload file to zenodo
-    file_path = ds_path / f"DOI/{ds_path.name}_README.txt"
     zenodo.upload_file(file_path)
     return zenodo.deposition
 
 
-def update_doi(zenodo: ZenodoClient, metadata: dict | ZenodoMetadata) -> dict:
-    """Create a draft DOI on zenodo.
+def replace_anchor_file_in_doi(
+    zenodo: ZenodoClient,
+    ds_path: Path,
+    doi_id: str | None = None,
+    new_file: str | None = None,
+    old_file: str | None = None,
+) -> dict:
+    # upload file to zenodo
 
-    Args:
-        zenodo (ZenodoClient): Zenodo client
-        metadata (dict, optional): Metadata to update. Defaults to None.
+    if doi_id is not None:
+        zenodo.set_deposition_id(doi_id)
+    # else use current deposition
 
-    Returns:
-        dict: Zenodo deposition
-    """
+    if old_file is None:
+        old_file = f"{ds_path.name}.pdf"
+    # find file_id
+    file_ids = zenodo.get_file_ids(doi_id)
+    file_id = file_ids.get(old_file, "")
+    if file_id == "":
+        print(f"Could not find file {old_file} in deposition {doi_id}")
+        file_id = zenodo.get_files(doi_id)
 
-    if isinstance(metadata, dict):
-        metadata = ZenodoMetadata(**metadata)
-    zenodo.change_metadata(metadata)
+        if len(file_id) > 0:
+            file_id = file_id[0]
+
+    if file_id != "":
+        # delete old file
+        deposition = zenodo.delete_file(file_id)
+    else:
+        # no file to delete...
+        print(f"no file to delete...")
+
+    if new_file is None:
+        new_file = f"{ds_path.name}_README.txt"
+
+    # add anchor file
+    deposition = add_anchor_file_to_doi(zenodo, ds_path / new_file, doi_id=doi_id)
 
     return zenodo.deposition
 
 
-def publish_doi(zenodo: ZenodoClient) -> dict:
+def bump_doi_version(zenodo: ZenodoClient, doi_id: str | int, new_version: str) -> dict:
+    """Bump the version of a DOI on zenodo.
+
+    Args:
+        zenodo (ZenodoClient): Zenodo client
+        doi_id (str | int): DOI to bump
+        new_version (str): New version to bump to
+
+    Returns:
+        dict: Zenodo deposition
+    """
+    if isinstance(doi_id, int):
+        print(f"Warning: You are using the record id {doi_id} instead of the doi")
+        doi_id = str(doi_id)
+
+    zenodo.deposition_id = doi_id
+    # deposition = zenodo.all_depositions[doi_id] #get_published_deposition(zenodo,doi_id)
+    # zenodo.set_deposition_iddoi_id)
+    deposition = zenodo.make_new_version()
+    return deposition
+
+    # metadata = deposition["metadata"]
+    # metadata["version"] = new_version
+    # return zenodo.change_metadata(metadata)
+
+    # return zenodo.deposition
+
+
+def update_doi_metadata(
+    zenodo: ZenodoClient, doi_id: str | int, metadata: dict
+) -> dict:
+    """update the metadata on zenodo.
+
+    Args:
+        zenodo (ZenodoClient): Zenodo client
+        metadata (dict, optional): Metadata to update.
+    Returns:
+        dict: Zenodo deposition
+    """
+    if isinstance(doi_id, int):
+        print(f"Warning: You are using the record id {doi_id} instead of the doi")
+        doi_id = str(doi_id)
+
+    zenodo.set_deposition_id(doi_id)
+
+    deposition = zenodo.deposition
+
+    # add missing keys from deposition to metadata
+    for key in deposition.get("metadata", {}).keys():
+        if key not in metadata:
+            metadata[key] = deposition["metadata"][key]
+
+    if deposition["state"] == "done":
+        print("Deposition is already published. unlocking for update.")
+        deposition = zenodo.unlock_deposition()
+
+    deposition = zenodo.change_metadata(metadata)
+    return deposition
+
+
+def publish_doi(zenodo: ZenodoClient, doi_id: str | int) -> dict:
     """Publish a DOI on zenodo.
 
     Args:
@@ -468,65 +631,57 @@ def publish_doi(zenodo: ZenodoClient) -> dict:
     Returns:
         dict: Zenodo deposition
     """
+    if isinstance(doi_id, int):
+        print(f"Warning: You are using the record id {doi_id} instead of the doi")
+        doi_id = str(doi_id)
+
+    zenodo.set_deposition_id(doi_id)
+
+    deposition = zenodo.deposition
+    if deposition.get("state", {}) == "done":
+        print("Deposition is already published.")
+        return deposition
 
     return zenodo.publish()
 
 
-# def mint_DOI(ds_path: Path) -> dict:
-#     """
-#     Mint a DOI for the dataset.
-#     """
-#     api_token = setup_zenodo()
-#     metadata = setup_DOI(ds_path)
-#     deposition, upload_response = create_DOI(ds_path, metadata, api_token)
-#     published_deposition = finalize_DOI(ds_path, deposition, api_token)
-#     return published_deposition, upload_response
+def finalize_DOI(ds_path: Path, deposition: dict):
+    # Publish the deposition to reserve a DOI.
+    # Print the final published deposition details.
+    print("\nFinal Published Deposition Details:")
 
+    #  'doi': '10.5281/zenodo.15485104',
+    #  'conceptdoi': '10.5281/zenodo.15485103',
 
-# def setup_DOI(ds_path: Path) -> dict:
-#     # load json
+    doi = deposition.get("doi", "")
+    doi_url = deposition.get("doi_url", "")
 
-#     with open(ds_path / f"DOI/{ds_path.name}.json", "r") as f:
-#         export_data = json.load(f)
+    if doi == "":
+        prerelease = True
+        tmp = deposition["metadata"]["prereserve_doi"]
+        doi = tmp["doi"]
+        doi_url = f"https://doi.org/{doi}"
+        # 'prereserve_doi': {'doi': '10.5281/zenodo.15578088', 'recid': 15578088}},
 
-#     metadata = export_data["metadata"]
-#     return metadata
+    conceptdoi = deposition["conceptdoi"]
+    conceptdoi_url = doi_url.replace(doi, conceptdoi)
 
+    doi_path = ds_path / "DOI"
+    with open(doi_path / "version.doi", "w") as f:
+        # write doi to file as text
+        f.write(doi)
 
-# def create_DOI(ds_path: Path, metadata: dict, api_token: str) -> dict:
-#     # Create a new deposition.
-#     deposition = create_deposition(api_token)
+    with open(doi_path / "dataset.doi", "w") as f:
+        # write doi to file as text
+        f.write(conceptdoi)
 
-#     # file_path = doi_path / f"{long_dataset_name}.md"
-#     pdf_path = ds_path / f"DOI/{ds_path.name}.pdf"
-
-#     # Upload the file.
-#     upload_response = upload_file(deposition, pdf_path, api_token)
-#     # Update the deposition metadata with the provided metadata.
-#     deposition = update_metadata(deposition, api_token, metadata)
-#     return deposition, upload_response
-
-
-# def finalize_DOI(ds_path: Path, deposition: dict, api_token: str) -> dict:
-#     # Publish the deposition to reserve a DOI.
-#     print("Publishing deposition...")
-#     published_deposition = publish_deposition(deposition, api_token)
-#     # Print the final published deposition details.
-#     print("\nFinal Published Deposition Details:")
-#     print(json.dumps(published_deposition, indent=2))
-#     doi = published_deposition["doi"]
-#     doi_url = published_deposition["doi_url"]
-#     # 10.5281/zenodo.15162835
-#     doi_path = ds_path / "DOI"
-#     with open(doi_path / "doi", "w") as f:
-#         # write doi to file as text
-#         f.write(doi)
-
-#     with open(doi_path / f"{doi.replace('/','_')}", "w") as f:
-#         # write doi to file
-#         f.write(doi_url)
-
-#     return published_deposition
+    with open(doi_path / f"{conceptdoi.replace('/','_')}", "w") as f:
+        # write doi to file
+        f.write(f"ALL_VERSIONS        : {conceptdoi_url}\n")
+        if prerelease:
+            f.write(f"CURRENT (prerelease): {doi_url}")
+        else:
+            f.write(f"CURRENT             : {doi_url}")
 
 
 def archive_deposition_local(ds_path: Path, arch_name: str, deposition: dict):
@@ -544,45 +699,56 @@ def update_study_table_with_doi(study_df: pd.DataFrame, ds_path: str | Path):
     # load jsons
     doi_path = ds_path / "DOI"
 
-    with open(doi_path / "doi", "r") as f:
-        doi = f.read().strip()
-    study_df["dataset_DOI"] = doi
-
-    with open(doi_path / f"{doi.replace('/','_')}", "r") as f:
-        doi_url = f.read().strip()
-    study_df["dataset_DOI_url"] = doi_url
+    with open(doi_path / "dataset.doi", "r") as f:
+        ds_doi = f.read().strip()
+    study_df["dataset_DOI"] = ds_doi
+    study_df["dataset_DOI_url"] = f"https://doi.org/{ds_doi}"
 
     # get dataset version from version file
     with open(ds_path / "version", "r") as f:
         ds_ver = f.read().strip()
-
     study_df["dataset_version"] = ds_ver
 
     return study_df
 
 
-# # always start by creating a Client object
-# zeno = zenodopy.Client(sandbox=True)
+# def clean_json_read(file_path):
+#     """
+#     Read a JSON file and clean non-breaking spaces and other problematic characters.
 
-# # list project id's associated to zenodo account
-# zeno.list_projects
+#     Args:
+#         file_path (str): Path to the JSON file
 
-# # create a project
-# zeno.create_project(title="test_project", upload_type="other")
-# # your zeno object now points to this newly created project
+#     Returns:
+#         dict: The cleaned JSON data
+#     """
+#     # Read the file as text first
+#     with open(file_path, "r", encoding="utf-8") as f:
+#         json_text = f.read()
 
-# # create a file to upload
-# with open("~/test_file.txt", "w+") as f:
-#     f.write("Hello from zenodopy")
+#     # Clean the text by replacing non-breaking spaces with regular spaces
+#     cleaned_text = json_text.replace("\xa0", " ")
 
-# # upload file to zenodo
-# zeno.upload_file("~/test.file.txt")
+#     # Also clean other common problematic characters
+#     cleaned_text = re.sub(r"[\u2018\u2019]", "'", cleaned_text)  # Smart single quotes
+#     cleaned_text = re.sub(r"[\u201c\u201d]", '"', cleaned_text)  # Smart double quotes
+#     cleaned_text = cleaned_text.replace("\u2013", "-")  # En dash
+#     cleaned_text = cleaned_text.replace("\u2014", "--")  # Em dash
+#     cleaned_text = cleaned_text.replace("\u2026", "...")  # Ellipsis
 
-# # list files of project
-# zeno.list_files
-
-# # set project to other project id's
-# zeno.set_project("<id>")
-
-# # delete project
-# zeno._delete_project(dep_id="<id>")
+#     # Parse the cleaned JSON
+#     try:
+#         data = json.loads(cleaned_text)
+#         return data
+#     except json.JSONDecodeError as e:
+#         print(f"Error decoding JSON: {e}")
+#         # If there's still an error, try a more aggressive cleaning approach
+#         cleaned_text = re.sub(
+#             r"[^\x00-\x7F]+", " ", cleaned_text
+#         )  # Remove all non-ASCII
+#         try:
+#             data = json.loads(cleaned_text)
+#             return data
+#         except json.JSONDecodeError as e2:
+#             print(f"Still couldn't decode JSON after aggressive cleaning: {e2}")
+#             raise

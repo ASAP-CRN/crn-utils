@@ -264,9 +264,9 @@ def prep_release_metadata_pmdbs(
 
     export_meta_tables(dfs, out_dir)
     write_version(schema_version, out_dir / "cde_version")
-    export_map_path = map_path / "asap-ids/master"
+    export_map_path = map_path  # / "asap-ids/master"
     export_pmdbs_id_mappers(
-        export_map_path,
+        map_path,
         suffix,
         datasetid_mapper,
         subjectid_mapper,
