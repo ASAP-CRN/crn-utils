@@ -204,11 +204,13 @@ class ZenodoMetadata:
     publication_date: str = field(
         default_factory=lambda: datetime.now().strftime("%Y-%m-%d")
     )
-    version: str = "0.1.0"
+    version: str = "0.1"
     access_right: str = "open"  # can set to "embargoed"
     embargo_date: str | None = None  # if embargoed
     access_conditions: str | None = None  # if embargoed
-    keywords: list[str] = field(default_factory=lambda: ["zenodo", "github", "git"])
+    keywords: list[str] = field(
+        default_factory=lambda: ["Zenodo", "ASAP", "ASAP CRN", "Parkinson's"]
+    )
     creators: list[dict] = field(
         default_factory=lambda: [{"name": "Jhon, Doe", "orcid": "0000-0003-2584-3576"}]
     )
@@ -217,6 +219,11 @@ class ZenodoMetadata:
     communities: list[dict] = field(default_factory=lambda: [{"identifier": "asaphub"}])
     grants: list[dict] = field(default_factory=lambda: [])
     license: dict = field(default_factory=lambda: {"license": {"id": "cc-by-4.0"}})
+    refrences: list[str] = field(
+        default_factory=lambda: [
+            "Aligning Science Across Parkinson’s Collaborative Research Network Cloud, https://cloud.parkinsonsroadmap.org/collections, RRID:SCR_023923"
+        ]
+    )
 
     @classmethod
     def parse_metadata_from_json(cls, json_file_path: Path) -> "ZenodoMetadata":
@@ -413,15 +420,22 @@ class ZenodoClient(object):
             dict: dictionary containing project details
         """
         dep_id = dep_id if dep_id is not None else self.deposition_id
-        # get request, returns our response
-        if self.deposition_id is not None:
-            r = requests.get(
-                f"{self._endpoint}/deposit/depositions/{dep_id}",
-                params={"access_token": self.token},
+        if dep_id is None:
+            dep = self._get_depositions()[0]
+            dep_id = dep["id"]
+            self.title = dep["title"]
+            self.bucket = dep["links"]["bucket"]
+            print(
+                " ** no deposition id is set on the project ** choosing first deposition "
             )
-        else:
-            print(" ** no deposition id is set on the project ** ")
-            return None
+
+        self.deposition_id = dep_id
+        # get request, returns our response
+        r = requests.get(
+            f"{self._endpoint}/deposit/depositions/{dep_id}",
+            params={"access_token": self.token},
+        )
+
         if r.ok:
             return r.json()
         else:
@@ -460,7 +474,7 @@ class ZenodoClient(object):
         Returns:
             str: the bucket URL to upload files to
         """
-        dic = self.list_projects
+        dic = self._get_depositions()
         dep_id = dic[title] if dic is not None else None
 
         # get request, returns our response, this the records metadata
@@ -528,7 +542,7 @@ class ZenodoClient(object):
         """
         return doi.split(".")[-1]
 
-    def _get_latest_record(self):
+    def _get_latest_deposition(self):
         """return the latest record id for given record id
 
         Returns:
@@ -568,22 +582,22 @@ class ZenodoClient(object):
         # else:
         #    print(f'Project title {self.title} is still available.')
 
-    def _depricate_project(self, doi_id: str):
-        """delete a project from repository by ID
+    # def _depricate_project(self, doi_id: str):
+    #     """delete a project from repository by ID
 
-        Args:
-            dep_id (str): The project deposition ID
-        """
-        print(
-            "this will depricate the project by setting to version to 0.0.0.1, change 'title' to 'deprecated', and blank out other metadata fields."
-        )
+    #     Args:
+    #         dep_id (str): The project deposition ID
+    #     """
+    #     print(
+    #         "this will depricate the project by setting to version to 0.0.0.1, change 'title' to 'deprecated', and blank out other metadata fields."
+    #     )
 
-        # could check to see if deposition["state"] == "done" and warn user that this is a published record...
-        #  but it fails either way.
+    #     # could check to see if deposition["state"] == "done" and warn user that this is a published record...
+    #     #  but it fails either way.
 
-        zenodo.set_deposition_id(doi_id)
+    #     zenodo.set_deposition_id(doi_id)
 
-        deposition = zenodo.deposition
+    #     deposition = zenodo.deposition
 
     def _check_parent_doi(self, dep_id: str, project_obj: dict):
         if project_obj["id"] == int(dep_id):
@@ -607,10 +621,6 @@ class ZenodoClient(object):
     @property
     def all_depositions(self):
         return self._all_depositions
-
-    @property
-    def projects(self):
-        return self.list_projects()
 
     @property
     def deposition(self):
@@ -637,24 +647,24 @@ class ZenodoClient(object):
     def update_depositions(self):
         self._all_depositions = self._get_all_depositions()
 
-    def list_projects(self):
-        """list projects connected to the supplied ACCESS_KEY
+    # def list_depositions(self):
+    #     """list depositions connected to the supplied ACCESS_KEY
 
-        prints to the screen the "Project Name" and "ID"
-        """
-        tmp = self._get_depositions()
+    #     prints to the screen the "Project Name" and "ID"
+    #     """
+    #     tmp = self._get_depositions()
 
-        if isinstance(tmp, list):
-            print("Project Name ---- ID ---- Status ---- Latest Published ID")
-            print("---------------------------------------------------------")
-            for file in tmp:
-                status = "published" if file["submitted"] else "unpublished"
-                latest = self._get_latest_record()
-                print(f"{file['title']} ---- {file['id']} ---- {status} ---- {latest}")
-        else:
-            print(" ** need to setup ~/.zenodo_token file ** ")
+    #     if isinstance(tmp, list):
+    #         print("Dataset Name ---- ID ---- Status ---- Latest Published ID")
+    #         print("---------------------------------------------------------")
+    #         for file in tmp:
+    #             status = "published" if file["submitted"] else "unpublished"
+    #             latest = self._get_latest_deposition()
+    #             print(f"{file['title']} ---- {file['id']} ---- {status} ---- {latest}")
+    #     else:
+    #         print(" ** need to setup ~/.zenodo_token file ** ")
 
-        return tmp
+    #     return tmp
 
     def list_files(self, dep_id: str | None = None):
         """list files in current deposition
@@ -755,28 +765,31 @@ class ZenodoClient(object):
             )
             return r.raise_for_status()
 
+    # this is pretty useless....
     def set_deposition_id(self, dep_id: str | None = None):
         """set the project by id"""
-        projects = self._get_depositions()
+        depositions = self._get_depositions()
 
-        if projects is not None:
-            project_list = [d for d in projects if d["id"] == int(dep_id)]
-            if len(project_list) > 0:
-                self.title = project_list[0]["title"]
-                self.bucket = self._get_bucket_by_id(project_list[0]["id"])
-                self.deposition_id = project_list[0]["id"]
-
+        if depositions is not None:
+            for d in depositions:
+                if d["id"] == int(dep_id):
+                    self.title = d["title"]
+                    self.bucket = self._get_bucket_by_id(d["id"])
+                    self.deposition_id = d["id"]
+                    return
         else:
-            print(f" ** Deposition ID: {dep_id} does not exist in your projects  ** ")
+            print(
+                f" ** Deposition ID: {dep_id} does not exist in your depositions  ** "
+            )
 
     def set_deposition_dataset_id(self, dataset_id: str | None = None):
         """set the deposition to the root of the generic dataset_id (conceptrecid)"""
-        projects = self._get_depositions()
+        depositions = self._get_depositions()
 
-        if projects is not None:
+        if depositions is not None:
             project_list = [
                 d
-                for d in projects
+                for d in depositions
                 if self._check_parent_doi(dep_id=dataset_id, project_obj=d)
             ]
             if len(project_list) > 0:
@@ -785,7 +798,9 @@ class ZenodoClient(object):
                 self.deposition_id = project_list[0]["id"]
 
         else:
-            print(f" ** Deposition ID: {dep_id} does not exist in your projects  ** ")
+            print(
+                f" ** Deposition ID: {dep_id} does not exist in your depositions  ** "
+            )
 
     def unlock_deposition(self, dep_id: str | None = None):
         """unlock a deposition
@@ -801,6 +816,7 @@ class ZenodoClient(object):
             params={"access_token": self.token},
         )
         if r.ok:
+            print("::::::::Deposition unlocked")
             return r.json()
         else:
             # 400 Bad Request: Deposition state does not allow for editing (e.g. depositions in state inprogress).
@@ -856,9 +872,28 @@ class ZenodoClient(object):
 
         # response status
         if r.ok:
-            return r.json()
+            print("File deleted")
+            return r.raise_for_status()
         else:
             return r.raise_for_status()
+
+    # def delete_file(self, filename: Path | str | None = None):
+    #     """delete a file from a project
+
+    #     Args:
+    #         filename (str): the name of file to delete
+    #     """
+    #     bucket_link = self.bucket
+    #     if filename is None:
+    #         print("You need to supply a filename")
+    #         return
+    #     elif isinstance(filename, str):
+    #         filename = Path(filename)
+
+    #     # with open(file_path, "rb") as fp:
+    #     _ = requests.delete(
+    #         f"{bucket_link}/{filename}", params={"access_token": self.token}
+    #     )
 
     def upload_file(self, file_path: Path | str | None = None, publish=False):
         """upload a file to a project
@@ -963,21 +998,3 @@ class ZenodoClient(object):
             f"https://zenodo.org/api/records/{record_id}"
         )  # params={'access_token': ACCESS_TOKEN})
         return [f["links"]["self"] for f in r.json()["files"]]
-
-    def delete_file(self, filename: Path | str | None = None):
-        """delete a file from a project
-
-        Args:
-            filename (str): the name of file to delete
-        """
-        bucket_link = self.bucket
-        if filename is None:
-            print("You need to supply a filename")
-            return
-        elif isinstance(filename, str):
-            filename = Path(filename)
-
-        # with open(file_path, "rb") as fp:
-        _ = requests.delete(
-            f"{bucket_link}/{filename}", params={"access_token": self.token}
-        )

@@ -30,11 +30,8 @@ __all__ = [
     "get_sc_manifests",
     "make_cohort_fastqtables",
     "gen_raw_bucket_summary",
-    "get_raw_bucket_summary",
-    "get_raw_bucket_summary_flat",
-    "get_spatial_bucket_summary",
+    "gen_spatial_bucket_summary",
     "make_file_metadata",
-    "get_data_df_",
     "get_fastqs_df",
     "get_artifacts_df",
     "get_spatial_df",
@@ -83,9 +80,6 @@ def make_file_metadata(
     # add contributed artifacts
     artifacts_df = get_artifacts_df(dl_path, dataset_id, team_id)
 
-    # drop filename == ".DS_Store"
-    artifacts_df = artifacts_df[artifacts_df["file_name"] != ".DS_Store"]
-
     if artifacts_df.shape[0] > 0:
         artifacts_df.to_csv(dl_path / "artifacts.csv", index=False)
     else:
@@ -95,52 +89,43 @@ def make_file_metadata(
     ## raw files
     ############################################
 
-    samp_df = data_df
+    samp_df = data_df.copy()
     samp_df["project_id"] = team_name
 
-    print(samp_df.columns)
-    fastq_df = get_fastqs_df(dl_path)
+    fastq_df = get_fastqs_df(dl_path, dataset_id, team_id)
     # fastq_df["file_name"] = fastq_df["raw_files"].apply(lambda x: x.split("/")[-1])
-    print(fastq_df.columns)
+    files_df = pd.concat([fastq_df, artifacts_df])
 
     if spatial:
-        img_df = get_spatial_df(dl_path)
-        print(img_df.columns)
+        spatial_df = get_spatial_df(dl_path, dataset_id, team_id)
+        spatial_df.to_csv(dl_path / "spatial_files.csv", index=False)
+        # print(f"spatial_df: {spatial_df.columns}")
+        # print(f"fastq_df: {fastq_df.columns}")
+        files_df = pd.concat([fastq_df, spatial_df])
 
-        # img_df["file_name"] = img_df["spatial_files"].apply(lambda x: x.split("/")[-1])
-        files_df = pd.concat([fastq_df, img_df])
-        print(files_df.columns)
+    merge_cols = ["gcp_uri", "file_name", "bucket_md5"]
 
-    else:
-        files_df = fastq_df
-
-    df = samp_df.merge(files_df, on="file_name", how="inner")
-    df["gcp_uri"] = df["raw_files"]
-
-    df = df[
-        [
-            "ASAP_dataset_id",
-            "ASAP_team_id",
-            "ASAP_sample_id",
-            "gcp_uri",
-            "replicate",
-            "batch",
-            "file_name",
-            "file_MD5",
-            "file_type",
-            "sample_name",
-            "bucket_md5",
-        ]
+    df = samp_df.merge(files_df[merge_cols].copy(), on="file_name", how="left")
+    # df = add_bucket_md5(df, dl_path)
+    keep_cols = [
+        "ASAP_dataset_id",
+        "ASAP_team_id",
+        "ASAP_sample_id",
+        "file_name",
+        "replicate",
+        "batch",
+        "file_MD5",
+        "file_type",
+        "gcp_uri",
+        "sample_name",
+        "bucket_md5",
     ]
-
+    df = df.loc[:, keep_cols]
     # # check md5s
-    # md5_file = list(dl_path.glob("*raw_fastqs-md5s.json"))[0]
-    # bucket_files_md5 = extract_md5_from_details2(md5_file)
-    # df["check2"] = df["file_name"].map(bucket_files_md5)
-    # df["check1"] = df["file_MD5"]
-
-    # df = df[df.check1 == df.check2]
-    # df.drop(columns=["check1", "check2"], inplace=True)
+    check = pd.Index(df.loc[:, "file_MD5"] == df.loc[:, "bucket_md5"])
+    if not check.all():
+        print(f"MD5s do not match for {dataset_name}")
+        print(f"{df.loc[~check,"file_name"].to_list()}")
 
     # now export the combined_df to a csv file
     df.to_csv(dl_path / "raw_files.csv", index=False)
@@ -149,7 +134,6 @@ def make_file_metadata(
 def update_data_table_with_gcp_uri(data_df: pd.DataFrame, ds_path: str | Path):
     """ """
     ds_path = Path(ds_path)
-    metadata_path = ds_path / "metadata"
     file_metadata_path = ds_path / "file_metadata"
 
     raw_files = pd.read_csv(file_metadata_path / "raw_files.csv")
@@ -157,7 +141,7 @@ def update_data_table_with_gcp_uri(data_df: pd.DataFrame, ds_path: str | Path):
     raw_files = raw_files[["file_name", "gcp_uri"]]
     data_df = data_df.merge(raw_files, on="file_name", how="left")
 
-    print(f"Updated {metadata_path / 'DATA.csv'} with gcp_uri")
+    print(f"Updated 'DATA.csv' with gcp_uri")
 
     return data_df
 
@@ -167,30 +151,46 @@ def update_spatial_table_with_gcp_uri(
 ):
     """ """
     ds_path = Path(ds_path)
-    metadata_path = ds_path / "metadata"
     file_metadata_path = ds_path / "file_metadata"
 
     raw_files = pd.read_csv(file_metadata_path / "raw_files.csv")
+    spatial_files = pd.read_csv(
+        file_metadata_path / f"{ds_path.name}-spatial_files.csv"
+    )
+    # make mappers for spatial files
+    spatial_file_gcp_mapper = dict(
+        zip(spatial_files["file_name"], spatial_files["spatial_files"])
+    )
+    spatial_file_md5_mapper = dict(
+        zip(spatial_files["file_name"], spatial_files["bucket_md5"])
+    )
 
-    raw_files = raw_files[["file_name", "gcp_uri"]]
+    raw_files = raw_files[["file_name", "gcp_uri", "bucket_md5"]]
+    raw_file_gcp_mapper = dict(zip(raw_files["file_name"], raw_files["gcp_uri"]))
+    raw_file_md5_mapper = dict(zip(raw_files["file_name"], raw_files["bucket_md5"]))
+
+    # combine mappers
+    spatial_file_gcp_mapper.update(raw_file_gcp_mapper)
+    spatial_file_md5_mapper.update(raw_file_md5_mapper)
+
     if visium:
         left_ons = ["visium_cytassist"]
     else:
         left_ons = ["geomx_config", "geomx_dsp_config", "geomx_annotation_file"]
 
     for left_on in left_ons:
-        spatial_df = spatial_df.merge(
-            raw_files, left_on=left_on, right_on="file_name", how="left"
+        spatial_df[f"{left_on}_md5"] = spatial_df[left_on].map(spatial_file_md5_mapper)
+        spatial_df[f"{left_on}_gcp_uri"] = spatial_df[left_on].map(
+            spatial_file_gcp_mapper
         )
-        spatial_df.rename(columns={"gcp_uri": f"{left_on}_gcp_uri"}, inplace=True)
 
-    spatial_df.drop(columns=["file_name"], inplace=True)
-    print(f"Updated {metadata_path / 'SPATIAL.csv'} with gcp_uri")
-
+    print(f"Updated 'SPATIAL.csv' with gcp_uris")
     return spatial_df
 
 
-def get_raw_bucket_summary(raw_bucket_name: str, dl_path: Path, dataset_name: str):
+def gen_raw_bucket_summary(
+    raw_bucket_name: str, dl_path: Path, dataset_name: str, flatten: bool = False
+):
     if "cohort" in dataset_name:
         print(f"No raw bucket for cohort datasets: {dataset_name}")
         # need to join with the cohort-pmdbs-sn-rnaseq raw files
@@ -211,80 +211,57 @@ def get_raw_bucket_summary(raw_bucket_name: str, dl_path: Path, dataset_name: st
         ]
 
         if len(artifact_files) > 0:
+            bucket_files_md5 = get_md5_hashes(bucket_path, prefix)
             artifact_files_df = pd.DataFrame(artifact_files, columns=["artifact_files"])
+
+            artifact_files_df["file_name"] = artifact_files_df["artifact_files"].apply(
+                lambda x: x.split("/")[-1]
+            )
+            artifact_files_df["bucket_md5"] = artifact_files_df["file_name"].map(
+                bucket_files_md5
+            )
+
             artifact_files_df.to_csv(
                 dl_path / f"{dataset_name}-artifact_files.csv", index=False
             )
+
+            # merge in md5s.
+            # dump md5s to file
+            with open(dl_path / f"{dataset_name}-raw_fastqs-md5s.json", "w") as f:
+                json.dump(bucket_files_md5, f)
+
         else:
             print(f"No artifact files found for {dataset_name}")
 
         # create a list of the files in the raw_bucket/fastqs
-        prefix = f"fastqs/**/*.fastq.gz"
+        prefix = "fastqs/*.fastq.gz" if flatten else "fastqs/**/*.fastq.gz"
         bucket_path = (
             f"{raw_bucket_name.split('/')[-1]}"  # dev_bucket_name has gs:// prefix
         )
         fastqs = gsutil_ls2(bucket_path, prefix, project="dnastack-asap-parkinsons")
         raw_files = [f for f in fastqs if f != ""]
+
         if len(raw_files) > 0:
+            # should just use the list of raw_files?
+            bucket_files_md5 = get_md5_hashes(bucket_path, prefix)
             raw_files_df = pd.DataFrame(raw_files, columns=["raw_files"])
-            raw_files_df.to_csv(dl_path / f"{dataset_name}-raw_fastqs.csv", index=False)
-        else:
-            print(f"No raw files found for {dataset_name}")
 
-        bucket_files_md5 = get_md5_hashes(bucket_path, prefix)
-        # dump md5s to file
-        with open(dl_path / f"{dataset_name}-raw_fastqs-md5s.json", "w") as f:
-            json.dump(bucket_files_md5, f)
-
-
-def get_raw_bucket_summary_flat(raw_bucket_name: str, dl_path: Path, dataset_name: str):
-    if "cohort" in dataset_name:
-        print(f"No raw bucket for cohort datasets: {dataset_name}")
-        # need to join with the cohort-pmdbs-sn-rnaseq raw files
-
-    else:
-
-        ## OTHER and everything else...
-        # create a list of the curated files in /artifacts
-
-        prefix = f"artifacts/**"
-        bucket_path = (
-            f"{raw_bucket_name.split('/')[-1]}"  # dev_bucket_name has gs:// prefix
-        )
-        artifacts = gsutil_ls2(bucket_path, prefix, project="dnastack-asap-parkinsons")
-        # drop empty strings, files that start with ".", and folders
-        artifact_files = [
-            f for f in artifacts if f != "" and Path(f).name[0] != "." and f[-1] != "/"
-        ]
-
-        if len(artifact_files) > 0:
-            artifact_files_df = pd.DataFrame(artifact_files, columns=["artifact_files"])
-            artifact_files_df.to_csv(
-                dl_path / f"{dataset_name}-artifact_files.csv", index=False
+            raw_files_df["file_name"] = raw_files_df["raw_files"].apply(
+                lambda x: x.split("/")[-1]
             )
-        else:
-            print(f"No artifact files found for {dataset_name}")
-
-        # create a list of the files in the raw_bucket/fastqs
-        prefix = f"fastqs/*.fastq.gz"
-        bucket_path = (
-            f"{raw_bucket_name.split('/')[-1]}"  # dev_bucket_name has gs:// prefix
-        )
-        fastqs = gsutil_ls2(bucket_path, prefix, project="dnastack-asap-parkinsons")
-        raw_files = [f for f in fastqs if f != ""]
-        if len(raw_files) > 0:
-            raw_files_df = pd.DataFrame(raw_files, columns=["raw_files"])
+            raw_files_df["bucket_md5"] = raw_files_df["file_name"].map(bucket_files_md5)
             raw_files_df.to_csv(dl_path / f"{dataset_name}-raw_fastqs.csv", index=False)
+
+            # merge in md5s.
+            # dump md5s to file
+            with open(dl_path / f"{dataset_name}-raw_fastqs-md5s.json", "w") as f:
+                json.dump(bucket_files_md5, f)
+
         else:
-            print(f"No raw files found for {dataset_name}")
-
-        bucket_files_md5 = get_md5_hashes(bucket_path, prefix)
-        # dump md5s to file
-        with open(dl_path / f"{dataset_name}-raw_fastqs-md5s.json", "w") as f:
-            json.dump(bucket_files_md5, f)
+            print(f"No spatial files found for {dataset_name}")
 
 
-def get_spatial_bucket_summary(raw_bucket_name: str, dl_path: Path, dataset_name: str):
+def gen_spatial_bucket_summary(raw_bucket_name: str, dl_path: Path, dataset_name: str):
     if "cohort" in dataset_name:
         print(f"No raw bucket for cohort datasets: {dataset_name}")
         # need to join with the cohort-pmdbs-sn-rnaseq raw files
@@ -296,55 +273,67 @@ def get_spatial_bucket_summary(raw_bucket_name: str, dl_path: Path, dataset_name
         bucket_path = (
             f"{raw_bucket_name.split('/')[-1]}"  # dev_bucket_name has gs:// prefix
         )
-        images = gsutil_ls2(bucket_path, prefix, project="dnastack-asap-parkinsons")
-        img_files = [f for f in images if f != ""]
-        if len(img_files) > 0:
-            img_files_df = pd.DataFrame(img_files, columns=["spatial_files"])
-            img_files_df.to_csv(
+        s_files = gsutil_ls2(bucket_path, prefix, project="dnastack-asap-parkinsons")
+        spatial_files = [f for f in s_files if f != ""]
+
+        if len(spatial_files) > 0:
+            bucket_files_md5 = get_md5_hashes(bucket_path, prefix)
+            spatial_files_df = pd.DataFrame(spatial_files, columns=["spatial_files"])
+
+            spatial_files_df["file_name"] = spatial_files_df["spatial_files"].apply(
+                lambda x: x.split("/")[-1]
+            )
+            spatial_files_df["bucket_md5"] = spatial_files_df["file_name"].map(
+                bucket_files_md5
+            )
+            spatial_files_df.to_csv(
                 dl_path / f"{dataset_name}-spatial_files.csv", index=False
             )
+            # merge in md5s.
+            # dump md5s to file
+            with open(dl_path / f"{dataset_name}-spatial_files-md5s.json", "w") as f:
+                json.dump(bucket_files_md5, f)
         else:
-            print(f"No image files found for {dataset_name}")
-
-        bucket_files_md5 = get_md5_hashes(bucket_path, prefix)
-        # dump md5s to file
-        with open(dl_path / f"{dataset_name}-spatial_files-md5s.json", "w") as f:
-            json.dump(bucket_files_md5, f)
+            print(f"No spatial files found for {dataset_name}")
 
 
-def get_artifacts_df(dl_path, dataset_id, team_id):
+####################
+
+
+def get_artifacts_df(dl_path: Path, dataset_id: str, team_id: str):
     keep_cols = [
         "ASAP_dataset_id",
         "ASAP_team_id",
         "artifact_type",
         "file_name",
-        "file_path",
         "timestamp",
         "workflow",
         "workflow_version",
+        "gcp_uri",  # change to gcp_uri
+        "bucket_md5",
     ]
-    artifacts = list(dl_path.glob("*artifact_files.csv"))
+
+    artifacts = list(dl_path.glob("*-artifact_files.csv"))
     if len(artifacts) > 0:
         artifact = artifacts[0]
-        print(f"Processing {artifact}")
+        print(f"Processing {artifact.name}")
         df = pd.read_csv(artifact)
-        artifact_name = artifact.stem.split("-")[0]
 
-        df["exclude"] = df["artifact_files"].apply(
-            lambda x: "cellranger_counts" in x
-        ) | df["artifact_files"].apply(lambda x: ".git" in x)
+        df["exclude"] = (
+            df["artifact_files"].apply(lambda x: "cellranger_counts" in x)
+            | df["artifact_files"].apply(lambda x: ".git" in x)
+            | df["artifact_files"].apply(lambda x: ".DS_Store" in x)
+        )
         # now concatenate the dataframes
         df = df[~df["exclude"]]
-
-        df["file_name"] = df["artifact_files"].str.split("/").apply(lambda x: x[-1])
         df["ASAP_dataset_id"] = dataset_id
         df["ASAP_team_id"] = team_id
         df["timestamp"] = "NA"
         df["workflow"] = "NA"
         df["workflow_version"] = "NA"
         df["artifact_type"] = "contributed"
-        df["file_path"] = df["artifact_files"].apply(lambda x: x.split("/")[-1])
-        df = add_bucket_md5(df, dl_path)
+        df["gcp_uri"] = df["artifact_files"]
+
         return df[keep_cols]
     else:
         print(f"no artifact files found for {dl_path.parent.name}")
@@ -352,57 +341,78 @@ def get_artifacts_df(dl_path, dataset_id, team_id):
         return df
 
 
-def get_data_df_(metadata_path: Path) -> pd.DataFrame:
-    """
-    metadata are stored in "short" dataset name format
-    """
-    # print(f"Processing {metadata_path}")
-    data_df = read_meta_table(metadata_path / "DATA.csv")
-    data_df = data_df[
-        [
-            "ASAP_sample_id",
-            "ASAP_team_id",
-            "ASAP_dataset_id",
-            "sample_id",  # sample_id gets clobbered.
-            "replicate",
-            "batch",
-            "file_name",
-            "file_MD5",
-        ]
-    ]
-    return data_df
-
-
-def get_fastqs_df(dl_path: Path) -> pd.DataFrame:
+def get_fastqs_df(dl_path: Path, dataset_id: str, team_id: str) -> pd.DataFrame:
     """ """
-    fastqs = list(dl_path.glob("*raw_fastqs.csv"))
-    if len(fastqs) > 0:
-        fastq = fastqs[0]
-        # print(f"Processing {fastq}")
-        fastq_df = pd.read_csv(fastq)
-        fastq_df["file_name"] = fastq_df["raw_files"].apply(lambda x: x.split("/")[-1])
-        fastq_df = add_bucket_md5(fastq_df, dl_path)
 
-        return fastq_df
+    keep_cols = [
+        "ASAP_dataset_id",
+        "ASAP_team_id",
+        "artifact_type",
+        "file_name",
+        "timestamp",
+        "workflow",
+        "workflow_version",
+        "gcp_uri",  # change to gcp_uri
+        "bucket_md5",
+    ]
+
+    fastqs = list(dl_path.glob("*-raw_fastqs.csv"))
+    if len(fastqs) > 0:
+
+        fastq = fastqs[0]
+        print(f"Processing {fastq.name}")
+        df = pd.read_csv(fastq)
+        df["ASAP_dataset_id"] = dataset_id
+        df["ASAP_team_id"] = team_id
+        df["timestamp"] = "NA"
+        df["workflow"] = "NA"
+        df["workflow_version"] = "NA"
+        df["artifact_type"] = "contributed"
+        df["gcp_uri"] = df["raw_files"]
+
+        df = df[keep_cols]
+        return df
     else:
         print(f"no fastq files found for {dl_path.parent.name}")
-        return pd.DataFrame(columns=["raw_files"])
+        return pd.DataFrame(columns=keep_cols)
 
 
-def get_spatial_df(dl_path: Path) -> pd.DataFrame:
-    images = list(dl_path.glob("*spatial_files.csv"))
-    if len(images) > 0:
-        image = images[0]
-        # print(f"Processing {fastq}")
-        img_df = pd.read_csv(image)
-        img_df["file_name"] = img_df["spatial_files"].apply(lambda x: x.split("/")[-1])
+def get_spatial_df(dl_path: Path, dataset_id: str, team_id: str) -> pd.DataFrame:
+
+    keep_cols = [
+        "ASAP_dataset_id",
+        "ASAP_team_id",
+        "artifact_type",
+        "file_name",
+        "timestamp",
+        "workflow",
+        "workflow_version",
+        "gcp_uri",  # change to gcp_uri
+        "bucket_md5",
+    ]
+
+    spatial_files = list(dl_path.glob("*-spatial_files.csv"))
+    if len(spatial_files) > 0:
+        spatial_file = spatial_files[0]  # HACK
+        print(f"Processing {spatial_file.name}")
+        # spatial_files,file_name,bucket_md5
+        spatial_df = pd.read_csv(spatial_file)
+        # now export the combined_df to a csv file
+        spatial_df["ASAP_dataset_id"] = dataset_id
+        spatial_df["ASAP_team_id"] = team_id
+        spatial_df["timestamp"] = "NA"
+        spatial_df["workflow"] = "NA"
+        spatial_df["workflow_version"] = "NA"
+        spatial_df["artifact_type"] = "contributed"
+        spatial_df["gcp_uri"] = spatial_df["spatial_files"]
+
+        spatial_df = spatial_df[keep_cols]
         # rename "spatial_files" to "raw_files"
-        img_df.rename(columns={"spatial_files": "raw_files"}, inplace=True)
-        img_df = add_bucket_md5(img_df, dl_path)
-        return img_df
+        # spatial_df.rename(columns={"spatial_files": "raw_files"}, inplace=True)
+        return spatial_df
     else:
         print(f"no images files found for {dl_path.parent.name}")
-        return pd.DataFrame(columns=["raw_files"])
+        return pd.DataFrame(columns=keep_cols)
 
 
 def add_bucket_md5(df: pd.DataFrame, dl_path: Path):
@@ -425,57 +435,6 @@ def add_bucket_md5(df: pd.DataFrame, dl_path: Path):
 ####################
 ## raw bucket contributions
 ####################
-def gen_raw_bucket_summary(raw_bucket_name: str, dl_path: Path, dataset_name: str):
-    if "cohort" in dataset_name:
-        print(f"No raw bucket for cohort datasets: {dataset_name}")
-        # need to join with the cohort-pmdbs-sn-rnaseq raw files
-
-    else:
-
-        ## OTHER and everything else...
-        # create a list of the curated files in /artifacts
-
-        prefix = f"artifacts/**"
-        bucket_path = (
-            f"{raw_bucket_name.split('/')[-1]}"  # dev_bucket_name has gs:// prefix
-        )
-        artifacts = gsutil_ls2(bucket_path, prefix, project="dnastack-asap-parkinsons")
-        artifact_files = [f for f in artifacts if f != ""]
-        if len(artifact_files) > 0:
-            artifact_files_df = pd.DataFrame(artifact_files, columns=["artifact_files"])
-            artifact_files_df.to_csv(
-                dl_path / f"{dataset_name}-artifact_files.csv", index=False
-            )
-        else:
-            print(f"No artifact files found for {dataset_name}")
-
-        bucket_files_md5 = get_md5_hashes(bucket_path, prefix)
-        # dump md5s to file
-        with open(dl_path / f"{dataset_name}-artifacts-md5s.json", "w") as f:
-            json.dump(bucket_files_md5, f)
-
-        return df[keep_cols]
-
-        # create a list of the files in the raw_bucket/fastqs
-        prefix = f"fastqs/**/*.fastq.gz"
-        bucket_path = (
-            f"{raw_bucket_name.split('/')[-1]}"  # dev_bucket_name has gs:// prefix
-        )
-        fastqs = gsutil_ls2(bucket_path, prefix, project="dnastack-asap-parkinsons")
-        raw_files = [f for f in fastqs if f != ""]
-        if len(raw_files) > 0:
-            raw_files_df = pd.DataFrame(raw_files, columns=["raw_files"])
-            raw_files_df.to_csv(dl_path / f"{dataset_name}-raw_fastqs.csv", index=False)
-        else:
-            print(f"No raw files found for {dataset_name}")
-
-        bucket_files_md5 = get_md5_hashes(bucket_path, prefix)
-        # dump md5s to file
-        with open(dl_path / f"{dataset_name}-raw_fastqs-md5s.json", "w") as f:
-            json.dump(bucket_files_md5, f)
-
-        return df[keep_cols]
-
 
 ####################
 ## helpers

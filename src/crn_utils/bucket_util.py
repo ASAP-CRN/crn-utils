@@ -83,9 +83,9 @@ def gsutil_cp(source, destination, directory=False):
     project = "dnastack-asap-parkinsons"
 
     if directory:
-        cmd = f"gsutil -u {project} cp -r {source} {destination}"
+        cmd = f"gsutil -u {project} cp -r '{source}' {destination}"
     else:
-        cmd = f"gsutil -u {project} cp {source} {destination}"
+        cmd = f"gsutil -u {project} cp '{source}' {destination}"
 
     # print(cmd)
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
@@ -120,9 +120,9 @@ def gsutil_cp2(
         project_flag = f"-u {project}"
 
     if directory:
-        cmd = f"gsutil {project_flag} cp -r {source} {destination}"
+        cmd = f"gsutil {project_flag} cp -r '{source}' {destination}"
     else:
-        cmd = f"gsutil {project_flag} cp {source} {destination}"
+        cmd = f"gsutil {project_flag} cp '{source}' {destination}"
 
     print(cmd)
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
@@ -152,9 +152,9 @@ def gsutil_mv(source, destination, directory=False):
     project = "dnastack-asap-parkinsons"
 
     if directory:
-        cmd = f"gsutil -u {project} mv -r {source} {destination}"
+        cmd = f"gsutil -u {project} mv -r '{source}' {destination}"
     else:
-        cmd = f"gsutil -u {project} mv {source} {destination}"
+        cmd = f"gsutil -u {project} mv '{source}' {destination}"
 
     # print(cmd)
 
@@ -318,9 +318,9 @@ def gsutil_rm(destination, directory=False):
     project = "dnastack-asap-parkinsons"
 
     if directory:
-        cmd = f"gsutil -u {project} rm -r {destination}"
+        cmd = f"gsutil -u {project} rm -r '{destination}'"
     else:
-        cmd = f"gsutil -u {project} rm  {destination}"
+        cmd = f"gsutil -u {project} rm '{destination}'"
 
     # print(cmd)
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)

@@ -33,7 +33,7 @@ def get_md5_hashes(bucket_name, prefix):
     #     md5_hashes[blob.name] = blob.md5_hash
 
     project = "dnastack-asap-parkinsons"
-    cmd = f"gsutil -u {project} hash -h gs://{bucket_name}/{prefix}"
+    cmd = f'gsutil -u {project} hash -h "gs://{bucket_name}/{prefix}"'
     print(cmd)
 
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
@@ -49,7 +49,7 @@ def get_md5_hashes(bucket_name, prefix):
 def get_md5_hashes_full(bucket_name, prefix):
 
     project = "dnastack-asap-parkinsons"
-    cmd = f"gsutil -u {project} hash -h gs://{bucket_name}/{prefix}"
+    cmd = f'gsutil -u {project} hash -h "gs://{bucket_name}/{prefix}"'
     print(cmd)
 
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
@@ -188,12 +188,10 @@ def extract_md5_from_details2_lines_full(lines):
     current_file = None
     for line in lines:
         if line.startswith("Hashes [hex]"):
-            current_file = line.strip().rstrip(":")
-            # current_file = current_file.split("/")[-1]
-            current_file = current_file.lstrip("Hashes [hex]: ")
-            current_file = current_file.split(" ")[1].strip()
+            current_file = line.split(" for ")[-1].rstrip(":")
         if "Hash (md5)" in line:
             md5s[current_file] = line.split(":")[1].strip()
+            md5_list.append((current_file, md5s[current_file]))
     return md5s
 
 

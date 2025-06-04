@@ -17,23 +17,24 @@ from .util import (
 
 from .asap_ids import *
 from .validate import validate_table, ReportCollector, process_table
-from .file_metadata import *
 
 from .checksums import extract_md5_from_details2, get_md5_hashes
 from .bucket_util import authenticate_with_service_account
 from .file_metadata import (
-    get_raw_bucket_summary,
-    get_raw_bucket_summary_flat,
+    gen_raw_bucket_summary,
     update_data_table_with_gcp_uri,
     update_spatial_table_with_gcp_uri,
+    gen_spatial_bucket_summary,
+    make_file_metadata,
 )
 from .constants import *
 from .doi import update_study_table_with_doi
 
 
 __all__ = [
-    "prep_release_metadata_mouse",
-    "prep_release_metadata_pmdbs",
+    "prep_sc_release_metadata",
+    # "prep_release_metadata_mouse",
+    # "prep_release_metadata_pmdbs",
     "load_and_process_table",
     "process_schema",
     "create_metadata_package",
@@ -54,6 +55,28 @@ def create_metadata_package(
     write_version(schema_version, final_metadata_path / "cde_version")
 
 
+def prep_sc_release_metadata(
+    ds_path: Path,
+    schema_version: str,
+    map_path: Path,
+    suffix: str,
+    spatial: bool = False,
+    source: str = "pmdbs",
+    flatten: bool = False,
+):
+
+    if source == "pmdbs":
+        prep_release_metadata_pmdbs(
+            ds_path, schema_version, map_path, suffix, spatial, flatten
+        )
+    elif source == "mouse":
+        prep_release_metadata_mouse(
+            ds_path, schema_version, map_path, suffix, spatial, flatten
+        )
+    else:
+        raise ValueError(f"Unknown source {source}")
+
+
 def prep_release_metadata_mouse(
     ds_path: Path,
     schema_version: str,
@@ -66,12 +89,14 @@ def prep_release_metadata_mouse(
     # spatial
 
     dataset_name = ds_path.name
-    print(f"Processing {ds_path.name}")
+    print(f"release_util: Processing {ds_path.name}")
     ds_parts = dataset_name.split("-")
     team = ds_parts[0]
     source = ds_parts[1]
     short_dataset_name = "-".join(ds_parts[2:])
     raw_bucket_name = f"asap-raw-team-{team}-{source}-{short_dataset_name}"
+
+    visium = "geomx" not in dataset_name
 
     CDE = read_CDE(schema_version)
     asap_ids_df = read_CDE_asap_ids()
@@ -125,20 +150,21 @@ def prep_release_metadata_mouse(
     if not file_metadata_path.exists():
         file_metadata_path.mkdir(parents=True, exist_ok=True)
 
-    if flatten:
-        get_raw_bucket_summary_flat(raw_bucket_name, file_metadata_path, dataset_name)
-    else:
-        get_raw_bucket_summary(raw_bucket_name, file_metadata_path, dataset_name)
+    gen_raw_bucket_summary(
+        raw_bucket_name, file_metadata_path, dataset_name, flatten=flatten
+    )
 
-    make_file_metadata(ds_path, file_metadata_path, dfs["DATA"])
+    make_file_metadata(ds_path, file_metadata_path, dfs["DATA"], spatial=spatial)
+
+    if spatial:
+        gen_spatial_bucket_summary(raw_bucket_name, file_metadata_path, dataset_name)
 
     dfs["STUDY"] = update_study_table_with_doi(dfs["STUDY"], ds_path)
     dfs["DATA"] = update_data_table_with_gcp_uri(dfs["DATA"], ds_path)
     if spatial:
-        get_image_bucket_summary(raw_bucket_name, file_metadata_path, dataset_name)
 
         dfs["SPATIAL"] = update_spatial_table_with_gcp_uri(
-            dfs["SPATIAL"], ds_path, visium=False
+            dfs["SPATIAL"], ds_path, visium=visium
         )
 
     # export the tables to the metadata directory in a release subdirectory
@@ -169,12 +195,14 @@ def prep_release_metadata_pmdbs(
     # spatial
 
     dataset_name = ds_path.name
-    print(f"Processing {ds_path.name}")
+    print(f"release_util: Processing {ds_path.name}")
     ds_parts = dataset_name.split("-")
     team = ds_parts[0]
     source = ds_parts[1]
     short_dataset_name = "-".join(ds_parts[2:])
     raw_bucket_name = f"asap-raw-team-{team}-{source}-{short_dataset_name}"
+
+    visium = "geomx" not in dataset_name
 
     CDE = read_CDE(schema_version)
     asap_ids_df = read_CDE_asap_ids()
@@ -231,6 +259,7 @@ def prep_release_metadata_pmdbs(
         sampleid_mapper,
         gp2id_mapper,
         sourceid_mapper,
+        pmdbs_tables=table_names,
     )
 
     # TODO: need to make this read an env variable or something safe.
@@ -242,20 +271,20 @@ def prep_release_metadata_pmdbs(
     if not file_metadata_path.exists():
         file_metadata_path.mkdir(parents=True, exist_ok=True)
 
-    # if flatten:
-    #     get_raw_bucket_summary_flat(raw_bucket_name, file_metadata_path, dataset_name)
-    # else:
-    #     get_raw_bucket_summary(raw_bucket_name, file_metadata_path, dataset_name)
+    gen_raw_bucket_summary(
+        raw_bucket_name, file_metadata_path, dataset_name, flatten=flatten
+    )
+    if spatial:
+        gen_spatial_bucket_summary(raw_bucket_name, file_metadata_path, dataset_name)
 
-    make_file_metadata(ds_path, file_metadata_path, dfs["DATA"])
+    make_file_metadata(ds_path, file_metadata_path, dfs["DATA"], spatial=spatial)
 
     dfs["STUDY"] = update_study_table_with_doi(dfs["STUDY"], ds_path)
 
     dfs["DATA"] = update_data_table_with_gcp_uri(dfs["DATA"], ds_path)
     if spatial:
-        get_image_bucket_summary(raw_bucket_name, file_metadata_path, dataset_name)
         dfs["SPATIAL"] = update_spatial_table_with_gcp_uri(
-            dfs["SPATIAL"], ds_path, visium=False
+            dfs["SPATIAL"], ds_path, visium=visium
         )
 
     # export the tables to the metadata directory in a release subdirectory

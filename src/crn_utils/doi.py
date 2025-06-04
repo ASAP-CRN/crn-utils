@@ -78,6 +78,7 @@ def ingest_DOI_doc(
     submitter_email = study_df["submitter_email"].values[0]
     publication_DOI = study_df["publication_DOI"].values[0]
     grant_ids = study_df["ASAP_grant_id"].values[0]
+    print(grant_ids)
     team_name = (
         study_df["ASAP_team_name"].values[0].lower().replace("team-", "").capitalize()
     )
@@ -190,7 +191,7 @@ def ingest_DOI_doc(
         if oricid == "":
             oricid = None
         else:
-            to_append["orcid"] = oricid
+            to_append["orcid"] = oricid.lstrip("https://orcid.org/")
         creators.append(to_append)
 
         # creators.append({"name": name, "affiliation": affiliation, "orcid": oricid})
@@ -219,6 +220,10 @@ This Zenodo deposit was created by the ASAP CRN Cloud staff on behalf of the dat
     version = ds_ver  # "2.0"?  also do "v1.0"
     # license
     license = {"id": "cc-by-4.0"}
+    refrences = [
+        "Aligning Science Across Parkinson’s Collaborative Research Network Cloud, https://cloud.parkinsonsroadmap.org/collections, RRID:SCR_023923",
+        f"Team {team_name}",
+    ]
 
     # publication_date
     if publication_date is None:
@@ -236,14 +241,25 @@ This Zenodo deposit was created by the ASAP CRN Cloud staff on behalf of the dat
         "creators": creators,
         "resource_type": "dataset",
         "communities": communities,
+        "references": refrences,
+        "license": license,
     }
 
     if not pd.isna(grant_ids):
-        metadata["grants"] = [{"id": f"10.13039/100018231::{grant_ids}"}]
+        if "," in grant_ids:
+            grant_ids = grant_ids.split(",")
+        elif ";" in grant_ids:
+            grant_ids = grant_ids.split(";")
+        else:
+            grant_ids = [grant_ids]
+
+        grants = [{"id": f"10.13039/100018231::{grant_id}"} for grant_id in grant_ids]
+        metadata["grants"] = grants
+
+    else:
+        print("Warning: No grant ids found")
 
     export_data = {"metadata": metadata}
-
-    metadata["license"] = license
 
     # dump json
     doi_path = ds_path / "DOI"
@@ -459,6 +475,12 @@ def get_doi_from_dataset(ds_path: Path, version: bool = True):
     """
     doi_path = ds_path / "DOI"
     doi_file = "version.doi" if version else "dataset.doi"
+
+    # fall back to doi if version does not exist
+    if not (doi_path / doi_file).exists():
+        doi_file = "doi"
+        print(f"Warning: {doi_file} does not exist. Falling back to old format 'doi' ")
+
     with open(doi_path / doi_file, "r") as f:
         doi_id = f.read().strip()
     doi_id = doi_id.split(".")[-1]
@@ -516,6 +538,7 @@ def create_draft_doi(zenodo: ZenodoClient, ds_path: Path, version: str = "0.1") 
 def add_anchor_file_to_doi(
     zenodo: ZenodoClient, file_path: Path, doi_id: str | int | None = None
 ) -> dict:
+    zenodo.set_deposition_id(doi_id)  # forces .bucket .title .deposition_id update
     # upload file to zenodo
     zenodo.upload_file(file_path)
     return zenodo.deposition
@@ -532,6 +555,8 @@ def replace_anchor_file_in_doi(
 
     if doi_id is not None:
         zenodo.set_deposition_id(doi_id)
+        # zenodo.deposition_id = doi_id
+
     # else use current deposition
 
     if old_file is None:
@@ -541,23 +566,21 @@ def replace_anchor_file_in_doi(
     file_id = file_ids.get(old_file, "")
     if file_id == "":
         print(f"Could not find file {old_file} in deposition {doi_id}")
-        file_id = zenodo.get_files(doi_id)
-
-        if len(file_id) > 0:
-            file_id = file_id[0]
 
     if file_id != "":
         # delete old file
-        deposition = zenodo.delete_file(file_id)
+        msg = zenodo.delete_file(file_id)
+        print(msg)
     else:
         # no file to delete...
         print(f"no file to delete...")
 
     if new_file is None:
         new_file = f"{ds_path.name}_README.txt"
+    new_file_path = ds_path / "DOI" / new_file
 
     # add anchor file
-    deposition = add_anchor_file_to_doi(zenodo, ds_path / new_file, doi_id=doi_id)
+    deposition = add_anchor_file_to_doi(zenodo, new_file_path, doi_id=doi_id)
 
     return zenodo.deposition
 
@@ -605,18 +628,17 @@ def update_doi_metadata(
         print(f"Warning: You are using the record id {doi_id} instead of the doi")
         doi_id = str(doi_id)
 
-    zenodo.set_deposition_id(doi_id)
-
+    zenodo.deposition_id = doi_id
     deposition = zenodo.deposition
-
-    # add missing keys from deposition to metadata
-    for key in deposition.get("metadata", {}).keys():
-        if key not in metadata:
-            metadata[key] = deposition["metadata"][key]
-
     if deposition["state"] == "done":
         print("Deposition is already published. unlocking for update.")
         deposition = zenodo.unlock_deposition()
+
+    # # add missing keys from deposition to metadata
+    # for key in deposition.get("metadata", {}).keys():
+    #     if key not in metadata:
+    #         metadata[key] = deposition["metadata"][key]
+    #         print(f"Warning: Adding missing key {key} to metadata")
 
     deposition = zenodo.change_metadata(metadata)
     return deposition
@@ -646,13 +668,9 @@ def publish_doi(zenodo: ZenodoClient, doi_id: str | int) -> dict:
 
 
 def finalize_DOI(ds_path: Path, deposition: dict):
-    # Publish the deposition to reserve a DOI.
-    # Print the final published deposition details.
-    print("\nFinal Published Deposition Details:")
-
-    #  'doi': '10.5281/zenodo.15485104',
-    #  'conceptdoi': '10.5281/zenodo.15485103',
-
+    """
+    Write the DOI information to the dataset/DOI directory
+    """
     doi = deposition.get("doi", "")
     doi_url = deposition.get("doi_url", "")
 
@@ -662,6 +680,8 @@ def finalize_DOI(ds_path: Path, deposition: dict):
         doi = tmp["doi"]
         doi_url = f"https://doi.org/{doi}"
         # 'prereserve_doi': {'doi': '10.5281/zenodo.15578088', 'recid': 15578088}},
+    else:
+        prerelease = False
 
     conceptdoi = deposition["conceptdoi"]
     conceptdoi_url = doi_url.replace(doi, conceptdoi)

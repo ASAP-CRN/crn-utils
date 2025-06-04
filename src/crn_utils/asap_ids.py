@@ -537,7 +537,7 @@ def update_pmdbs_meta_tables_with_asap_ids(
 
     if pmdbs_tables is None:
         pmdbs_tables = PMDBS_TABLES + ["SPATIAL"]
-
+        print(f"default {pmdbs_tables=}")
     # pmdbs_tables = ['STUDY', 'PROTOCOL','SUBJECT', 'ASSAY_RNAseq', 'SAMPLE', 'PMDBS', 'CONDITION', 'CLINPATH', 'DATA']
     # pmdbs_tables = asap_ids_schema['Table'].to_list()
 
@@ -548,6 +548,8 @@ def update_pmdbs_meta_tables_with_asap_ids(
         asap_ids_schema["Field"] == "ASAP_subject_id"
     ]["Table"].to_list()
 
+    # print(f"{ASAP_sample_id_tables=}")
+    # print(f"{ASAP_subject_id_tables=}")
     DATASET_ID = datasetid_mapper[long_dataset_name]
 
     if "STUDY" in dfs.keys():  # un-necessary check
