@@ -1,10 +1,13 @@
 import json
-import pypandoc
+import io
+
+# import pypandoc
+from xhtml2pdf import pisa
 import docx
 from pathlib import Path
 import os
 import pandas as pd
-
+from markdown import markdown
 
 from .zenodo_util import *
 from .util import read_meta_table
@@ -53,7 +56,6 @@ def setup_DOI_info(
     study_df = read_meta_table(ds_path / "metadata/STUDY.csv")
     ingest_DOI_doc(ds_path, doi_doc_path, study_df, publication_date=publication_date)
     make_readme_file(ds_path)
-    # make_pdf_file(ds_path)
     update_study_table(ds_path)
 
 
@@ -200,19 +202,35 @@ def ingest_DOI_doc(
     # string (allows HTML)	Yes	Abstract or description for deposition.
     # description = dataset_description
 
-    description = f"""
-This Zenodo deposit contains a publicly available description of the dataset: 
+    dataset_description = dataset_description.strip()
+    project_description = project_description.strip()
+    # fix description to enable the numbered and bulletted lists...
+    for i in range(10):
+        rep_from = f" {i}. "
+        rep_to = f"\n\n{i}. "
+        project_description = project_description.strip().replace(rep_from, rep_to)
+        dataset_description = dataset_description.strip().replace(rep_from, rep_to)
+    project_description = project_description.strip().replace("* ", "\n\t* ")
+    dataset_description = dataset_description.strip().replace("* ", "\n\t* ")
 
-    “{title}". ({ds_path.name}, v{ds_ver}) submitted by ASAP Team: {team_name}.
+    description = f"""This Zenodo deposit contains a publicly available description of the Dataset:
 
-This dataset will be made available to researchers via the ASAP CRN Cloud in approximately one month. Once available, the dataset will be accessible by going to https://cloud.parkinsonsroadmap.org.
-This research was funded by the Aligning Science Across Parkinson’s Collaborative Research Network (ASAP CRN), through the Michael J. Fox Foundation for Parkinson’s Research (MJFF).
+**Title:** "{title}".
 
-This Zenodo deposit was created by the ASAP CRN Cloud staff on behalf of the dataset Authors. It provides a citable reference for a CRN Cloud Dataset
+**Description:** {dataset_description}
 
-- Aligning Science Across Parkinson’s 
+--------------------------
+
+> This dataset is made available to researchers via the ASAP CRN Cloud: [cloud.parkinsonsroadmap.org](https://cloud.parkinsonsroadmap.org). Instructions for how to request access can be found in the [User Manual](https://storage.googleapis.com/asap-public-assets/wayfinding/ASAP-CRN-Cloud-User-Manual.pdf).
+
+> This research was funded by the Aligning Science Across Parkinson's Collaborative Research Network (ASAP CRN), through the Michael J. Fox Foundation for Parkinson's Research (MJFF).
+
+> This Zenodo deposit was created by the ASAP CRN Cloud staff on behalf of the dataset authors. It provides a citable reference for a CRN Cloud Dataset
 
 """
+
+    # Convert to html for good formatting
+    description = markdown(description)
 
     # ASAP
     communities = [{"identifier": "asaphub"}]
@@ -221,7 +239,7 @@ This Zenodo deposit was created by the ASAP CRN Cloud staff on behalf of the dat
     # license
     license = {"id": "cc-by-4.0"}
     refrences = [
-        "Aligning Science Across Parkinson’s Collaborative Research Network Cloud, https://cloud.parkinsonsroadmap.org/collections, RRID:SCR_023923",
+        "Aligning Science Across Parkinson's Collaborative Research Network Cloud, https://cloud.parkinsonsroadmap.org/collections, RRID:SCR_023923",
         f"Team {team_name}",
     ]
 
@@ -276,7 +294,7 @@ This Zenodo deposit was created by the ASAP CRN Cloud staff on behalf of the dat
         "project_name": f"{project_title.strip()}",  # protect the parkionson's apostrophe
         "project_description": f"{project_description.strip()}",
         "dataset_title": f"{dataset_title.strip()}",
-        "dataset_description": f"{dataset_description.strip()}",
+        "dataset_description": f"{dataset_description}",
         "creators": creators,
         "publication_date": publication_date,
         "version": version,
@@ -307,7 +325,7 @@ def make_readme_file(ds_path: Path):
     """
     # TODO:  add grant_ids
 
-    # Aligning Science Across Parkinson’s: 10.13039/100018231
+    # Aligning Science Across Parkinson's: 10.13039/100018231
     # grants = [{'id': f"10.13039/100018231::{grant_id}"}]
 
     long_dataset_name = ds_path.name
@@ -337,15 +355,6 @@ def make_readme_file(ds_path: Path):
     grant_ids = data.get("grant_ids")
     team_name = data.get("team_name")
 
-    # fix description to enable the numbered and bulletted lists...
-    for i in range(10):
-        rep_from = f"{i}. "
-        rep_to = f"\n\n{i}. "
-        project_description = project_description.strip().replace(rep_from, rep_to)
-        dataset_description = dataset_description.strip().replace(rep_from, rep_to)
-    project_description = project_description.strip().replace("* ", "\n\t* ")
-    dataset_description = dataset_description.strip().replace("* ", "\n\t* ")
-
     # # avoid unicodes that mess up latex
     # rep_from = "α"
     # rep_to = "alpha"
@@ -356,14 +365,20 @@ def make_readme_file(ds_path: Path):
     # project_description = project_description.strip().replace(rep_from, rep_to)
     # dataset_description = dataset_description.strip().replace(rep_from, rep_to)
 
-    readme_content = (
-        f"TITLE: {title}\n\nDataset Description:  {dataset_description}\n\n"
-    )
-    readme_content += f"ASAP Team: Team {team.capitalize()}\n"
-    readme_content += f"ASAP CRN Cloud Dataset Name: {long_dataset_name}]\nDataset Version:v{version}\n"
-    readme_content += f"Authors:\n"
+    description = f"""This Zenodo deposit contains a publicly available description of the Dataset:
+
+# "{title}".
+
+## Dataset Description:
+ 
+{dataset_description.strip()}
+
+"""
+    readme_content = description
+
+    readme_content += f"\n**Authors:**\n\n"
     for creator in creators:
-        readme_content += f"\t* {creator['name']}"
+        readme_content += f"* {creator['name']}"
         if "orcid" in creator:
             # format as link
             readme_content += (
@@ -373,45 +388,65 @@ def make_readme_file(ds_path: Path):
             readme_content += f"; {creator['affiliation']}"
         readme_content += "\n"
 
-    readme_content += f"\nPrincipal Investigator: {PI_full_name}, {PI_email}\n"
-    readme_content += f"Dataset Submitter: {submitter_name}, {submitter_email}\n"
-    readme_content += f"Publication DOI: {publication_DOI}\n"
-    readme_content += f"Grant IDs: {grant_ids}\n"
-    readme_content += f"ASAP Lab: {ASAP_lab_name}\n"
-    readme_content += (
-        f"ASAP Project: {project_title}\nProject Description: {project_description}\n\n"
-    )
-    readme_content += f"Submission Date: {publication_date}\n"
+    readme_content += f"\n\n**ASAP Team:** {team_name}\n\n"
+    readme_content += f"**Dataset Name:** {ds_path.name}, v{version}\n\n"
+
+    readme_content += f"**Principal Investigator:** {PI_full_name}, {PI_email}\n\n"
+    readme_content += f"**Dataset Submitter:** {submitter_name}, {submitter_email}\n\n"
+    readme_content += f"**Publication DOI:** {publication_DOI}\n\n"
+    readme_content += f"**Grant IDs:** {grant_ids}\n\n"
+    readme_content += f"**ASAP Lab:** {ASAP_lab_name}\n\n"
+    readme_content += f"**ASAP Project:** {project_title}\n\n"
+    readme_content += f"**Project Description:** {project_description}\n\n"
+    readme_content += f"**Submission Date:** {publication_date}\n\n"
     readme_content += f"__________________________________________\n"
 
     readme_content += f"""
-    This Zenodo deposit contains a publicly available description of the dataset.
 
-    This dataset will be made available to researchers via the ASAP CRN Cloud in approximately one month. Once available, the dataset will be accessible by going to https://cloud.parkinsonsroadmap.org.
-    This research was funded by the Aligning Science Across Parkinson’s Collaborative Research Network (ASAP CRN), through the Michael J. Fox Foundation for Parkinson’s Research (MJFF).
+> This dataset is made available to researchers via the ASAP CRN Cloud: [cloud.parkinsonsroadmap.org](https://cloud.parkinsonsroadmap.org). Instructions for how to request access can be found in the [User Manual](https://storage.googleapis.com/asap-public-assets/wayfinding/ASAP-CRN-Cloud-User-Manual.pdf).
 
-    This Zenodo deposit was created by the ASAP CRN Cloud staff on behalf of the dataset Authors. It provides a citable reference for a CRN Cloud Dataset
+> This research was funded by the Aligning Science Across Parkinson's Collaborative Research Network (ASAP CRN), through the Michael J. Fox Foundation for Parkinson's Research (MJFF).
 
-    - Aligning Science Across Parkinson’s 
+> This Zenodo deposit was created by the ASAP CRN Cloud staff on behalf of the dataset authors. It provides a citable reference for a CRN Cloud Dataset
 
-    """
+"""
 
-    with open(doi_path / f"{long_dataset_name}_README.txt", "w") as f:
+    readme_content_HTML = markdown(readme_content)
+
+    print(f"{long_dataset_name=}")
+    print(f"{doi_path=}")
+    with open(doi_path / f"{long_dataset_name}_README.md", "w") as f:
         f.write(readme_content)
 
+    make_pdf_file(readme_content_HTML, doi_path / f"{long_dataset_name}_README.pdf")
 
-def make_pdf_file(ds_path: Path):
-    """
-    Make the stereotyped .pdf from the .md file
-    """
-    if not "/Library/TeX/texbin:" in os.environ["PATH"]:
-        os.environ["PATH"] = "/Library/TeX/texbin:" + os.environ["PATH"]
-    long_dataset_name = ds_path.name
-    doi_path = ds_path / "DOI"
-    file_path = doi_path / f"{long_dataset_name}.md"
-    pdf_path = doi_path / f"{long_dataset_name}.pdf"
-    output = pypandoc.convert_file(file_path, "pdf", outputfile=pdf_path)
-    return output
+
+# def make_pdf_file(ds_path: Path):
+#     """
+#     Make the stereotyped .pdf from the .md file
+#     """
+#     if not "/Library/TeX/texbin:" in os.environ["PATH"]:
+#         os.environ["PATH"] = "/Library/TeX/texbin:" + os.environ["PATH"]
+#     long_dataset_name = ds_path.name
+#     doi_path = ds_path / "DOI"
+#     file_path = doi_path / f"{long_dataset_name}.md"
+#     pdf_path = doi_path / f"{long_dataset_name}.pdf"
+#     output = pypandoc.convert_file(file_path, "pdf", outputfile=pdf_path)
+#     return output
+
+
+def make_pdf_file(html_content: str, output_filepath: str | Path):
+    # Open a file to write the PDF to
+    output_filepath = Path(output_filepath)
+    # Convert HTML to PDF
+    # The `io.BytesIO` is crucial for handling the content in memory before writing to file
+    with open(output_filepath, "w+b") as result_file:
+        pisa_status = pisa.CreatePDF(
+            io.BytesIO(html_content.encode("utf-8")),  # HTML needs to be bytes
+            dest=result_file,
+        )
+
+    return not pisa_status.err  # True if conversion was successful
 
 
 def update_study_table(ds_path: str | Path):
@@ -487,7 +522,7 @@ def get_doi_from_dataset(ds_path: Path, version: bool = True):
     return doi_id
 
 
-def create_draft_metadata(ds_path: Path, version: str = "1.0") -> dict:
+def create_draft_metadata(ds_path: Path, version: str = "0.1") -> dict:
     """Create a draft DOI on zenodo.
 
     Args:
@@ -502,8 +537,9 @@ def create_draft_metadata(ds_path: Path, version: str = "1.0") -> dict:
     # export_data = clean_json_read(ds_path / f"DOI/{ds_path.name}.json")
     metadata = export_data["metadata"]
 
-    if "beta" not in version:
-        metadata["version"] = version + "-beta"
+    if not version.endswith(".1"):
+        print(f"Warning: Version {version} does not end with .1. Forcing to 0.1")
+        metadata["version"] = "0.1"
     # metadata["license"] = {"id": "cc-by-4.0"}
     # metadata["communities"] = [{"id": "asaphub"}]
 
@@ -557,8 +593,15 @@ def replace_anchor_file_in_doi(
         zenodo.set_deposition_id(doi_id)
         # zenodo.deposition_id = doi_id
 
-    # else use current deposition
+    # add new file first
+    if new_file is None:
+        new_file = f"{ds_path.name}_README.pdf"
+    new_file_path = ds_path / "DOI" / new_file
 
+    # add anchor file
+    deposition = add_anchor_file_to_doi(zenodo, new_file_path, doi_id=doi_id)
+
+    # else use current deposition
     if old_file is None:
         old_file = f"{ds_path.name}.pdf"
     # find file_id
@@ -575,17 +618,10 @@ def replace_anchor_file_in_doi(
         # no file to delete...
         print(f"no file to delete...")
 
-    if new_file is None:
-        new_file = f"{ds_path.name}_README.txt"
-    new_file_path = ds_path / "DOI" / new_file
-
-    # add anchor file
-    deposition = add_anchor_file_to_doi(zenodo, new_file_path, doi_id=doi_id)
-
     return zenodo.deposition
 
 
-def bump_doi_version(zenodo: ZenodoClient, doi_id: str | int, new_version: str) -> dict:
+def bump_doi_version(zenodo: ZenodoClient, doi_id: str | int) -> dict:
     """Bump the version of a DOI on zenodo.
 
     Args:
@@ -667,7 +703,7 @@ def publish_doi(zenodo: ZenodoClient, doi_id: str | int) -> dict:
     return zenodo.publish()
 
 
-def finalize_DOI(ds_path: Path, deposition: dict):
+def finalize_DOI(ds_path: Path, deposition: dict, prerelease: bool = False):
     """
     Write the DOI information to the dataset/DOI directory
     """
@@ -680,8 +716,8 @@ def finalize_DOI(ds_path: Path, deposition: dict):
         doi = tmp["doi"]
         doi_url = f"https://doi.org/{doi}"
         # 'prereserve_doi': {'doi': '10.5281/zenodo.15578088', 'recid': 15578088}},
-    else:
-        prerelease = False
+    # else:
+    #     prerelease = False
 
     conceptdoi = deposition["conceptdoi"]
     conceptdoi_url = doi_url.replace(doi, conceptdoi)

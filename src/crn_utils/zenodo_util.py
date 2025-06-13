@@ -775,12 +775,12 @@ class ZenodoClient(object):
                 if d["id"] == int(dep_id):
                     self.title = d["title"]
                     self.bucket = self._get_bucket_by_id(d["id"])
-                    self.deposition_id = d["id"]
+                    self.deposition_id = f"{d["id"]}"
                     return
-        else:
-            print(
-                f" ** Deposition ID: {dep_id} does not exist in your depositions  ** "
-            )
+            else:
+                print(
+                    f" ** Deposition ID: {dep_id} does not exist in your depositions  ** "
+                )
 
     def set_deposition_dataset_id(self, dataset_id: str | None = None):
         """set the deposition to the root of the generic dataset_id (conceptrecid)"""

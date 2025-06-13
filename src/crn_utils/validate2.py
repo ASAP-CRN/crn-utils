@@ -4,7 +4,9 @@ import dataclasses
 
 from collections import defaultdict
 
-from util import read_CDE, read_meta_table, NULL, export_table
+from .util import read_CDE, read_meta_table, NULL, export_table
+
+from .constants import PMDBS_TABLES, MOUSE_TABLES
 
 
 ## make an asap_crn_schema class using dataclasses
@@ -62,6 +64,7 @@ class MetadataField:
     asap_assigned_key: bool  # for ASAP assigned keys
 
     values: pd.Series | None = None
+
     og_values: pd.Series | None = None
     valid_idx: list[int] | None = None
     errors: list[str] | None = None
@@ -171,20 +174,28 @@ class MetadataField:
 
         # TODO fix bug in CDE resource shouldn't be "Int"
         if self.data_type in ["Integer", "Int"]:
-            ret = self.values.apply(_int_typer)
+            ret = self.values.copy().apply(_int_typer).astype("object")
             ret_type = "object"
         elif self.data_type == "Float":
-            ret = self.values.apply(lambda x: float(x) if x != NULL else x)
+            ret = (
+                self.values.copy()
+                .apply(lambda x: float(x) if x != NULL else x)
+                .astype("object")
+            )
             ret_type = "object"
         elif self.data_type in ["String", "Enum"]:
-            ret = self.values.apply(lambda x: str(x) if x != NULL else x)
+            ret = (
+                self.values.copy()
+                .apply(lambda x: str(x) if x != NULL else x)
+                .astype("str")
+            )
             ret_type = "str"
         else:
             raise ValueError(f"Unknown 'Type': {self.data_type} \n values unchanged")
             ret_type = "object"
-            ret = self.values
+            ret = self.values.copy().astype("object")
 
-        self.values = ret.astype(ret_type)
+        return ret
 
     def add_values(self, values: pd.Series) -> tuple[bool, list[str]]:
         self.valid = True
@@ -203,12 +214,10 @@ class MetadataField:
             print("no values to validate")
             return
 
-        self._force_type()
-
         valid_indices = []
         invalid_indices = []
         error_messages = []
-        values = self.values
+        new_values = self._force_type()
 
         for idx, value in enumerate(self.values):
             val, is_valid, error_msg = self._validate_item(value)
@@ -217,13 +226,13 @@ class MetadataField:
             else:
                 invalid_indices.append(idx)
                 error_messages.append(f"val[{idx}]={value}: {error_msg}")
-            values[idx] = val
+            new_values[idx] = val
 
         self.valid_idx = valid_indices
         self.invalid_idx = invalid_indices
         self.errors = error_messages
 
-        self.values = values
+        self.values = new_values
 
 
 class SchemaTable:
@@ -311,7 +320,8 @@ class MetadataTable:
     name: str
     table: list[MetadataField]
     df: pd.DataFrame
-    aux_table: pd.DataFrame
+    aux_df: pd.DataFrame
+    aux_table: list[MetadataField]
 
     def __init__(self, name: str, df: pd.DataFrame, cde_df: pd.DataFrame):
         self.name = name
@@ -323,13 +333,26 @@ class MetadataTable:
         for field, data in self.df.items():
             # find the field in the cde_df
             if field not in schema["Field"].values:
-                raise ValueError(
-                    f"Field {field} not found in CDE for table {self.name}"
-                )
+                # raise ValueError(
+                #     f"Field {field} not found in CDE for table {self.name}"
+                # )
+                print(f"Field {field} not found in CDE for table {self.name}")
                 if aux_table.empty:
                     # we also need to grab the any indices..
                     idx_cols = schema[schema["Shared_key"] == 1, "Field"]
                     aux_table = self.df[idx_cols]
+
+                row_idx = schema["Field"] == field
+                md_field = MetadataField(
+                    field,
+                    schema.loc[row_idx, "Description"].item(),
+                    schema.loc[row_idx, "DataType"].item(),
+                    schema.loc[row_idx, "Required"].item(),
+                    schema.loc[row_idx, "Validation"].item(),
+                    schema.loc[row_idx, "Shared_key"].item(),
+                    schema.loc[row_idx, "Required"].item() == "Assigned",
+                    data,
+                )
                 aux_table[field] = data
             else:
                 row_idx = schema["Field"] == field
@@ -407,6 +430,7 @@ class MetadataCollection:
     cde: CDE
     path: Path
     date: str
+    source: str
     dfs: list[pd.DataFrame]
     all_fields: list[MetadataField]
     table_list: list[str]
@@ -488,7 +512,7 @@ class MetadataCollection:
     def validate_schema(
         df: pd.DataFrame,
         table_names: list[str],
-        collection: self,
+        collection: "MetadataCollection",
         cde: CDE,
     ):
         """
@@ -526,7 +550,6 @@ class MetadataPMDBS(MetadataCollection):
     - PMDBS
     - CLINPATH
     - CONDITION
-    - MOUSE
     - SPATIAL
     """
 
@@ -535,34 +558,25 @@ class MetadataPMDBS(MetadataCollection):
         name: str | None,
         path: Path | str,
         schema: pd.DataFrame,
-        table_names: list[str] | None = None,
         cde_version: str = "v3.1",
-        source: str = "team-X-pmdbs-Y",
         date: str | None = None,
+        spatial: bool = False,
     ):
         # force overwrite of table names
-        table_names = [
-            "SUBJECT",
-            "STUDY",
-            "PROTOCOL",
-            # "SUBJECT",
-            "SAMPLE",
-            "ASSAY_RNAseq",
-            "DATA",
-            "PMDBS",
-            "CLINPATH",
-            "CONDITION",
-        ]
+        req_tables = PMDBS_TABLES
+        if spatial:
+            req_tables.append("SPATIAL")
 
         super().__init__(
             name,
             path,
             schema,
-            table_names=table_names,
+            table_names=req_tables,
             cde_version=cde_version,
-            source=source,
+            source="pmdbs",
             date=date,
         )
+
         # name: str | None,
         # path: Path | str,
         # schema: pd.DataFrame,

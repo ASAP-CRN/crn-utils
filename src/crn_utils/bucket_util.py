@@ -213,7 +213,7 @@ def gsutil_rsync_r(source, destination):
 
     # cmd = f"gsutil -u {project} -m rsync -d -r {source} {destination}"
     cmd = f"gsutil -u {project} -m rsync -r {source} {destination}"
-    # print(cmd)
+    print(cmd)
 
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
     if result.returncode == 0:
