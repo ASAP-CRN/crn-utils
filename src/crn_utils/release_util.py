@@ -167,6 +167,9 @@ def prep_release_metadata_mouse(
             dfs["SPATIAL"], ds_path, visium=visium
         )
 
+    # HACK:
+    # need to change file_metadata so artifacts.csv and (eventually curated_files.csv) point to curated bucket
+
     # export the tables to the metadata directory in a release subdirectory
     out_dir = ds_path / "metadata/release"
     out_dir.mkdir(parents=True, exist_ok=True)

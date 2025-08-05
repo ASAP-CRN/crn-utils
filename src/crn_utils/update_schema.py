@@ -7,6 +7,17 @@ import datetime
 from .util import read_CDE, read_meta_table, NULL, export_table
 from .validate import validate_table, create_valid_table
 
+__all__ = [
+    "update_tables_v3_0_to_3_2",
+    "update_tables_v3_1tov3_2",
+    "updated_tables_v3_0tov3_1",
+    "update_tables_v3_1tov3_2",
+    "reorder_table_to_CDE",
+    "filter_table_columns",
+    "move_table_columns",
+    "v1_to_v2",
+    "v2_to_v3_PMDBS",
+]
 
 # def v1_to_v2(tables_path: str|Path, out_dir: str, CDEv1: pd.DataFrame, CDEv2: pd.DataFrame):
 #     """
@@ -434,6 +445,74 @@ def v2_to_v3_PMDBS(
             export_table(f"{table_name}_aux", aux_df, export_root)
 
     return v3_tables, aux_tables
+
+
+def updated_tables_v3_0tov3_1(tables: dict, STUDY_dataset_info: dict):
+    """
+    Update v3.0 tables to the CDEv3_1 schema.
+    NOTE:  all v3.0 submissions are PMDBS
+    """
+
+    STUDY = tables["STUDY"].copy()
+    SAMPLE = tables["SAMPLE"].copy()
+    SUBJECT = tables["SUBJECT"].copy()
+    CONDITION = tables["CONDITION"].copy()
+
+    # STUDY changes: remove 'team_dataset_id', and "project_dataset", replace with "dataset_title", "dataset_name", and "project_description"
+    STUDY["dataset_title"] = STUDY_dataset_info["dataset_title"]
+    STUDY["dataset_description"] = STUDY_dataset_info["dataset_description"]
+    STUDY["dataset_name"] = STUDY_dataset_info["dataset_name"]
+    STUDY.drop(columns=["team_dataset_id", "project_dataset"], inplace=True)
+
+    # collect 'age_at_collection' from SUBJECT
+    SAMPLE["age_at_collection"] = SUBJECT["age_at_collection"]
+    SUBJECT.drop(columns=["age_at_collection"], inplace=True)
+
+    # infer 'gp2_phenotype'
+    gp2_phenotype_mapper = {
+        "No PD nor other neurological disorder": "Control",
+        "Healthy Control": "Control",
+        "Idiopathic PD": "PD",
+        "PD": "PD",
+        "Prodromal motor PD": "Prodromal",
+        "Prodromal Motor PD": "Prodromal",
+    }
+
+    SUBJECT["gp2_phenotype"] = SUBJECT["primary_diagnosis"].map(gp2_phenotype_mapper)
+
+    # force CONDITION table to use gp2_phenotype
+
+    tables["STUDY"] = STUDY
+    tables["SUBJECT"] = SUBJECT
+    tables["SAMPLE"] = SAMPLE
+
+    return tables
+
+
+def update_tables_v3_1tov3_2(tables: dict, CDEv3_2: pd.DataFrame):
+    """
+    Update v3.1 tables to the CDEv3_2 schema.
+    NOTE: v3.1 to v3.2 is just adding new tables for new modalities, and expanded Enums... no changes to existing tables
+
+    """
+    for table_name, table in tables.items():
+        tables[table_name] = reorder_table_to_CDE(table, table_name, CDEv3_2)
+    return tables
+
+
+def update_tables_v3_0_to_3_2(
+    tables: dict, STUDY_dataset_info: dict, CDEv3_2: pd.DataFrame | None = None
+):
+    """
+    Update v3.0 tables to the CDEv3_2 schema.
+    NOTE:  all v3.0 submissions are PMDBS
+    """
+    if CDEv3_2 is None:
+        CDEv3_2 = read_CDE("v3.2")
+
+    tables = updated_tables_v3_0tov3_1(tables, STUDY_dataset_info)
+    tables = update_tables_v3_1tov3_2(tables, CDEv3_2)
+    return tables
 
 
 def reorder_table_to_CDE(table: pd.DataFrame, table_name: str, CDE: pd.DataFrame):

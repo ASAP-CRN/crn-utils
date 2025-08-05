@@ -1,212 +1,224 @@
-Table,Field,Description,DataType,Required,Validation,Shared_key,V0,comment,denormalized,source relavent
-STUDY,ASAP_dataset_id,ASAP Dataset ID. Unique ID issued by ASAP CRN Cloud. ,String,Assigned,,1,,,,
-STUDY,ASAP_team_id,ASAP Team ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,
-STUDY,ASAP_team_name,"ASAP Team Name:   Name of the ASAP CRN Team. i.e. ""TEAM-LEE"",""TEAM-HAFLER"",""TEAM-HARDY"",etc.",Enum,Required,"[""TEAM-LEE"",""TEAM-HAFLER"",""TEAM-HARDY"", ""TEAM-JAKOBSSON"", ""TEAM-SCHERZER"", ""TEAM-SULZER"", ""TEAM-VOET"", ""TEAM-WOOD"",""TEAM-RIO"", "" TEAM-EDWARDS"",""TEAM-VILA"",""TEAM-KIRIK""]",0,,,,
-STUDY,ASAP_lab_name,Lab Name. :   Lab name that is submitting dataset for the ASAP CRN Team.,String,Required,,0,,,,
-STUDY,project_name,Project Name:   A Title of the overall project. A unique and clear title of the Team's project.,String,Required,,0,,,,
-STUDY,project_description,Project Description:   Brief description of the goals and objectives of the project.,String,Required,,0,,,,
-STUDY,dataset_title,Dataset Title:   Title for this dataset.,String,Required,,0,,,,
-STUDY,dataset_description,Dataset Description:   Brief description specific to the dataset.,String,Required,,0,,,,
-STUDY,dataset_name,"Dataset Name:   A unique name is required for each data submission, as one project can generate and submit multiple datasets.  snakecase.",String,Required,,0,,,,
-STUDY,PI_full_name,"Principal Investigator Name.:   Full name of the lab Principal Investigator. Format:  First name, Initial, Last name",String,Required,,0,,,,
-STUDY,PI_email,Principal Investigator E-mail.:   E-mail address of the Principle Investigator of the Lab submitting the data.,String,Required,,0,,,,
-STUDY,contributor_names,"Contributor(s).:   Names of all contributors to the dataset. Format:  First name, Initial, Last name ; First name, Initial, Last name ; ...",String,Required,,0,,,,
-STUDY,submitter_name,Data Submitter Name.:   Full name of individual submitting data.,String,Required,,0,,,,
-STUDY,submitter_email,Data Submitter E-Mail.:   Email address of individual submitting data.,String,Required,,0,,,,
-STUDY,ASAP_grant_id,ASAP Grant ID.:   ID of the ASAP grant funding the study.  e.g. ASAP-000xxx,String,Required,,0,,,,
-STUDY,other_funding_source,Other Funding.:   Details of other funding contributing to data generation.,String,Required,,0,,,,
-STUDY,publication_DOI,bioRxiv DOI.:   Digital Object Identifer for pre-print(s). NA if not available.,String,Required,,0,,,,
-STUDY,publication_PMID,PubMed ID.:   Unique identifier for journal articles/abstracts in PubMed. NA if not available.,String,Required,,0,,,,
-STUDY,number_samples,Number of Samples.:   Total number of tissue samples in the dataset.,Integer,Required,,0,,Need to make this generic for non-PMDBS,,
-STUDY,sample_types,"enumeration of samples in this collection. e.g. Brain Regions, a list of all anatomical origins of brain samples.  This should be as specific as possible for this field. comma separated.",String,Required,,0,,Need to make this generic for non-PMDBS,,
+Table,Field,Description,DataType,Required,Validation,Shared_key
+STUDY,ASAP_dataset_id,ASAP Dataset ID. Unique ID issued by ASAP CRN Cloud. ,String,Assigned,,1.0
+STUDY,ASAP_team_id,ASAP Team ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1.0
+STUDY,ASAP_team_name,"ASAP Team Name:   Name of the ASAP CRN Team. i.e. ""TEAM-LEE"",""TEAM-HAFLER"",""TEAM-HARDY"",etc.",Enum,Required,"[""TEAM-LEE"",""TEAM-HAFLER"",""TEAM-HARDY"", ""TEAM-JAKOBSSON"", ""TEAM-SCHERZER"", ""TEAM-SULZER"", ""TEAM-VOET"", ""TEAM-WOOD"",""TEAM-RIO"", "" TEAM-EDWARDS"",""TEAM-VILA"",""TEAM-KIRIK""]",0.0
+STUDY,ASAP_lab_name,Lab Name. :   Lab name that is submitting dataset for the ASAP CRN Team.,String,Required,,0.0
+STUDY,project_name,Project Name:   A Title of the overall project. A unique and clear title of the Team's project.,String,Required,,0.0
+STUDY,project_description,Project Description:   Brief description of the goals and objectives of the project.,String,Required,,0.0
+STUDY,dataset_title,Dataset Title:   Title for this dataset.,String,Required,,0.0
+STUDY,dataset_description,Dataset Description:   Brief description specific to the dataset.,String,Required,,0.0
+STUDY,dataset_name,"Dataset Name:   A unique name is required for each data submission, as one project can generate and submit multiple datasets.  snakecase.",String,Required,,0.0
+STUDY,PI_full_name,"Principal Investigator Name.:   Full name of the lab Principal Investigator. Format:  First name, Initial, Last name",String,Required,,0.0
+STUDY,PI_email,Principal Investigator E-mail.:   E-mail address of the Principle Investigator of the Lab submitting the data.,String,Required,,0.0
+STUDY,contributor_names,"Contributor(s).:   Names of all contributors to the dataset. Format:  First name, Initial, Last name ; First name, Initial, Last name ; ...",String,Required,,0.0
+STUDY,submitter_name,Data Submitter Name.:   Full name of individual submitting data.,String,Required,,0.0
+STUDY,submitter_email,Data Submitter E-Mail.:   Email address of individual submitting data.,String,Required,,0.0
+STUDY,ASAP_grant_id,ASAP Grant ID.:   ID of the ASAP grant funding the study.  e.g. ASAP-000xxx,String,Required,,0.0
+STUDY,other_funding_source,Other Funding.:   Details of other funding contributing to data generation.,String,Required,,0.0
+STUDY,publication_DOI,bioRxiv DOI.:   Digital Object Identifer for pre-print(s). NA if not available.,String,Required,,0.0
+STUDY,publication_PMID,PubMed ID.:   Unique identifier for journal articles/abstracts in PubMed. NA if not available.,String,Required,,0.0
+STUDY,number_samples,Number of Samples.:   Total number of tissue samples in the dataset.,Integer,Required,,0.0
+STUDY,sample_types,"enumeration of samples in this collection. e.g. Brain Regions, a list of all anatomical origins of brain samples.  This should be as specific as possible for this field. comma separated.",String,Required,,0.0
 STUDY,types_of_samples,"Sample Type. :   
-Description of samples.  e.g.: late-stage PD and control postmortem brains",String,Required,,0,,,,
-STUDY,DUA_version,DUA Version. :   ASAP Access & Use Policy,String,Required,,0,,,,
-STUDY,metadata_tables,List of Metadata tables for this dataset.,String,Required,,0,,New for v3,,
-STUDY,PI_ORCID,PI ORCID.:   Principle investigator ,String,Optional,,0,,,,
-STUDY,PI_google_scholar_id,PI Google Scholar ID.:   ,String,Optional,,0,,,,
-STUDY,preprocessing_references,Preprocessing References.:   Github repository link or similar code reference plus electronic lab notes detailing all data generation steps and quality control summaries.  Analysis scripts for additional processing will also create valuable context.,String,Optional,,0,,,,
-STUDY,metadata_version_date,Metadata Version and Date.  :   Metadata Version and Date,String,Optional,,0,OTHER,,,
-STUDY,alternate_dataset_id,Alternate dataset identifier,String,Optional,,0,,,,
-PROTOCOL,ASAP_dataset_id,ASAP Dataset ID. Unique ID issued by ASAP CRN Cloud. ,String,Assigned,,1,,,,
-PROTOCOL,ASAP_team_id,ASAP Team ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,
-PROTOCOL,sample_collection_summary,Sample Collection Summary.:   Short summary detailing how samples were collected.  ,String,Required,,0,,,,
-PROTOCOL,cell_extraction_summary,Cell Extraction Summary.:   Short summary detailing the protocols used for cell extraction. ,String,Required,,0,,,,
-PROTOCOL,lib_prep_summary,Library Preparation Summary.:   Short summary detailing how the library was prepared.,String,Required,,0,,,,
-PROTOCOL,data_processing_summary,Data Processing Summary.:   Short summary of how data has been processed prior to fastq generation.,String,Required,,0,,,,
-PROTOCOL,github_url,Github Repository Link.:   URL for lab github repo conatining the code and scripts for processing data in this dataset.,String,Required,,0,,,,
-PROTOCOL,protocols_io_DOI,Protocols.io DOI.:   Digital Object Identifier (DOI) for protocols.io,String,Required,,0,,,,
-PROTOCOL,other_reference,Other Reference.:   Link to technology/platform protocol(s) if not available in protocols.io,String,Optional,,0,,,,
-SUBJECT,ASAP_dataset_id,ASAP Dataset ID. Unique ID issued by ASAP CRN Cloud. ,String,Assigned,,1,,,,HUMAN
-SUBJECT,ASAP_team_id,ASAP Team ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,HUMAN
-SUBJECT,ASAP_subject_id,ASAP Subject ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,HUMAN
-SUBJECT,subject_id,The Subject ID.  This will be a unique ID for the subject.  Please submit the subject ID used internally.  In the harmonized dataset this may be modified by the ASAP team to prevent naming collisions.  ,String,Required,,1,,,,HUMAN
-SUBJECT,source_subject_id,Source Subject ID.:   Subject ID issued by providing brain bank.,String,Required,,1,,,,HUMAN
-SUBJECT,biobank_name,Biobank Name.:   Name of the biobank from which the samples were sourced.,String,Required,,0,,,,HUMAN
-SUBJECT,sex,Sex.:   Genetically derived sex. ,Enum,Required,"[""Male"", ""Female"",""Intersex"",""Unnown""]",0,,,,HUMAN
-SUBJECT,age_at_collection,Age at Collection.:   Numerical age of subject at sample collection. Unit of years in decimal format.,Float,Required,,0,,,,HUMAN
-SUBJECT,race,Race.:   Reported race of subject. NINDS CDE for race. NOT genetic race.,Enum,Required,"[""American Indian or Alaska Native"", ""Asian"", ""White"", ""Black or African American"", ""Multi-racial"", ""Native Hawaiian or Other Pacific Islander"", ""Other"", ""Unknown"", ""Not Reported""]",0,,,,HUMAN
-SUBJECT,primary_diagnosis,"Primary Diagnosis.:   The diagnosis of the subject.  Because subjucts could have multple diagnoses, this is the PRIMARY diagnosis. ",Enum,Required,"[""Healthy Control"", ""Idiopathic PD"", ""Alzheimer's disease"", ""Frontotemporal dementia"", ""Corticobasal syndrome"", ""Dementia with Lewy bodies"", ""Dopa-responsive dystonia"", ""Essential tremor"", ""Hemiparkinson/hemiatrophy syndrome"", ""Juvenile autosomal recessive parkinsonism"", ""Motor neuron disease with parkinsonism"", ""Multiple system atrophy"", ""Neuroleptic-induced parkinsonism"", ""Normal pressure hydrocephalus"", ""Progressive supranuclear palsy"", ""Psychogenic parkinsonism"", ""Vascular parkinsonism"", ""No PD nor other neurological disorder"", ""Spinocerebellar Ataxia (SCA)"", ""Prodromal non-motor PD"", ""Prodromal motor PD"", ""Other neurological disorder""]",0,,,,HUMAN
-SUBJECT,gp2_phenotype,"GP2 Parkinson's phenotype:   GP2 aligned diagnosis phenotype of the subject. PD - parkinsons disease, Control - no NDD diagnosis, Prodromal - prodromal parkinsons, Other - encompasses anything not in the above list for example diagnoses llike huntingtons, Not reported - missing, MSA - multiple system atrophy, PSP - progressive supranuclear palsy, DLB - dementia with lewey bodies, CBS - corticobasal degeneration, AD - alzheimers disease",Enum,Required,"[""PD"", ""Control"", ""Prodromal"", ""Other"", ""Not Reported"", ""MSA"", ""PSP"", ""DLB"", ""CBS"", ""AD""]",0,,,,HUMAN
-SUBJECT,primary_diagnosis_text,"Primary Diagnosis Text.:   If the primary_diagnosis is ""Other neurological disorders"" diagnosis must be specified here. ",string,Optional,,0,,change for v3,,PMDBS
-SAMPLE,ASAP_sample_id,ASAP Sample ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,
-SAMPLE,ASAP_subject_id,ASAP Subject ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,can be assigned NULL for datasets where subject doesn't make sense,1,,,,
-SAMPLE,ASAP_dataset_id,ASAP Dataset ID. Unique ID issued by ASAP CRN Cloud. ,String,Assigned,,1,,,,
-SAMPLE,ASAP_team_id,ASAP Team ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,
-SAMPLE,sample_id,"Sample ID.:   ID of each individual sample used in the study (e.g. cortex of anterior cingulate gyrus); if from the same brain several regions are included in the study, each region (i.e. each sample) has different ID and listed as a separate entry",String,Required,,1,,,,
-SAMPLE,subject_id,Subject ID.:   Can be multiple samples from each Subject. Avoid spaces.,String,Required,,1,,,,
-SAMPLE,source_sample_id,Source Sample ID.:   ID provided by Brain bank or other source,String,Required,,1,,,,
-SAMPLE,replicate,"Replicate.:   Indicator for replicates of the sample.  Replicates could be biological or tecnical.  Indicate biological replicates as capitalized ""Rep"" + replicated number (i.e. Rep1, Rep2, etc) and technical replicates with lowercase ""rep"" + replicate number (i.e., rep1, rep2 etc.)",String,Required,,0,,,,
-SAMPLE,replicate_count,"Replicate Count.:   Number of replicates of this sample.  Typically this will be 1, but if replicates have been collected indicate how many total.",Integer,Required,,0,,,,
-SAMPLE,repeated_sample,Repeated Sample.:   Repeated Sample indicator.  This will be treated as a boolean.  i.e. enter 0 unless sample is a replicate.,Integer,Required,,0,,,,
-SAMPLE,batch,"Batch.:   Label to enumerate the batch. This will probablby numerica, but could be coded as letters.",String,Required,,1,,,,
-SAMPLE,organism,"Organism.:   Organism of the subject. Currently this is ONLY: ""Human""",Enum,Required,"[""Human"", ""Mouse"",""Dog"",""Fly"",""Other""]",0,,change for v3,,
-SAMPLE,tissue,"Tissue.:   Type of tissue.  e.g. ""Brain"" or other organ.  For this PMDBS database it should always be ""Brain"".  ""Colon"", ""iPSC"", ""Blood"",  ""CSF"", etc.",String,Required,,0,,,,
-SAMPLE,assay_type,Type of Assay. Refers to the ASSAY_* table. Expand as nescessary,Enum,Required,"['scRNAseq','snRNAseq','bulkRNAseq','spatialRNAseq']",0,,new for v3,,
-SAMPLE,condition_id,"experimental condition. e.g. ""PD"", ""Control"", ""Prodromal"", ""Other"".  Defined further in CONDITION table.",String,Required,,0,,new for v3,,
-SAMPLE,organism_ontology_term_id,"Organism Ontology Term ID.:   NCBITaxon e.g. 9606 for Homo Sapiens, 10090 for mouse",Enum,Required,"[""NCBITaxon:9606"",""NCBITaxon:10090""]",0,,change for v3,,
-SAMPLE,age_at_collection,"Age at Collection.:   Numerical age of subject/animal at sample collection. Matches SUBJECT.'age_at_collection' for Human/PMDBS, magches MOUSE.age for Mouse datasets. days",Float,Required,,0,,,,
-SAMPLE,time,"Time.:   Time from baseline in days. Units in days, 0 is baseline to facilitate longitudinal analysis.",Float,Optional,,0,,change for v3,,
-SAMPLE,alternate_id,Alternate ID.:  alternate sample identifier. e.g. cell line,String,Optional,,0,,new for v3,,
-SAMPLE,development_stage_ontology_term_id,Development Stage Ontology Term.:   HsapDv if human. Included for compatibilty with CELLxGENE. https://www.ebi.ac.uk/ols/ontologies/hsapdv,String,Optional,,0,,change for v3,,
-SAMPLE,sex_ontology_term_id,"Sex Ontology Term ID.:   PATO:0000384 for male, PATO:0000383 for female, or unknown if unavailable",Enum,Optional,"[""PATO:0000384 (male)"", ""PATO:0000383 (female)"", ""Unknown""] ",0,,change for v3,,
-SAMPLE,self_reported_ethnicity_ontology_term_id,"Self Reported Ethnicity Ontology.:   HANCESTRO use multiethnic if more than one ethnicity is reported. If human and information unavailable, use unknown. Included for compatibilty with CELLxGENE. https://www.ebi.ac.uk/ols/ontologies/hancestro",String,Optional,,0,,change for v3,,
-SAMPLE,disease_ontology_term_id,Disease Ontology Term ID.:   MONDO or PATO:0000461 for 'normal'. Included for compatibilty with CELLxGENE. https://www.ebi.ac.uk/ols/ontologies/mondo https://github.com/chanzuckerberg/single-cell-curation/blob/main/schema/3.0.0/schema.md#suspension_type ,String,Optional,,0,,change for v3,,
-SAMPLE,tissue_ontology_term_id,Tissue Ontology Term ID.:   UBERON. Included for compatibilty with CELLxGENE. https://www.ebi.ac.uk/ols/ontologies/uberon  as per  https://github.com/chanzuckerberg/single-cell-curation/blob/main/schema/3.0.0/schema.md#suspension_type ,String,Optional,,0,,change for v3,,
-SAMPLE,assay_ontology_term_id,Assay Ontology Term ID.:   EFO. Included for compatibilty with CELLxGENE. https://www.ebi.ac.uk/ols/ontologies/efo,String,Optional,,0,,change for v3,,
-SAMPLE,donor_id,Donor ID.:   free-text identifier that distinguishes the unique individual that data were derived from. Included for compatibilty with CELLxGENE.,String,Optional,,0,,,,
-SAMPLE,pm_PH,Post-mortem PH.:   PH measured in the tissue. PH is designated as a number ranging between 0 and 14.,Float,Optional,(0-14),0,,,,
-SAMPLE,cell_type_ontology_term_id,Cell Type Ontology Term ID.:   CL. Included for compatibilty with CELLxGENE. https://www.ebi.ac.uk/ols/ontologies/cl,String,Optional,,0,,change for v3,,
-SAMPLE,source_RIN,"Source RIN.:  RIN provided by Tissue/Brain/Biobank, if applicable.",Float,Optional,,0,,,,
-SAMPLE,DV200,DV200.:   Value is the percentage of RNA fragments larger than 200 nucleotides.,Float,Optional,,0,,,,
-SAMPLE,suspension_type,"Suspension Type.:   Cell, nucleus, or na, as corresponding to assay. Included for compatibilty with CELLxGENE. Use https://github.com/chanzuckerberg/single-cell-curation/blob/main/schema/3.0.0/schema.md#suspension_type defined in the data schema for additional guidance.",String,Optional,,0,,change for v3,,
-ASSAY_RNAseq,ASAP_sample_id,ASAP Sample ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,
-ASSAY_RNAseq,ASAP_dataset_id,ASAP Dataset ID. Unique ID issued by ASAP CRN Cloud. ,String,Assigned,,1,,,,
-ASSAY_RNAseq,ASAP_team_id,ASAP Team ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,
-ASSAY_RNAseq,sample_id,"Sample ID.:   ID of each individual sample used in the study (e.g. cortex of anterior cingulate gyrus); if from the same brain several regions are included in the study, each region (i.e. each sample) has different ID and listed as a separate entry",String,Required,,1,,,,
-ASSAY_RNAseq,tissue,"Tissue.:   Type of tissue.  e.g. ""Brain"" or other organ.  For this PMDBS database it should always be ""Brain"". ",String,Required,,0,,,,
-ASSAY_RNAseq,technology,Technology.:   Technology used for the assay.  e.g. 'sN' for single Nuclei or 'sC' for single Cell.,Enum,Required,"['SN','SC','Spatial','Bulk','Seq','Array']",0,,,,
-ASSAY_RNAseq,omic,"Omic.:   Readout type. This will be ""RNA"" for most of the ASAP CRN data.",Enum,Required,"['RNA','DNA','Hi-C','ATAC','Protein']",0,,,,
-ASSAY_RNAseq,RIN,RIN.:  RNA integrity number (RIN) is an algorithm for assigning integrity values to RNA measurements. RIN on sample received (performed by team/lab/3rd party)?,Float,Required,,0,,,,
-ASSAY_RNAseq,molecular_source,"Molecular Source.:   The molecular source of the data could be DNA, RNA or protein, for example.  Initially this will be RNA.",Enum,Required,"[""Total RNA"", ""PolyA RNA"", ""Cytoplasmic RNA"", ""Nuclear RNA"", ""Genomic DNA"", ""Protein"", ""Other""]",0,,,,
-ASSAY_RNAseq,input_cell_count,Input Cell Count.:   Total count of cells (single cell or single nuclei) that were originally isolated and processed for capture. I.e. cell suspension concentration * volume injected.,Integer,Required,,0,,,,
-ASSAY_RNAseq,assay,"Assay.:   Assay performed and Version. Other for non-10x, or add apropriate designation",Enum,Required,"[""v3.1 - Dual Index"",""v3.1 - Single Index"",""v2 - Dual Index"", ""v1"", ""Xenium In Situ"",""v1.1 - Single Index"", ""v2"", ""Other"",""GeoMx Hu WTA""]",0,,,,
-ASSAY_RNAseq,sequencing_end,Sequencing End.:   Specification sequencing type: Single End vs. Paired-End.,Enum,Required,"[""Single"", ""Paired-end""]",0,,,,
-ASSAY_RNAseq,sequencing_length,Sequencing Length.:   Nominal Number of base pairs sequenced.  ,Integer,Required,,0,,change for v3,,
-ASSAY_RNAseq,sequencing_instrument,Sequencing Instrument.:   The instrument used to perform sequencing.   Illumina NovaSeq 6000 recommended by protocols alignment group leads.,Enum,Required,"[""Illumina NovaSeq 6000"", ""llumina HiSeq 2500"", ""Illumina HiSeq 3000"", ""Illumina HiSeq 4000"", ""Illumina NextSeq 550"", ""Illumina HiSeq X Ten"", ""Illumina HiSeq X Five"", ""Illumina MiSeq"", ""on Torrent PGM"", ""Ion Torrent Proton"", ""Ion Torrent S5"", ""Ion Torrent S5 XL"", ""PacBio RS"", ""PacBio RS II"", ""Other""]",0,,,,
-DATA,ASAP_sample_id,ASAP Sample ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,
-DATA,ASAP_dataset_id,ASAP Dataset ID. Unique ID issued by ASAP CRN Cloud. ,String,Assigned,,1,,,,
-DATA,ASAP_team_id,ASAP Team ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,
-DATA,gcp_uri,location of raw data file in the raw google bucket,String,Assigned,,,,,,
-DATA,sample_id,"Sample ID.:   ID of each individual sample used in the study (e.g. cortex of anterior cingulate gyrus); if from the same brain several regions are included in the study, each region (i.e. each sample) has different ID and listed as a separate entry",String,Required,,1,,,,
-DATA,replicate,"Replicate.:   Indicator for replicates of the sample.  Replicates could be biological or tecnical.  Indicate biological replicates as capitalized ""Rep"" + replicated number (i.e. Rep1, Rep2, etc) and technical replicates with lowercase ""rep"" + replicate number (i.e., rep1, rep2 etc.)",String,Required,,0,,,,
-DATA,replicate_count,"Replicate Count.:   Number of replicates of this sample.  Typically this will be 1, but if replicates have been collected indicate how many total.",Integer,Required,,0,,,,
-DATA,repeated_sample,Repeated Sample.:   Repeated Sample indicator.  This will be treated as a boolean.  i.e. enter 0 unless sample is a replicate.,Integer,Required,,0,,,,
-DATA,batch,"Batch.:   Label to enumerate the batch. This will probablby numerica, but could be coded as letters.",String,Required,,1,,,,
-DATA,file_type,"File Type.:   Type of file uploaded for this sample.  We are asking for ""fastq"" for raw data transfer.",Enum,Required,"[""fastq"",""Per sample raw file"", ""Per sample processed file"", ""Combined analysis files"", ""annData"", ""vHDF"", ""plink2"", ""VCF"", ""csv"",""RDS"", ""h5"", ""Seurat Object"", ""bam"", ""cram""]",0,,,,
-DATA,file_name,"File Name.:   Full name of file containing the sample data.  For paired-end data (e.g. `sequencing_end` = ""single"") the ROOT of the file can be specified, and the others will be inferred. ",String,Required,,0,,,,
-DATA,file_description,File Description.:   Short description of the file.,String,Required,,0,,,,
-DATA,file_MD5,File MD5.:   Checksum hash of the uploaded file using MD5,String,Required,,0,,,,
-DATA,adjustment,"Adjustment. :   Indication of whether the data has been adjusted.  i.e. Is the data ""raw"" or ""processed""?",Enum,Required,"['Raw','Processed']",0,,,,
-DATA,content,Content.:   What is the variable measurement values? ,Enum,Required,"['Counts','Probabilities','Genotypes','Dosages','Reads']",0,,,,
-DATA,header,Header.:   What are the primary header labels?,String,Optional,,0,,change for v3,,
-DATA,annotation,"Annotation.:   Additional annotation columns present in file. I.e. 'tissue','UMI','barcode','cluster', or'cell location' ... Additional colunns in the annData or HDF files when relevant to technologies like single cell or spatial. ['SNP','ENSG','interval'] SNP is rsID or positional annotation. Interval is in chr_start_stop format. ENSG is ensemble ID.",String,Optional,,0,,change for v3,,
-DATA,configuration_file,"Configuration File.:   Incl. software version, reference assembly, parameters for analysis, in YAML format",String,Optional,,0,,change for v3,,
-PMDBS,ASAP_sample_id,ASAP Sample ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,
-PMDBS,ASAP_dataset_id,ASAP Dataset ID. Unique ID issued by ASAP CRN Cloud. ,String,Assigned,,1,,,,
-PMDBS,ASAP_team_id,ASAP Team ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,
-PMDBS,sample_id,"Sample ID.:   ID of each individual sample used in the study (e.g. cortex of anterior cingulate gyrus); if from the same brain several regions are included in the study, each region (i.e. each sample) has different ID and listed as a separate entry",String,Required,,1,,,,
-PMDBS,brain_region,Brain Region.:   The anatomical origin of brain sample.,String,Required,,0,,,,PMDBS
-PMDBS,hemisphere,Side of the hemisphere (i.e. right or left) from which the sample is acquired:   Side of the hemisphere (i.e. right or left) from which the sample is acquired,Enum,Optional,"[""Right"",""Left"",""Unknown""]",0,,change for v3,,PMDBS
-PMDBS,region_level_1,Region Level 1.:   General (Level 1) anatomical location.  ,Enum,Required,"[""Frontal lobe"", ""Temporal lobe"", ""Parietal lobe"", ""Occipital lobe"", ""Cingulate gyrus"", ""Striatum"", ""Thalamus"", ""Midbrain"", ""Pons"", ""Medulla"", ""Cerebellum"", ""Intestine"", ""Unknown""]",0,,change for v3,,PMDBS
-PMDBS,region_level_2,"Region Level 2.:   More specific (Level 2) anatomical subdivision. Note that ""CA1-CA4"" indicates Hippocampus origin.",Enum,Required,"[""Prefrontal cortex"",""Superior frontal gyrus"",""Middle frontal gyrus"",""Inferior frontal gyrus"",""Superior temporal gyrus"",""Middle temporal gyrus"",""Inferior temporal gyrus"",""Fusiform gyrus"",""Transentorhinal region"",""Entorinal region"",""Subiculum"",""CA1-CA4"",""Amygdala"",""Periamygdala cortex"",""Anterior cingulate gyrus"",""Posterior cingulate gyrus"",""Superior parietal lobule"",""Inferior parietal lobule"",""Parastriate cortex"",""Peristriate cortex"",""Striate cortex"",""Insular cortex"",""Caudate nucleus"",""Putamen"",""Globus pallidus"",""Thalamus"",""Subthalamic nucleus"",""Substantia nigra"",""Pontine tegmentum"",""Pontine base"",""Medulla tegmentum"",""Medulla base"",""Cerebellar vermis"",""Cerebellar hemisphere"",""Dentate nucleus"",""Right colon"",""Left colon"",""Unknown""]",0,,change for v3,,PMDBS
-PMDBS,region_level_3,Region Level 3.:   Specification if the sample is from the grey or white matter. ,Enum,Required,"[""Grey matter"", ""White matter"", ""Grey and white matter"", ""Unknown""]",0,,change for v3,,PMDBS
-CLINPATH,ASAP_dataset_id,ASAP Dataset ID. Unique ID issued by ASAP CRN Cloud. ,String,Assigned,,1,,,,
-CLINPATH,ASAP_team_id,ASAP Team ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,
-CLINPATH,ASAP_subject_id,ASAP Subject ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,
-CLINPATH,subject_id,Subject ID.:   Can be multiple samples from each Subject,String,Required,,1,SUBJECT,,,
-CLINPATH,source_subject_id,Source Sample ID.:   ID provided by Brain bank or other source,String,Required,,1,SUBJECT,,,
-CLINPATH,duration_pmi,Duration of Pmi.:   Post Mortem Interval (PMI) between death and autopsy start. Units in hours,Float,Required,,0,SUBJECT,,,
-CLINPATH,age_at_death,Age at Death.:   Age in years when the donor from which the sample is derived died,String,Required,,0,,,,
-CLINPATH,AMPPD_id,AMP-PD ID.:   The AMP-PD ID if subhect has samples in AMP-PD. NULL if not in AMP-PD,String,Optional,,0,,change for v3,,PMDBS
-CLINPATH,GP2_id,GP2 ID if subject has samples  in GP2. NULL if not in GP2,String,Optional,,0,,change for v3,,PMDBS
-CLINPATH,ethnicity,Ethnicity.:   Reported ethnicity of subject. NINDS CDE for ethnicity. NOT genetic race.,Enum ,Optional,"[""Hispanic or Latino"", ""Not Hispanic or Latino"", ""Unknown"", ""Not Reported""]",0,,change for v3,,PMDBS
-CLINPATH,family_history,"Family History.:   Answer to: Did your parents, full-siblings, or children have Parkinson's disease? ",Enum,Optional,"[""Yes"",""No"",""Unknown"", ""Not Reported""]",0,,change for v3,,PMDBS
-CLINPATH,last_diagnosis,"Last Diagnosis.:   Most recent ""clinical"" diagnosis.",String,Optional,,0,,change for v3,,PMDBS
-CLINPATH,age_at_onset,"Age at Onset.:   Age in years at which any sympton was manifest, Between 0 and 120",Integer,Optional,(y>=0) & (y<=120),0,,change for v3,,PMDBS
-CLINPATH,age_at_diagnosis,Age at diagnosis:   Age in years at which clinical diagnosis was made. Between 0 and 120,Integer,Optional,(y>=0) & (y<=120),0,,change for v3,,PMDBS
-CLINPATH,first_motor_symptom,First Motor Symptom.:   Age in years at which first motor symptoms manifest. Between 0 and 120,Integer,Optional,(y>=0) & (y<=120),0,,change for v3,,PMDBS
-CLINPATH,hx_dementia_mci,Dementia MCI.:   Answer to: Have you ever been diagnosed with Dementia or MCI? ,Enum,Optional,"[""Yes"", ""No""]",0,,change for v3,,PMDBS
-CLINPATH,hx_melanoma,Melanoma.:   Answer to: Have you ever been diagnosed with Melanoma?,Enum,Optional,"[""Yes"", ""No""]",0,,change for v3,,PMDBS
-CLINPATH,education_level,Education Level.:   Derived value for level of education. ,Enum,Optional,"[""High School"", ""High School/GED"", ""Some college without degree"", ""Associate degree college"", ""Bachelor's degree"", ""Master's degree"", ""Professional or doctoral degree"", ""Refuse"", ""Other""]",0,,change for v3,,PMDBS
-CLINPATH,smoking_status,"Smoking Status.:   Assessment of ""substantial"" smoking.  ",Enum,Optional,"[""Current smoker"", ""Former smoker"", ""Never"", ""Unknown""]",0,,change for v3,,PMDBS
-CLINPATH,smoking_years,"Smoking Years.:   Time in years of ""substantial"" smoking. ",Float,Optional,,0,,change for v3,,PMDBS
-CLINPATH,APOE_e4_status,APOE e4 Status.:   APOE e4 alelle phenotype. ,Enum,Optional,"[""22"", ""23"",""24"",""33"", ""34"", ""44"", ""Unknown""]",0,,change for v3,,PMDBS
-CLINPATH,cognitive_status,"Cognitive Status.:   Derived cognitive status from general cognitive screening test (i.e., MMSE, MoCA, CDR, etc.).  ",Enum,Optional,"[""Normal"", ""MCI"", ""Dementia""]",0,,change for v3,,PMDBS
-CLINPATH,time_from_baseline,"Time from baseline visit in days, baseline is when the participants were enrolled:   Time from baseline visit in days, baseline is when the participants were enrolled",String,Optional,,0,,change for v3,,PMDBS
-CLINPATH,path_autopsy_dx_main,"Pathology Autopsy Diagnosis (Main):   The primary pathological autopsy result.  Code general healthy control as: ""Control, no misfolded protein or significant vascular pathology""",Enum,Optional,"[""Lewy body disease nos"", ""Parkinson's disease"", ""Parkinson's disease with dementia"", ""Dementia with Lewy bodies"", ""Multiple system atrophy (SND>OPCA)"", ""Multiple system atrophy (OPCA<SND)"", ""Multiple system atrophy (SND=OPCA)"", ""Progressive supranuclear palsy"", ""Corticobasal degeneration"", ""Globular glial tauoapathy (GGT)"", ""Chronic traumatic encephalopathy (CTE)"", ""FTLD-Tau (Pick's)"", ""FTLD-Tau (MAPT)"", ""FTLD-Tau (AGD)"", ""FTLD-TDP43, Type A"", ""FTLD-TDP43, Type B"", ""FTLD-TDP43, Type C"", ""FTLD-TDP43, Type D"", ""FTLD-TDP43, Type E"", ""Motor neurone disease-TDP43 (MND or ALS)"", ""FTLD-MND-TDP43"", ""Huntington's disease"", ""Spinocerebellar ataxia, nos"", ""Prion disease, nos"", ""Alzheimer's disease (high level neuropathological change)"", ""Alzheimer's disease (intermediate level neuropathological change)"", ""Control, Low level AD neuropathological change"", ""Control, Limbic predominant age-related TDP43 proteinopathy (LATE)"", ""Control, Argyrophilic grain disease"", ""Control, Primary age-related tauopathy (PART)"", ""Control, Ageing-related tau astrogliopathy (ARTAG)"", ""Control, Cerebrovascular disease (atherosclerosis)"", ""Control, Cerebrovascular disease (hyaline arteriolosclerosis)"", ""Control, Cerebrovascular disease (cerebral amyloid angiopathy)"", ""Control, no misfolded protein or significant vascular pathology"", “Control, Low level TDP-43 neuropathological change”, “Control, Low level PSP neuropathological change"", ""Other neurological disorder""]",0,,change for v3?,,PMDBS
-CLINPATH,path_autopsy_second_dx,"Pathology Autopsy Diagnosis (2):   The second listed neuropathological diagnosis as provided by the brain bank for the donor from which the sample is acquired; if none listed, state ""none""",String,Optional,,0,,,,PMDBS
-CLINPATH,path_autopsy_third_dx,"Pathology Autopsy Diagnosis (3):   The third listed neuropathological diagnosis as provided by the brain bank for the donor from which the sample is acquired; if none listed, state ""none""",String,Optional,,0,,,,PMDBS
-CLINPATH,path_autopsy_fourth_dx,"Pathology Autopsy Diagnosis (4):   The fourth listed neuropathological diagnosis as provided by the brain bank for the donor from which the sample is acquired; if none listed, state ""none""",String,Optional,,0,,,,PMDBS
-CLINPATH,path_autopsy_fifth_dx,"Pathology Autopsy Diagnosis (5):   The fifth listed neuropathological diagnosis as provided by the brain bank for the donor from which the sample is acquired; if none listed, state ""none""",String,Optional,,0,,,,PMDBS
-CLINPATH,path_autopsy_sixth_dx,"Pathology Autopsy Diagnosis (6):   The sixth listed neuropathological diagnosis as provided by the brain bank for the donor from which the sample is acquired; if none listed, state ""none""",String,Optional,,0,,,,PMDBS
-CLINPATH,path_autopsy_seventh_dx,"Pathology Autopsy Diagnosis (7):   The seventh listed neuropathological diagnosis as provided by the brain bank for the donor from which the sample is acquired; if none listed, state ""none""",String,Optional,,0,,,,PMDBS
-CLINPATH,path_autopsy_eight_dx,"Pathology Autopsy Diagnosis (8):   The eighth listed neuropathological diagnosis as provided by the brain bank for the donor from which the sample is acquired; if none listed, state ""none""",String,Optional,,0,,,,PMDBS
-CLINPATH,path_year_death,Year of Death.:   Year in which the donor from which the sample is derived died. Must be between 1920 and 2050,Float,Optional,(y>1920)&(y<2050),0,,change for v3,,PMDBS
-CLINPATH,cause_death,Cause of Death.:   The direct cause of death.,String,Optional,,0,,change for v3,,PMDBS
-CLINPATH,other_cause_death_1,"Other Cause of Death (1):   Additional (secondary) causes of death; if not available, to state ""unknown""",String,Optional,,0,,,,PMDBS
-CLINPATH,other_cause_death_2,"Other Cause of Death (2):   Additional (tertiary) causes of death; if not available, to state ""unknown""",String,Optional,,0,,,,PMDBS
-CLINPATH,brain_weight,Brain Weight.:   Post-mortem brain weight in grams.,Float,Optional,,0,,change for v3,,PMDBS
-CLINPATH,path_braak_nft,Pathology Braak NFT.:   Braak&Braak neurofibrillary tangle tau stage.  ,Enum,Optional,"[""0"", ""I"", ""II"", ""III"", ""IV"", ""V"", ""VI"", ""I/II"", ""III/IV"", ""IV/V"", ""V/VI""]",0,,change for v3,,PMDBS
-CLINPATH,path_braak_asyn,Pathology Braak asyn:   Braak&Braak lewie body stage.  ,Enum,Optional,"[""0"", ""1"", ""2"", ""3"", ""4"", ""5"", ""6"", ""1/2"", ""3/4"", ""4/5"", ""5/6""]",0,,change for v3,,PMDBS
-CLINPATH,path_cerad,Pathology CERAD:   Semiquantitative assessment of neuritic plaques.,Enum,Optional,"[""None"", ""Sparse"", ""Moderate"", ""Frequent""]",0,,change for v3,,PMDBS
-CLINPATH,path_thal,Pathology Thal :   Thal stage of Amyloid beta. ,Enum,Optional,"[""0"", ""1"", ""2"", ""3"", ""4"", ""5"", ""1/2"",""4/5""]",0,,change for v3,,PMDBS
-CLINPATH,known_pathogenic_mutation,"Known Pathogenic Mutation.:   Does the donor from which the sample is acquired is known to have a pathogenic Parkinson's disease -causing mutation as known to the brain bank, including GBA?  ",Enum,Optional,"[""None"", ""Present"", ""Unknown""]",0,,,,PMDBS
-CLINPATH,PD_pathogenic_mutation,"PD Pathogenic Mutation.:   To specify as a free text which pathogenic mutation the donor has (e.g., LRRK2 G2019S, GBA L444P)",String,Optional,,0,,,,PMDBS
-CLINPATH,path_mckeith,Pathology McKeith.:   McKeith and USSLBD Stage.  ,Enum,Optional,"[""Neocortical"", ""Limbic (transitional)"" ,""Brainstem"", ""Amygdala Predominant"", ""Olfactory bulb only"",""Limbic, transitional (brainstem and limbic involvement)"", ""Diffuse, neocortical (brainstem, limbic and neocortical involvement)"", ""Olfactory Bulb-Only"", ""Limbic (amygdala) predominant"", ""Absent"", ""Present, but extent unknown""]",0,,,,PMDBS
-CLINPATH,sn_neuronal_loss,"SN Neuronal Loss.:   sn_neuronal_loss (none, mild, moderate, severe, 0-3)",Enum,Optional,"[""None"", ""Mild"", ""Moderate"", ""Severe"", ""Not assessed"", ""Unknown""]",0,,,,PMDBS
-CLINPATH,path_infarcs,Pathology Infarcs.:   Cerebral infarcts (indicator for a large infarct or in study region),Enum,Optional,"[""Yes"", ""No""]",0,,,,PMDBS
-CLINPATH,path_nia_ri,"Pathology NIA_RI.:   NIA_RI (Reagan Institute) criteria: 'low', 'intermediate', 'high', 'none'",Enum,Optional,"['Low', 'Intermediate', 'High', 'None']",0,,,,PMDBS
-CLINPATH,path_nia_aa_a,Pathology NIA-AA A.:   NIA-AA A criteria (pathological not biomarker criteria),Enum,Optional,"[""A0"",""A1"",""A2"",""A3""]",0,,,,PMDBS
-CLINPATH,path_nia_aa_b,Pathology NIA-AA B.:   NIA-AA B criteria (pathological not biomarker criteria),Enum,Optional,"[""B0"",""B1"",""B2"",""B3""]",0,,,,PMDBS
-CLINPATH,path_nia_aa_c,Pathology NIA-AA C.:   NIA-AA C criteria (pathological not biomarker criteria): ,Enum,Optional,"[""C0"",""C1"",""C2"",""C3""]",0,,,,PMDBS
-CLINPATH,TDP43,"TDP43.:   Specifies if concomitant TDP43 pathology is present in the medial temporal and frontal lobes; this information to be provided by the brain bank, based on the examination of formalin fixed paraffin embedded tissue of the whole or half of the brain. ",Enum,Optional,"[""None in medial temporal lobe"", ""Present in amygdala, only"", ""Present in hippocampus, only"", “Present in entorhinal cortex, only”, ""Present in amygdala and hippocampus, only"", “Present in the limbic region (where limbic includes amygdala, entorhinal cortex, hippocampus, and medial temporal lobe”, ""Present in medial temporal lobe and middle frontal gyrus (not FTLD pattern)"", ""Unknown""]",0,,,,PMDBS
-CLINPATH,arteriolosclerosis_severity_scale,Arteriolosclerosis Severity Scale:   Arteriolosclerosis severity scale.,Enum,Optional,"[""None"", ""Mild"", ""Moderate"", ""Severe"", ""Not assessed"", ""Unknown""]",0,,,,PMDBS
-CLINPATH,amyloid_angiopathy_severity_scale,Amyloid Angiopathy Severity Scale:   Amyloid angiopathy severity scale.,Enum,Optional,"[""None"", ""Mild"", ""Moderate"", ""Severe"", ""Not assessed"", ""Unknown""]",0,,,,PMDBS
-CLINPATH,path_ad_level,"Patholgy AD Level.:   Specifies the level of Alzheimer's disease neuropathological change, based on 2012 NIA-AA criteria using the options in the dropdown menu: this information to be provided by the brain bank, based on the examination of the whole or half of the brain.",Enum,Optional,"[""No evidence of Alzheimer's disease neuropathological change"", ""Low level Alzheimer's disease neuropathological change"", ""At least low level Alzheimer's disease neuropathological change"", ""Intermediate level Alzheimer's disease neuropathological change"", ""At least intermediate level Alzheimer's disease neuropathological change"", ""High level Alzheimer's disease neuropathological change"", ""Unknown""]",0,,,,PMDBS
-CLINPATH,dig_slide_avail,Digital Slide Available: Indicates if a digital image of the pathology slides are available.,Enum,Optional,"[""Yes"", ""No""]",0,,,,PMDBS
-CLINPATH,quant_path_avail,Quantitative Pathology Available:  Indicates if quantative pathology is available.,Enum,Optional,"[""Yes"", ""No""]",0,,,,PMDBS
-CONDITION,ASAP_dataset_id,ASAP Dataset ID. Unique ID issued by ASAP CRN Cloud. ,String,Assigned,,1,,,,
-CONDITION,ASAP_team_id,ASAP Team ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,
-CONDITION,condition_id,"Sample experimental condition, from SAMPLE",String,Required,,1,,new for v3,,
-CONDITION,intervention_name,Description of the top experimental conditions,String,Required,,0,,,,MOUSE
-CONDITION,intervention_id,ID for specifying the experimental condition,String,Required,,0,,,,MOUSE
-CONDITION,protocol_id,ID for referencing the protocols for interventions defining the experimental conditions,String,Required,,0,,,,MOUSE
-CONDITION,intervention_aux_table,Table which defines all experimental conditions for each sample,String,Optional,,0,,,,MOUSE
-MOUSE,ASAP_dataset_id,ASAP Dataset ID. Unique ID issued by ASAP CRN Cloud. ,String,Assigned,,1,,,,
-MOUSE,ASAP_team_id,ASAP Team ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,
-MOUSE,ASAP_mouse_id,ASAP Team ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,,,,,
-MOUSE,subject_id,The Subject ID.  This will be a unique ID for the mouse.  Note: is is clearly wrong to call it subject_ but lets us use the same key as the SAMPLE table. Maybe replace with an alias to subject_id? Or have different SAMPLE tables.,String,Required,,1,,,,MOUSE
-MOUSE,strain,Strain:   Mouse strain details,String,Required,,0,,,,MOUSE
-MOUSE,sex,Sex: sex of animal,String,Required,"[""Male"",""Female""]",0,,v3.1 late add,,MOUSE
-MOUSE,age,Age: age of animal in days,Int,Required,,0,,v3.1 late add,,
-MOUSE,aux_table,"Table which defines additional mouse ""subject"" information",String,Optional,,0,,,,MOUSE
-SPATIAL,ASAP_sample_id,ASAP Sample ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,
-SPATIAL,ASAP_dataset_id,ASAP Dataset ID. Unique ID issued by ASAP CRN Cloud. ,String,Assigned,,1,,,,
-SPATIAL,ASAP_team_id,ASAP Team ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,
-SPATIAL,sample_id,"Sample ID.: ID of each individual sample used in the study (e.g. cortex of anterior cingulate gyrus); if from the same brain several regions are included in the study, each region (i.e. each sample) has different ID and listed as a separate entry.",String,Required,,1,,new for v3.1,,
-SPATIAL,geomx_config,GeoMx (.ini) config file ref. Pipeline processing parameters that are used by the GeoMx NGS pipeline to assist in converting the FASTQ files to DCC files. It is from the GeoMx instrument study readout package. Leave blank if Visium. Files should be in /spatial.,String,Optional,,0,,new for v3.1,,
-SPATIAL,geomx_dsp_config,GeoMx DSP config file (.pkc) reference. Leave blank if Visium. Files should be in /spatial.,String,Optional,,0,,new for v3.1,,
-SPATIAL,geomx_annotation_file,Reference to the lab worksheet (.xlsx) from the GeoMx instrument study readout package. Leave blank if Visium. Files should be in /spatial.,String,Optional,,0,,new for v3.1,,
-SPATIAL,visium_cytassist,CytAssist image (.TIFF). A brightfield image that provides spatial orientation. Leave blank if GeoMx. Files should be in /spatial.,String,Optional,,0,,new for v3.1,,
-SPATIAL,visium_probe_set,"Probe set / panel used. For example, “#panel_name=Visium Human Transcriptome Probe Set v2.0”. Leave blank if GeoMx.",String,Optional,,0,,new for v3.1,,
-SPATIAL,visium_slide_ref,Visium slide ref / number. Leave blank if GeoMx.,String,Optional,,0,,new for v3.1,,
-SPATIAL,visium_capture_area,Visium Capture area. Leave blank if GeoMx.,String,Optional,,0,,new for v3.1,,
-CELL,ASAP_dataset_id,ASAP Dataset ID. Unique ID issued by ASAP CRN Cloud. ,String,Assigned,,1,,,,
-CELL,ASAP_team_id,ASAP Team ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1,,,,
-CELL,ASAP_cell_id,ASAP Cell ID. Unique ID issued by AsAP CRN,String,Assigned,,1,,,,
-CELL,subject_id,The Subject ID.  This will be a unique ID for each cell_line.  Please submit the ID used internally.  In the harmonized dataset this may be modified by the ASAP team to prevent naming collisions.  Note: is is clearly wrong to call it subject_ but lets us use the same key as the SAMPLE table. Maybe replace with an alias to subject_id? Or have different SAMPLE tables.,String,Required,,1,,,,
-CELL,cell_line,Cell Line Name.,String,Required,,0,,,,
-CELL,perturbation,"Perturbation.  ""NA"" if none",String,Required,,0,,v3.1 late add,,
-CELL,clone_level,Clone or sub-clone.  generation?,Enum,Required,['tbd'],0,,v3.1 late add,,
-CELL,aux_table,"Table which defines additional mouse ""subject"" information",String,Optional,,0,,,,
+Description of samples.  e.g.: late-stage PD and control postmortem brains",String,Required,,0.0
+STUDY,metadata_tables,List of Metadata tables for this dataset.,String,Required,,0.0
+STUDY,DUA_version,DUA Version. :   ASAP Access & Use Policy,String,Optional,,0.0
+STUDY,PI_ORCID,PI ORCID.:   Principle investigator ,String,Optional,,0.0
+STUDY,PI_google_scholar_id,PI Google Scholar ID.:   ,String,Optional,,0.0
+STUDY,preprocessing_references,Preprocessing References.:   Github repository link or similar code reference plus electronic lab notes detailing all data generation steps and quality control summaries.  Analysis scripts for additional processing will also create valuable context.,String,Optional,,0.0
+STUDY,metadata_version_date,Metadata Version and Date.  :   Metadata Version and Date,String,Optional,,0.0
+STUDY,alternate_dataset_id,Alternate dataset identifier,String,Optional,,0.0
+PROTOCOL,ASAP_dataset_id,ASAP Dataset ID. Unique ID issued by ASAP CRN Cloud. ,String,Assigned,,1.0
+PROTOCOL,ASAP_team_id,ASAP Team ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1.0
+PROTOCOL,sample_collection_summary,Sample Collection Summary.:   Short summary detailing how samples were collected.  ,String,Required,,0.0
+PROTOCOL,cell_extraction_summary,Cell Extraction Summary.:   Short summary detailing the protocols used for cell extraction. ,String,Required,,0.0
+PROTOCOL,lib_prep_summary,Library Preparation Summary.:   Short summary detailing how the library was prepared.,String,Required,,0.0
+PROTOCOL,data_processing_summary,Data Processing Summary.:   Short summary of how data has been processed prior to fastq generation.,String,Required,,0.0
+PROTOCOL,github_url,Github Repository Link.:   URL for lab github repo conatining the code and scripts for processing data in this dataset.,String,Required,,0.0
+PROTOCOL,protocols_io_DOI,Protocols.io DOI.:   Digital Object Identifier (DOI) for protocols.io,String,Required,,0.0
+PROTOCOL,other_reference,Other Reference.:   Link to technology/platform protocol(s) if not available in protocols.io,String,Optional,,0.0
+SUBJECT,ASAP_dataset_id,ASAP Dataset ID. Unique ID issued by ASAP CRN Cloud. ,String,Assigned,,1.0
+SUBJECT,ASAP_team_id,ASAP Team ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1.0
+SUBJECT,ASAP_subject_id,ASAP Subject ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1.0
+SUBJECT,subject_id,The Subject ID.  This will be a unique ID for the subject.  Please submit the subject ID used internally.  In the harmonized dataset this may be modified by the ASAP team to prevent naming collisions.  ,String,Required,,1.0
+SUBJECT,source_subject_id,Source Subject ID.:   Subject ID issued by providing brain bank.,String,Required,,1.0
+SUBJECT,biobank_name,Biobank Name.:   Name of the biobank from which the samples were sourced.,String,Required,,0.0
+SUBJECT,sex,Sex.:   Genetically derived sex. ,Enum,Required,"[""Male"", ""Female"",""Intersex"",""Unnown""]",0.0
+SUBJECT,age_at_collection,Age at Collection.:   Numerical age of subject at sample collection. Unit of years in decimal format.,Float,Required,,0.0
+SUBJECT,race,Race.:   Reported race of subject. NINDS CDE for race. NOT genetic race.,Enum,Required,"[""American Indian or Alaska Native"", ""Asian"", ""White"", ""Black or African American"", ""Multi-racial"", ""Native Hawaiian or Other Pacific Islander"", ""Other"", ""Unknown"", ""Not Reported""]",0.0
+SUBJECT,primary_diagnosis,"Primary Diagnosis.:   The diagnosis of the subject.  Because subjucts could have multple diagnoses, this is the PRIMARY diagnosis. ",Enum,Required,"[""Healthy Control"", ""Idiopathic PD"", ""Alzheimer's disease"", ""Frontotemporal dementia"", ""Corticobasal syndrome"", ""Dementia with Lewy bodies"", ""Dopa-responsive dystonia"", ""Essential tremor"", ""Hemiparkinson/hemiatrophy syndrome"", ""Juvenile autosomal recessive parkinsonism"", ""Motor neuron disease with parkinsonism"", ""Multiple system atrophy"", ""Neuroleptic-induced parkinsonism"", ""Normal pressure hydrocephalus"", ""Progressive supranuclear palsy"", ""Psychogenic parkinsonism"", ""Vascular parkinsonism"", ""No PD nor other neurological disorder"", ""Spinocerebellar Ataxia (SCA)"", ""Prodromal non-motor PD"", ""Prodromal motor PD"", ""Other neurological disorder""]",0.0
+SUBJECT,gp2_phenotype,"GP2 Parkinson's phenotype:   GP2 aligned diagnosis phenotype of the subject. PD - parkinsons disease, Control - no NDD diagnosis, Prodromal - prodromal parkinsons, Other - encompasses anything not in the above list for example diagnoses llike huntingtons, Not reported - missing, MSA - multiple system atrophy, PSP - progressive supranuclear palsy, DLB - dementia with lewey bodies, CBS - corticobasal degeneration, AD - alzheimers disease",Enum,Required,"[""PD"", ""Control"", ""Prodromal"", ""Other"", ""Not Reported"", ""MSA"", ""PSP"", ""DLB"", ""CBS"", ""AD""]",0.0
+SUBJECT,primary_diagnosis_text,"Primary Diagnosis Text.:   If the primary_diagnosis is ""Other neurological disorders"" diagnosis must be specified here. ",string,Optional,,0.0
+SAMPLE,ASAP_sample_id,ASAP Sample ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1.0
+SAMPLE,ASAP_subject_id,ASAP Subject ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,can be assigned NULL for datasets where subject doesn't make sense,1.0
+SAMPLE,ASAP_dataset_id,ASAP Dataset ID. Unique ID issued by ASAP CRN Cloud. ,String,Assigned,,1.0
+SAMPLE,ASAP_team_id,ASAP Team ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1.0
+SAMPLE,sample_id,"Sample ID.:   ID of each individual sample used in the study (e.g. cortex of anterior cingulate gyrus); if from the same brain several regions are included in the study, each region (i.e. each sample) has different ID and listed as a separate entry",String,Required,,1.0
+SAMPLE,subject_id,Subject ID.:   Can be multiple samples from each Subject. Avoid spaces.,String,Required,,1.0
+SAMPLE,source_sample_id,Source Sample ID.:   ID provided by Brain bank or other source,String,Required,,1.0
+SAMPLE,replicate,"Replicate.:   Indicator for replicates of the sample.  Replicates could be biological or tecnical.  Indicate biological replicates as capitalized ""Rep"" + replicated number (i.e. Rep1, Rep2, etc) and technical replicates with lowercase ""rep"" + replicate number (i.e., rep1, rep2 etc.)",String,Required,,0.0
+SAMPLE,replicate_count,"Replicate Count.:   Number of replicates of this sample.  Typically this will be 1, but if replicates have been collected indicate how many total.",Integer,Required,,0.0
+SAMPLE,repeated_sample,Repeated Sample.:   Repeated Sample indicator.  This will be treated as a boolean.  i.e. enter 0 unless sample is a replicate.,Integer,Required,,0.0
+SAMPLE,batch,"Batch.:   Label to enumerate the batch. This will probablby numerica, but could be coded as letters.",String,Required,,1.0
+SAMPLE,organism,"Organism.:   Organism of the subject. Currently this is ONLY: ""Human""",Enum,Required,"[""Human"", ""Mouse"",""Dog"",""Fly"",""Other""]",0.0
+SAMPLE,tissue,"Tissue.:   Type of tissue.  e.g. ""Brain"" or other organ.  For this PMDBS database it should always be ""Brain"".  ""Colon"", ""iPSC"", ""Blood"",  ""CSF"", etc.",String,Required,,0.0
+SAMPLE,assay_type,Type of Assay. Refers to the ASSAY_* table. Expand as nescessary,Enum,Required,"['scRNAseq','snRNAseq','bulkRNAseq','spatialRNAseq']",0.0
+SAMPLE,condition_id,"experimental condition. e.g. ""PD"", ""Control"", ""Prodromal"", ""Other"".  Defined further in CONDITION table.",String,Required,,0.0
+SAMPLE,organism_ontology_term_id,"Organism Ontology Term ID.:   NCBITaxon e.g. 9606 for Homo Sapiens, 10090 for mouse",Enum,Required,"[""NCBITaxon:9606"",""NCBITaxon:10090""]",0.0
+SAMPLE,age_at_collection,"Age at Collection.:   Numerical age of subject/animal at sample collection. Matches SUBJECT.'age_at_collection' for Human/PMDBS, magches MOUSE.age for Mouse datasets. days",Float,Required,,0.0
+SAMPLE,time,"Time.:   Time from baseline in days. Units in days, 0 is baseline to facilitate longitudinal analysis.",Float,Optional,,0.0
+SAMPLE,alternate_id,Alternate ID.:  alternate sample identifier. e.g. cell line,String,Optional,,0.0
+SAMPLE,development_stage_ontology_term_id,Development Stage Ontology Term.:   HsapDv if human. Included for compatibilty with CELLxGENE. https://www.ebi.ac.uk/ols/ontologies/hsapdv,String,Optional,,0.0
+SAMPLE,sex_ontology_term_id,"Sex Ontology Term ID.:   PATO:0000384 for male, PATO:0000383 for female, or unknown if unavailable",Enum,Optional,"[""PATO:0000384 (male)"", ""PATO:0000383 (female)"", ""Unknown""] ",0.0
+SAMPLE,self_reported_ethnicity_ontology_term_id,"Self Reported Ethnicity Ontology.:   HANCESTRO use multiethnic if more than one ethnicity is reported. If human and information unavailable, use unknown. Included for compatibilty with CELLxGENE. https://www.ebi.ac.uk/ols/ontologies/hancestro",String,Optional,,0.0
+SAMPLE,disease_ontology_term_id,Disease Ontology Term ID.:   MONDO or PATO:0000461 for 'normal'. Included for compatibilty with CELLxGENE. https://www.ebi.ac.uk/ols/ontologies/mondo https://github.com/chanzuckerberg/single-cell-curation/blob/main/schema/3.0.0/schema.md#suspension_type ,String,Optional,,0.0
+SAMPLE,tissue_ontology_term_id,Tissue Ontology Term ID.:   UBERON. Included for compatibilty with CELLxGENE. https://www.ebi.ac.uk/ols/ontologies/uberon  as per  https://github.com/chanzuckerberg/single-cell-curation/blob/main/schema/3.0.0/schema.md#suspension_type ,String,Optional,,0.0
+SAMPLE,assay_ontology_term_id,Assay Ontology Term ID.:   EFO. Included for compatibilty with CELLxGENE. https://www.ebi.ac.uk/ols/ontologies/efo,String,Optional,,0.0
+SAMPLE,donor_id,Donor ID.:   free-text identifier that distinguishes the unique individual that data were derived from. Included for compatibilty with CELLxGENE.,String,Optional,,0.0
+SAMPLE,pm_PH,Post-mortem PH.:   PH measured in the tissue. PH is designated as a number ranging between 0 and 14.,Float,Optional,(0-14),0.0
+SAMPLE,cell_type_ontology_term_id,Cell Type Ontology Term ID.:   CL. Included for compatibilty with CELLxGENE. https://www.ebi.ac.uk/ols/ontologies/cl,String,Optional,,0.0
+SAMPLE,source_RIN,"Source RIN.:  RIN provided by Tissue/Brain/Biobank, if applicable.",Float,Optional,,0.0
+SAMPLE,DV200,DV200.:   Value is the percentage of RNA fragments larger than 200 nucleotides.,Float,Optional,,0.0
+SAMPLE,suspension_type,"Suspension Type.:   Cell, nucleus, or na, as corresponding to assay. Included for compatibilty with CELLxGENE. Use https://github.com/chanzuckerberg/single-cell-curation/blob/main/schema/3.0.0/schema.md#suspension_type defined in the data schema for additional guidance.",String,Optional,,0.0
+ASSAY_RNAseq,ASAP_sample_id,ASAP Sample ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1.0
+ASSAY_RNAseq,ASAP_dataset_id,ASAP Dataset ID. Unique ID issued by ASAP CRN Cloud. ,String,Assigned,,1.0
+ASSAY_RNAseq,ASAP_team_id,ASAP Team ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1.0
+ASSAY_RNAseq,sample_id,"Sample ID.:   ID of each individual sample used in the study (e.g. cortex of anterior cingulate gyrus); if from the same brain several regions are included in the study, each region (i.e. each sample) has different ID and listed as a separate entry",String,Required,,1.0
+ASSAY_RNAseq,tissue,"Tissue.:   Type of tissue.  e.g. ""Brain"" or other organ.  For this PMDBS database it should always be ""Brain"". ",String,Required,,0.0
+ASSAY_RNAseq,technology,Technology.:   Technology used for the assay.  e.g. 'sN' for single Nuclei or 'sC' for single Cell.,Enum,Required,"['SN','SC','Spatial','Bulk','Seq','Array']",0.0
+ASSAY_RNAseq,omic,"Omic.:   Readout type. This will be ""RNA"" for most of the ASAP CRN data.",Enum,Required,"['RNA','DNA','Hi-C','ATAC','Protein']",0.0
+ASSAY_RNAseq,RIN,RIN.:  RNA integrity number (RIN) is an algorithm for assigning integrity values to RNA measurements. RIN on sample received (performed by team/lab/3rd party)?,Float,Required,,0.0
+ASSAY_RNAseq,molecular_source,"Molecular Source.:   The molecular source of the data could be DNA, RNA or protein, for example.  Initially this will be RNA.",Enum,Required,"[""Total RNA"", ""PolyA RNA"", ""Cytoplasmic RNA"", ""Nuclear RNA"", ""Genomic DNA"", ""Protein"", ""Other""]",0.0
+ASSAY_RNAseq,input_cell_count,Input Cell Count.:   Total count of cells (single cell or single nuclei) that were originally isolated and processed for capture. I.e. cell suspension concentration * volume injected.,Integer,Required,,0.0
+ASSAY_RNAseq,assay,"Assay.:   Assay performed and Version. Other for non-10x, or add apropriate designation",Enum,Required,"[""v3.1 - Dual Index"",""v3.1 - Single Index"",""v2 - Dual Index"", ""v1"", ""Xenium In Situ"",""v1.1 - Single Index"", ""v2"", ""Other"",""GeoMx Hu WTA""]",0.0
+ASSAY_RNAseq,sequencing_end,Sequencing End.:   Specification sequencing type: Single End vs. Paired-End.,Enum,Required,"[""Single"", ""Paired-end""]",0.0
+ASSAY_RNAseq,sequencing_length,Sequencing Length.:   Nominal Number of base pairs sequenced.  ,Integer,Required,,0.0
+ASSAY_RNAseq,sequencing_instrument,Sequencing Instrument.:   The instrument used to perform sequencing.   Illumina NovaSeq 6000 recommended by protocols alignment group leads.,Enum,Required,"[""Illumina NovaSeq 6000"", ""llumina HiSeq 2500"", ""Illumina HiSeq 3000"", ""Illumina HiSeq 4000"", ""Illumina NextSeq 550"", ""Illumina HiSeq X Ten"", ""Illumina HiSeq X Five"", ""Illumina MiSeq"", ""on Torrent PGM"", ""Ion Torrent Proton"", ""Ion Torrent S5"", ""Ion Torrent S5 XL"", ""PacBio RS"", ""PacBio RS II"", ""Other""]",0.0
+DATA,ASAP_sample_id,ASAP Sample ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1.0
+DATA,ASAP_dataset_id,ASAP Dataset ID. Unique ID issued by ASAP CRN Cloud. ,String,Assigned,,1.0
+DATA,ASAP_team_id,ASAP Team ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1.0
+DATA,gcp_uri,location of raw data file in the raw google bucket,String,Assigned,,
+DATA,sample_id,"Sample ID.:   ID of each individual sample used in the study (e.g. cortex of anterior cingulate gyrus); if from the same brain several regions are included in the study, each region (i.e. each sample) has different ID and listed as a separate entry",String,Required,,1.0
+DATA,replicate,"Replicate.:   Indicator for replicates of the sample.  Replicates could be biological or tecnical.  Indicate biological replicates as capitalized ""Rep"" + replicated number (i.e. Rep1, Rep2, etc) and technical replicates with lowercase ""rep"" + replicate number (i.e., rep1, rep2 etc.)",String,Required,,0.0
+DATA,replicate_count,"Replicate Count.:   Number of replicates of this sample.  Typically this will be 1, but if replicates have been collected indicate how many total.",Integer,Required,,0.0
+DATA,repeated_sample,Repeated Sample.:   Repeated Sample indicator.  This will be treated as a boolean.  i.e. enter 0 unless sample is a replicate.,Integer,Required,,0.0
+DATA,batch,"Batch.:   Label to enumerate the batch. This will probablby numerica, but could be coded as letters.",String,Required,,1.0
+DATA,file_type,"File Type.:   Type of file uploaded for this sample.  We are asking for ""fastq"" for raw data transfer.",Enum,Required,"[""fastq"",""Per sample raw file"", ""Per sample processed file"", ""Combined analysis files"", ""annData"", ""vHDF"", ""plink2"", ""VCF"", ""csv"",""RDS"", ""h5"", ""Seurat Object"", ""bam"", ""cram""]",0.0
+DATA,file_name,"File Name.:   Full name of file containing the sample data.  For paired-end data (e.g. `sequencing_end` = ""single"") the ROOT of the file can be specified, and the others will be inferred. ",String,Required,,0.0
+DATA,file_description,File Description.:   Short description of the file.,String,Required,,0.0
+DATA,file_MD5,File MD5.:   Checksum hash of the uploaded file using MD5,String,Required,,0.0
+DATA,adjustment,"Adjustment. :   Indication of whether the data has been adjusted.  i.e. Is the data ""raw"" or ""processed""?",Enum,Required,"['Raw','Processed']",0.0
+DATA,content,Content.:   What is the variable measurement values? ,Enum,Required,"['Counts','Probabilities','Genotypes','Dosages','Reads']",0.0
+DATA,header,Header.:   What are the primary header labels?,String,Optional,,0.0
+DATA,annotation,"Annotation.:   Additional annotation columns present in file. I.e. 'tissue','UMI','barcode','cluster', or'cell location' ... Additional colunns in the annData or HDF files when relevant to technologies like single cell or spatial. ['SNP','ENSG','interval'] SNP is rsID or positional annotation. Interval is in chr_start_stop format. ENSG is ensemble ID.",String,Optional,,0.0
+DATA,configuration_file,"Configuration File.:   Incl. software version, reference assembly, parameters for analysis, in YAML format",String,Optional,,0.0
+PMDBS,ASAP_sample_id,ASAP Sample ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1.0
+PMDBS,ASAP_dataset_id,ASAP Dataset ID. Unique ID issued by ASAP CRN Cloud. ,String,Assigned,,1.0
+PMDBS,ASAP_team_id,ASAP Team ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1.0
+PMDBS,sample_id,"Sample ID.:   ID of each individual sample used in the study (e.g. cortex of anterior cingulate gyrus); if from the same brain several regions are included in the study, each region (i.e. each sample) has different ID and listed as a separate entry",String,Required,,1.0
+PMDBS,brain_region,Brain Region.:   The anatomical origin of brain sample.,String,Required,,0.0
+PMDBS,hemisphere,Side of the hemisphere (i.e. right or left) from which the sample is acquired:   Side of the hemisphere (i.e. right or left) from which the sample is acquired,Enum,Optional,"[""Right"",""Left"",""Unknown""]",0.0
+PMDBS,region_level_1,Region Level 1.:   General (Level 1) anatomical location.  ,Enum,Required,"[""Frontal lobe"", ""Temporal lobe"", ""Parietal lobe"", ""Occipital lobe"", ""Cingulate gyrus"", ""Striatum"", ""Thalamus"", ""Midbrain"", ""Pons"", ""Medulla"", ""Cerebellum"", ""Intestine"", ""Unknown""]",0.0
+PMDBS,region_level_2,"Region Level 2.:   More specific (Level 2) anatomical subdivision. Note that ""CA1-CA4"" indicates Hippocampus origin.",Enum,Required,"[""Prefrontal cortex"",""Superior frontal gyrus"",""Middle frontal gyrus"",""Inferior frontal gyrus"",""Superior temporal gyrus"",""Middle temporal gyrus"",""Inferior temporal gyrus"",""Fusiform gyrus"",""Transentorhinal region"",""Entorinal region"",""Subiculum"",""CA1-CA4"",""Amygdala"",""Periamygdala cortex"",""Anterior cingulate gyrus"",""Posterior cingulate gyrus"",""Superior parietal lobule"",""Inferior parietal lobule"",""Parastriate cortex"",""Peristriate cortex"",""Striate cortex"",""Insular cortex"",""Caudate nucleus"",""Putamen"",""Globus pallidus"",""Thalamus"",""Subthalamic nucleus"",""Substantia nigra"",""Pontine tegmentum"",""Pontine base"",""Medulla tegmentum"",""Medulla base"",""Cerebellar vermis"",""Cerebellar hemisphere"",""Dentate nucleus"",""Right colon"",""Left colon"",""Unknown""]",0.0
+PMDBS,region_level_3,Region Level 3.:   Specification if the sample is from the grey or white matter. ,Enum,Required,"[""Grey matter"", ""White matter"", ""Grey and white matter"", ""Unknown""]",0.0
+CLINPATH,ASAP_dataset_id,ASAP Dataset ID. Unique ID issued by ASAP CRN Cloud. ,String,Assigned,,1.0
+CLINPATH,ASAP_team_id,ASAP Team ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1.0
+CLINPATH,ASAP_subject_id,ASAP Subject ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1.0
+CLINPATH,subject_id,Subject ID.:   Can be multiple samples from each Subject,String,Required,,1.0
+CLINPATH,source_subject_id,Source Sample ID.:   ID provided by Brain bank or other source,String,Required,,1.0
+CLINPATH,duration_pmi,Duration of Pmi.:   Post Mortem Interval (PMI) between death and autopsy start. Units in hours,Float,Required,,0.0
+CLINPATH,age_at_death,Age at Death.:   Age in years when the donor from which the sample is derived died,String,Required,,0.0
+CLINPATH,AMPPD_id,AMP-PD ID.:   The AMP-PD ID if subhect has samples in AMP-PD. NULL if not in AMP-PD,String,Optional,,0.0
+CLINPATH,GP2_id,GP2 ID if subject has samples  in GP2. NULL if not in GP2,String,Optional,,0.0
+CLINPATH,ethnicity,Ethnicity.:   Reported ethnicity of subject. NINDS CDE for ethnicity. NOT genetic race.,Enum ,Optional,"[""Hispanic or Latino"", ""Not Hispanic or Latino"", ""Unknown"", ""Not Reported""]",0.0
+CLINPATH,family_history,"Family History.:   Answer to: Did your parents, full-siblings, or children have Parkinson's disease? ",Enum,Optional,"[""Yes"",""No"",""Unknown"", ""Not Reported""]",0.0
+CLINPATH,last_diagnosis,"Last Diagnosis.:   Most recent ""clinical"" diagnosis.",String,Optional,,0.0
+CLINPATH,age_at_onset,"Age at Onset.:   Age in years at which any sympton was manifest, Between 0 and 120",Integer,Optional,(y>=0) & (y<=120),0.0
+CLINPATH,age_at_diagnosis,Age at diagnosis:   Age in years at which clinical diagnosis was made. Between 0 and 120,Integer,Optional,(y>=0) & (y<=120),0.0
+CLINPATH,first_motor_symptom,First Motor Symptom.:   Age in years at which first motor symptoms manifest. Between 0 and 120,Integer,Optional,(y>=0) & (y<=120),0.0
+CLINPATH,hx_dementia_mci,Dementia MCI.:   Answer to: Have you ever been diagnosed with Dementia or MCI? ,Enum,Optional,"[""Yes"", ""No""]",0.0
+CLINPATH,hx_melanoma,Melanoma.:   Answer to: Have you ever been diagnosed with Melanoma?,Enum,Optional,"[""Yes"", ""No""]",0.0
+CLINPATH,education_level,Education Level.:   Derived value for level of education. ,Enum,Optional,"[""High School"", ""High School/GED"", ""Some college without degree"", ""Associate degree college"", ""Bachelor's degree"", ""Master's degree"", ""Professional or doctoral degree"", ""Refuse"", ""Other""]",0.0
+CLINPATH,smoking_status,"Smoking Status.:   Assessment of ""substantial"" smoking.  ",Enum,Optional,"[""Current smoker"", ""Former smoker"", ""Never"", ""Unknown""]",0.0
+CLINPATH,smoking_years,"Smoking Years.:   Time in years of ""substantial"" smoking. ",Float,Optional,,0.0
+CLINPATH,APOE_e4_status,APOE e4 Status.:   APOE e4 alelle phenotype. ,Enum,Optional,"[""22"", ""23"",""24"",""33"", ""34"", ""44"", ""Unknown""]",0.0
+CLINPATH,cognitive_status,"Cognitive Status.:   Derived cognitive status from general cognitive screening test (i.e., MMSE, MoCA, CDR, etc.).  ",Enum,Optional,"[""Normal"", ""MCI"", ""Dementia""]",0.0
+CLINPATH,time_from_baseline,"Time from baseline visit in days, baseline is when the participants were enrolled:   Time from baseline visit in days, baseline is when the participants were enrolled",String,Optional,,0.0
+CLINPATH,path_autopsy_dx_main,"Pathology Autopsy Diagnosis (Main):   The primary pathological autopsy result.  Code general healthy control as: ""Control, no misfolded protein or significant vascular pathology""",Enum,Optional,"[""Lewy body disease nos"", ""Parkinson's disease"", ""Parkinson's disease with dementia"", ""Dementia with Lewy bodies"", ""Multiple system atrophy (SND>OPCA)"", ""Multiple system atrophy (OPCA<SND)"", ""Multiple system atrophy (SND=OPCA)"", ""Progressive supranuclear palsy"", ""Corticobasal degeneration"", ""Globular glial tauoapathy (GGT)"", ""Chronic traumatic encephalopathy (CTE)"", ""FTLD-Tau (Pick's)"", ""FTLD-Tau (MAPT)"", ""FTLD-Tau (AGD)"", ""FTLD-TDP43, Type A"", ""FTLD-TDP43, Type B"", ""FTLD-TDP43, Type C"", ""FTLD-TDP43, Type D"", ""FTLD-TDP43, Type E"", ""Motor neurone disease-TDP43 (MND or ALS)"", ""FTLD-MND-TDP43"", ""Huntington's disease"", ""Spinocerebellar ataxia, nos"", ""Prion disease, nos"", ""Alzheimer's disease (high level neuropathological change)"", ""Alzheimer's disease (intermediate level neuropathological change)"", ""Control, Low level AD neuropathological change"", ""Control, Limbic predominant age-related TDP43 proteinopathy (LATE)"", ""Control, Argyrophilic grain disease"", ""Control, Primary age-related tauopathy (PART)"", ""Control, Ageing-related tau astrogliopathy (ARTAG)"", ""Control, Cerebrovascular disease (atherosclerosis)"", ""Control, Cerebrovascular disease (hyaline arteriolosclerosis)"", ""Control, Cerebrovascular disease (cerebral amyloid angiopathy)"", ""Control, no misfolded protein or significant vascular pathology"", ""Control, Low level TDP-43 neuropathological change"", ""Control, Low level PSP neuropathological change"", ""Other neurological disorder""]",0.0
+CLINPATH,path_autopsy_second_dx,"Pathology Autopsy Diagnosis (2):   The second listed neuropathological diagnosis as provided by the brain bank for the donor from which the sample is acquired; if none listed, state ""none""",String,Optional,,0.0
+CLINPATH,path_autopsy_third_dx,"Pathology Autopsy Diagnosis (3):   The third listed neuropathological diagnosis as provided by the brain bank for the donor from which the sample is acquired; if none listed, state ""none""",String,Optional,,0.0
+CLINPATH,path_autopsy_fourth_dx,"Pathology Autopsy Diagnosis (4):   The fourth listed neuropathological diagnosis as provided by the brain bank for the donor from which the sample is acquired; if none listed, state ""none""",String,Optional,,0.0
+CLINPATH,path_autopsy_fifth_dx,"Pathology Autopsy Diagnosis (5):   The fifth listed neuropathological diagnosis as provided by the brain bank for the donor from which the sample is acquired; if none listed, state ""none""",String,Optional,,0.0
+CLINPATH,path_autopsy_sixth_dx,"Pathology Autopsy Diagnosis (6):   The sixth listed neuropathological diagnosis as provided by the brain bank for the donor from which the sample is acquired; if none listed, state ""none""",String,Optional,,0.0
+CLINPATH,path_autopsy_seventh_dx,"Pathology Autopsy Diagnosis (7):   The seventh listed neuropathological diagnosis as provided by the brain bank for the donor from which the sample is acquired; if none listed, state ""none""",String,Optional,,0.0
+CLINPATH,path_autopsy_eight_dx,"Pathology Autopsy Diagnosis (8):   The eighth listed neuropathological diagnosis as provided by the brain bank for the donor from which the sample is acquired; if none listed, state ""none""",String,Optional,,0.0
+CLINPATH,path_year_death,Year of Death.:   Year in which the donor from which the sample is derived died. Must be between 1920 and 2050,Float,Optional,(y>1920)&(y<2050),0.0
+CLINPATH,cause_death,Cause of Death.:   The direct cause of death.,String,Optional,,0.0
+CLINPATH,other_cause_death_1,"Other Cause of Death (1):   Additional (secondary) causes of death; if not available, to state ""unknown""",String,Optional,,0.0
+CLINPATH,other_cause_death_2,"Other Cause of Death (2):   Additional (tertiary) causes of death; if not available, to state ""unknown""",String,Optional,,0.0
+CLINPATH,brain_weight,Brain Weight.:   Post-mortem brain weight in grams.,Float,Optional,,0.0
+CLINPATH,path_braak_nft,Pathology Braak NFT.:   Braak&Braak neurofibrillary tangle tau stage.  ,Enum,Optional,"[""0"", ""I"", ""II"", ""III"", ""IV"", ""V"", ""VI"", ""I/II"", ""III/IV"", ""IV/V"", ""V/VI""]",0.0
+CLINPATH,path_braak_asyn,Pathology Braak asyn:   Braak&Braak lewie body stage.  ,Enum,Optional,"[""0"", ""1"", ""2"", ""3"", ""4"", ""5"", ""6"", ""1/2"", ""3/4"", ""4/5"", ""5/6""]",0.0
+CLINPATH,path_cerad,Pathology CERAD:   Semiquantitative assessment of neuritic plaques.,Enum,Optional,"[""None"", ""Sparse"", ""Moderate"", ""Frequent""]",0.0
+CLINPATH,path_thal,Pathology Thal :   Thal stage of Amyloid beta. ,Enum,Optional,"[""0"", ""1"", ""2"", ""3"", ""4"", ""5"", ""1/2"",""4/5""]",0.0
+CLINPATH,known_pathogenic_mutation,"Known Pathogenic Mutation.:   Does the donor from which the sample is acquired is known to have a pathogenic Parkinson's disease -causing mutation as known to the brain bank, including GBA?  ",Enum,Optional,"[""None"", ""Present"", ""Unknown""]",0.0
+CLINPATH,PD_pathogenic_mutation,"PD Pathogenic Mutation.:   To specify as a free text which pathogenic mutation the donor has (e.g., LRRK2 G2019S, GBA L444P)",String,Optional,,0.0
+CLINPATH,path_mckeith,Pathology McKeith.:   McKeith and USSLBD Stage.  ,Enum,Optional,"[""Neocortical"", ""Limbic (transitional)"" ,""Brainstem"", ""Amygdala Predominant"", ""Olfactory bulb only"",""Limbic, transitional (brainstem and limbic involvement)"", ""Diffuse, neocortical (brainstem, limbic and neocortical involvement)"", ""Olfactory Bulb-Only"", ""Limbic (amygdala) predominant"", ""Absent"", ""Present, but extent unknown""]",0.0
+CLINPATH,sn_neuronal_loss,"SN Neuronal Loss.:   sn_neuronal_loss (none, mild, moderate, severe, 0-3)",Enum,Optional,"[""None"", ""Mild"", ""Moderate"", ""Severe"", ""Not assessed"", ""Unknown""]",0.0
+CLINPATH,path_infarcs,Pathology Infarcs.:   Cerebral infarcts (indicator for a large infarct or in study region),Enum,Optional,"[""Yes"", ""No""]",0.0
+CLINPATH,path_nia_ri,"Pathology NIA_RI.:   NIA_RI (Reagan Institute) criteria: 'low', 'intermediate', 'high', 'none'",Enum,Optional,"['Low', 'Intermediate', 'High', 'None']",0.0
+CLINPATH,path_nia_aa_a,Pathology NIA-AA A.:   NIA-AA A criteria (pathological not biomarker criteria),Enum,Optional,"[""A0"",""A1"",""A2"",""A3""]",0.0
+CLINPATH,path_nia_aa_b,Pathology NIA-AA B.:   NIA-AA B criteria (pathological not biomarker criteria),Enum,Optional,"[""B0"",""B1"",""B2"",""B3""]",0.0
+CLINPATH,path_nia_aa_c,Pathology NIA-AA C.:   NIA-AA C criteria (pathological not biomarker criteria): ,Enum,Optional,"[""C0"",""C1"",""C2"",""C3""]",0.0
+CLINPATH,TDP43,"TDP43.:   Specifies if concomitant TDP43 pathology is present in the medial temporal and frontal lobes; this information to be provided by the brain bank, based on the examination of formalin fixed paraffin embedded tissue of the whole or half of the brain. ",Enum,Optional,"[ ""None in medial temporal lobe"", ""Present in amygdala, only"", ""Present in hippocampus, only"", ""Present in entorhinal cortex, only"", ""Present in amygdala and hippocampus, only"", ""Present in the limbic region (where limbic includes amygdala, entorhinal cortex, hippocampus, and medial temporal lobe"", ""Present in medial temporal lobe and middle frontal gyrus (not FTLD pattern)"", ""Unknown"" ]",0.0
+CLINPATH,arteriolosclerosis_severity_scale,Arteriolosclerosis Severity Scale:   Arteriolosclerosis severity scale.,Enum,Optional,"[""None"", ""Mild"", ""Moderate"", ""Severe"", ""Not assessed"", ""Unknown""]",0.0
+CLINPATH,amyloid_angiopathy_severity_scale,Amyloid Angiopathy Severity Scale:   Amyloid angiopathy severity scale.,Enum,Optional,"[""None"", ""Mild"", ""Moderate"", ""Severe"", ""Not assessed"", ""Unknown""]",0.0
+CLINPATH,path_ad_level,"Patholgy AD Level.:   Specifies the level of Alzheimer's disease neuropathological change, based on 2012 NIA-AA criteria using the options in the dropdown menu: this information to be provided by the brain bank, based on the examination of the whole or half of the brain.",Enum,Optional,"[""No evidence of Alzheimer's disease neuropathological change"", ""Low level Alzheimer's disease neuropathological change"", ""At least low level Alzheimer's disease neuropathological change"", ""Intermediate level Alzheimer's disease neuropathological change"", ""At least intermediate level Alzheimer's disease neuropathological change"", ""High level Alzheimer's disease neuropathological change"", ""Unknown""]",0.0
+CLINPATH,dig_slide_avail,Digital Slide Available: Indicates if a digital image of the pathology slides are available.,Enum,Optional,"[""Yes"", ""No""]",0.0
+CLINPATH,quant_path_avail,Quantitative Pathology Available:  Indicates if quantative pathology is available.,Enum,Optional,"[""Yes"", ""No""]",0.0
+CONDITION,ASAP_dataset_id,ASAP Dataset ID. Unique ID issued by ASAP CRN Cloud. ,String,Assigned,,1.0
+CONDITION,ASAP_team_id,ASAP Team ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1.0
+CONDITION,condition_id,"Sample experimental condition, from SAMPLE",String,Required,,1.0
+CONDITION,intervention_name,Description of the top experimental conditions,String,Required,,0.0
+CONDITION,intervention_id,ID for specifying the experimental condition,String,Required,,0.0
+CONDITION,protocol_id,ID for referencing the protocols for interventions defining the experimental conditions,String,Required,,0.0
+CONDITION,intervention_aux_table,Table which defines all experimental conditions for each sample,String,Optional,,0.0
+MOUSE,ASAP_dataset_id,ASAP Dataset ID. Unique ID issued by ASAP CRN Cloud. ,String,Assigned,,1.0
+MOUSE,ASAP_team_id,ASAP Team ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1.0
+MOUSE,ASAP_mouse_id,ASAP Team ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1.0
+MOUSE,subject_id,The Subject ID.  This will be a unique ID for the mouse and is alias for mouse_id below. Note: is is clearly wrong to call it subject_ but lets us use the same key as the SAMPLE table. ,String,Required,,1.0
+MOUSE,strain,Strain:   Mouse strain details,String,Required,,0.0
+MOUSE,sex,Sex: sex of animal,String,Required,"[""Male"",""Female""]",0.0
+MOUSE,age,Age: age of animal in days,Int,Required,,0.0
+MOUSE,aux_table,"Table which defines additional mouse ""subject"" information",String,Optional,,0.0
+SPATIAL,ASAP_sample_id,ASAP Sample ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1.0
+SPATIAL,ASAP_dataset_id,ASAP Dataset ID. Unique ID issued by ASAP CRN Cloud. ,String,Assigned,,1.0
+SPATIAL,ASAP_team_id,ASAP Team ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1.0
+SPATIAL,sample_id,"Sample ID.: ID of each individual sample used in the study (e.g. cortex of anterior cingulate gyrus); if from the same brain several regions are included in the study, each region (i.e. each sample) has different ID and listed as a separate entry.",String,Required,,1.0
+SPATIAL,geomx_config,GeoMx (.ini) config file ref. Pipeline processing parameters that are used by the GeoMx NGS pipeline to assist in converting the FASTQ files to DCC files. It is from the GeoMx instrument study readout package. Leave blank if Visium. Files should be in /spatial.,String,Optional,,0.0
+SPATIAL,geomx_dsp_config,GeoMx DSP config file (.pkc) reference. Leave blank if Visium. Files should be in /spatial.,String,Optional,,0.0
+SPATIAL,geomx_annotation_file,Reference to the lab worksheet (.xlsx) from the GeoMx instrument study readout package. Leave blank if Visium. Files should be in /spatial.,String,Optional,,0.0
+SPATIAL,visium_cytassist,CytAssist image (.TIFF). A brightfield image that provides spatial orientation. Leave blank if GeoMx. Files should be in /spatial.,String,Optional,,0.0
+SPATIAL,visium_probe_set,Probe set / panel used. Leave blank if GeoMx. or not applicable,Enum,Optional,"[""Human Transcriptome v2"", ""Human Transcriptome v1"", ""Mouse Transcriptome v2"", ""Mouse Transcriptome v1""]",0.0
+SPATIAL,visium_slide_ref,Visium slide ref / number. Leave blank if GeoMx.,String,Optional,,0.0
+SPATIAL,visium_capture_area,Visium Capture area. Leave blank if GeoMx.,String,Optional,,0.0
+CELL,ASAP_dataset_id,ASAP Dataset ID. Unique ID issued by ASAP CRN Cloud. ,String,Assigned,,1.0
+CELL,ASAP_team_id,ASAP Team ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1.0
+CELL,ASAP_cell_id,ASAP Cell ID. Unique ID issued by AsAP CRN,String,Assigned,,1.0
+CELL,subject_id,The Subject ID.  This will be a unique ID for the cell source.  Note: is is clearly wrong to call it subject_ but lets us use the same key as the SAMPLE table. ,String,Required,,1.0
+CELL,cell_line,Cell Line Name.,String,Required,,0.0
+CELL,perturbation,"Perturbation.  ""NA"" if none",String,Required,,0.0
+CELL,clone_level,Clone or sub-clone.  generation?,Enum,Required,['tbd'],0.0
+CELL,aux_table,"Table which defines additional mouse ""subject"" information",String,Optional,,0.0
+PROTEOMICS,ASAP_sample_id,ASAP Sample ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1.0
+PROTEOMICS,ASAP_dataset_id,ASAP Dataset ID. Unique ID issued by ASAP CRN Cloud. ,String,Assigned,,1.0
+PROTEOMICS,ASAP_team_id,ASAP Team ID. Unique ID issued by ASAP CRN Cloud.  ,String,Assigned,,1.0
+PROTEOMICS,sample_id,"Sample ID.:   ID of each individual sample used in the study (e.g. cortex of anterior cingulate gyrus); if from the same brain several regions are included in the study, each region (i.e. each sample) has different ID and listed as a separate entry",String,Required,,1.0
+PROTEOMICS,source_id,,String,Required,,0.0
+PROTEOMICS,technology,,String,Required,,0.0
+PROTEOMICS,assay,,String,Required,,0.0
+PROTEOMICS,instrument,,String,Required,,0.0
+PROTEOMICS,technical_replicate,,String,Required,,0.0
+PROTEOMICS,raw_file,,String,Required,,0.0
+PROTEOMICS,summary_file,,String,Required,,0.0
+PROTEOMICS,SDRF_proteomics_table,Table which defines SDRF-Proteomics metadata table,String,Required,,0.0

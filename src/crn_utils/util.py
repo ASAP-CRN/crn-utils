@@ -22,6 +22,7 @@ __all__ = [
     "get_release_version",
     "get_cde_version",
     "write_version",
+    "archive_CDE",
 ]
 
 SUPPORTED_METADATA_VERSIONS = [
@@ -49,7 +50,7 @@ def sanitize_validation_string(validation_str):
     )
 
 
-def read_CDE(metadata_version: str = "v3.0", local_path: str | bool | Path = False):
+def read_CDE(metadata_version: str = "v3.2", local_path: str | bool | Path = False):
     """
     Load CDE from local csv and cache it, return a dataframe and dictionary of dtypes
     """
@@ -64,6 +65,7 @@ def read_CDE(metadata_version: str = "v3.0", local_path: str | bool | Path = Fal
         "Required",
         "Validation",
     ]
+
     if metadata_version == "v1":
         resource_fname = "ASAP_CDE_v1"
     elif metadata_version == "v2":
@@ -83,7 +85,8 @@ def read_CDE(metadata_version: str = "v3.0", local_path: str | bool | Path = Fal
 
     # add the Shared_key column for v3
     if metadata_version in ["v3.2", "v3.2-beta", "v3.1", "v3", "v3.0", "v3.0-beta"]:
-        column_list += ["Shared_key"]
+        column_list.append("Shared_key")
+        # column_list += ["Shared_key"]
 
     if metadata_version in SUPPORTED_METADATA_VERSIONS:
         print(f"metadata_version: {resource_fname}")
@@ -100,7 +103,7 @@ def read_CDE(metadata_version: str = "v3.0", local_path: str | bool | Path = Fal
     try:
         GOOGLE_SHEET_ID = "1c0z5KvRELdT2AtQAH2Dus8kwAyyLrR0CROhKOjpU4Vc"
 
-        if metadata_version == "v3.1":
+        if metadata_version == "v3.2":
             metadata_version = "CDE_final"
         cde_url = f"https://docs.google.com/spreadsheets/d/{GOOGLE_SHEET_ID}/gviz/tq?tqx=out:csv&sheet={metadata_version}"
 
@@ -129,7 +132,7 @@ def read_CDE(metadata_version: str = "v3.0", local_path: str | bool | Path = Fal
         print(f"exception:read local file: ../../resource/CDE/{resource_fname}.csv")
 
     # drop rows with no table name (i.e. ASAP_ids)
-    CDE_df = CDE_df[column_list]
+    CDE_df = CDE_df.loc[:, column_list]
     CDE_df = CDE_df.dropna(subset=["Table"])
     CDE_df = CDE_df.reset_index(drop=True)
     CDE_df = CDE_df.drop_duplicates()
@@ -140,6 +143,23 @@ def read_CDE(metadata_version: str = "v3.0", local_path: str | bool | Path = Fal
     # CDE_df["Validation"] = CDE_df["Validation"].apply(sanitize_validation_string)
 
     return clean_cde_schema(CDE_df)
+
+
+def archive_CDE(metadata_version, resource_path: str | Path):
+    """
+    Archive CDE data to a CSV file
+    """
+    CDE_df = read_CDE(metadata_version=metadata_version)
+
+    resource_path = Path(resource_path)
+    if not resource_path.exists():
+        resource_path = Path(__file__).parent.parent.parent / "resource/CDE"
+        print(f"exporting to default: ../../resource/CDE/ path")
+
+    export_path = resource_path / f"ASAP_CDE_{metadata_version}.csv"
+
+    CDE_df.to_csv(export_path, index=False)
+    print(f"wrote CDE to: {export_path}")
 
 
 def sanitize_string(s):
