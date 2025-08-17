@@ -35,9 +35,13 @@ __all__ = [
     "prep_sc_release_metadata",
     # "prep_release_metadata_mouse",
     # "prep_release_metadata_pmdbs",
+    "get_crn_release_metadata",
     "load_and_process_table",
     "process_schema",
     "create_metadata_package",
+    "get_stat_tabs_pmdbs",
+    "get_stat_tabs_mouse",
+    "get_stats_table",
 ]
 
 
@@ -84,6 +88,7 @@ def prep_release_metadata_mouse(
     suffix: str,
     spatial: bool = False,
     flatten: bool = False,
+    map_only: bool = False,
 ):
     # source
     # spatial
@@ -122,14 +127,15 @@ def prep_release_metadata_mouse(
 
     dfs = load_tables(mdata_path, table_names)
 
-    datasetid_mapper, mouseid_mapper, sampleid_mapper = update_mouse_id_mappers(
-        dfs["MOUSE"],
-        dfs["SAMPLE"],
-        dataset_name,
-        datasetid_mapper,
-        mouseid_mapper,
-        sampleid_mapper,
-    )
+    if not map_only:
+        datasetid_mapper, mouseid_mapper, sampleid_mapper = update_mouse_id_mappers(
+            dfs["MOUSE"],
+            dfs["SAMPLE"],
+            dataset_name,
+            datasetid_mapper,
+            mouseid_mapper,
+            sampleid_mapper,
+        )
 
     dfs = update_mouse_meta_tables_with_asap_ids(
         dfs,
@@ -176,14 +182,16 @@ def prep_release_metadata_mouse(
 
     export_meta_tables(dfs, out_dir)
     write_version(schema_version, out_dir / "cde_version")
-    export_map_path = map_path  # root_path / "asap-ids/temp"
-    export_mouse_id_mappers(
-        export_map_path,
-        suffix,
-        datasetid_mapper,
-        mouseid_mapper,
-        sampleid_mapper,
-    )
+
+    if not map_only:
+        export_map_path = map_path  # root_path / "asap-ids/temp"
+        export_mouse_id_mappers(
+            export_map_path,
+            suffix,
+            datasetid_mapper,
+            mouseid_mapper,
+            sampleid_mapper,
+        )
 
 
 def prep_release_metadata_pmdbs(
@@ -193,6 +201,7 @@ def prep_release_metadata_pmdbs(
     suffix: str,
     spatial: bool = False,
     flatten: bool = False,
+    map_only: bool = False,
 ):
     # source
     # spatial
@@ -236,22 +245,23 @@ def prep_release_metadata_pmdbs(
 
     dfs = load_tables(mdata_path, table_names)
 
-    (
-        datasetid_mapper,
-        subjectid_mapper,
-        sampleid_mapper,
-        gp2id_mapper,
-        sourceid_mapper,
-    ) = update_pmdbs_id_mappers(
-        dfs["CLINPATH"],
-        dfs["SAMPLE"],
-        dataset_name,
-        datasetid_mapper,
-        subjectid_mapper,
-        sampleid_mapper,
-        gp2id_mapper,
-        sourceid_mapper,
-    )
+    if not map_only:
+        (
+            datasetid_mapper,
+            subjectid_mapper,
+            sampleid_mapper,
+            gp2id_mapper,
+            sourceid_mapper,
+        ) = update_pmdbs_id_mappers(
+            dfs["CLINPATH"],
+            dfs["SAMPLE"],
+            dataset_name,
+            datasetid_mapper,
+            subjectid_mapper,
+            sampleid_mapper,
+            gp2id_mapper,
+            sourceid_mapper,
+        )
 
     dfs = update_pmdbs_meta_tables_with_asap_ids(
         dfs,
@@ -296,16 +306,192 @@ def prep_release_metadata_pmdbs(
 
     export_meta_tables(dfs, out_dir)
     write_version(schema_version, out_dir / "cde_version")
-    export_map_path = map_path  # / "asap-ids/master"
-    export_pmdbs_id_mappers(
-        map_path,
-        suffix,
+
+    if not map_only:
+        export_map_path = map_path  # / "asap-ids/master"
+        export_pmdbs_id_mappers(
+            map_path,
+            suffix,
+            datasetid_mapper,
+            subjectid_mapper,
+            sampleid_mapper,
+            gp2id_mapper,
+            sourceid_mapper,
+        )
+
+
+def get_crn_release_metadata(
+    ds_path: Path,
+    schema_version: str,
+    map_path: Path,
+    suffix: str,
+    spatial: bool = False,
+    source: str = "pmdbs",
+):
+    """
+    only maps by default
+    """
+
+    if source == "pmdbs":
+        dfs = get_release_metadata_pmdbs(
+            ds_path, schema_version, map_path, suffix, spatial
+        )
+    elif source == "mouse":
+        dfs = get_release_metadata_mouse(
+            ds_path, schema_version, map_path, suffix, spatial
+        )
+
+    elif source == "cell":
+        # prep_release_metadata_cell(
+        #     ds_path, schema_version, map_path, suffix, spatial, flatten, map_only
+        # )
+        print(f"WARNING.. cell source not implimented")
+        return {}
+    else:
+        raise ValueError(f"Unknown source {source}")
+
+    return dfs
+
+
+def get_release_metadata_mouse(
+    ds_path: Path,
+    schema_version: str,
+    map_path: Path,
+    suffix: str,
+    spatial: bool = False,
+) -> dict:
+    # source
+    # spatial
+
+    dataset_name = ds_path.name
+    print(f"release_util: Processing {ds_path.name}")
+    ds_parts = dataset_name.split("-")
+    team = ds_parts[0]
+    source = ds_parts[1]
+    short_dataset_name = "-".join(ds_parts[2:])
+    raw_bucket_name = f"asap-raw-team-{team}-{source}-{short_dataset_name}"
+
+    visium = "geomx" not in dataset_name
+
+    CDE = read_CDE(schema_version)
+    asap_ids_df = read_CDE_asap_ids()
+    asap_ids_schema = asap_ids_df[["Table", "Field"]]
+
+    # # %%
+    datasetid_mapper, mouseid_mapper, sampleid_mapper = load_mouse_id_mappers(
+        map_path, suffix
+    )
+
+    # ds_path.mkdir(parents=True, exist_ok=True)
+    mdata_path = ds_path / "metadata" / schema_version
+    tables = [
+        table
+        for table in mdata_path.iterdir()
+        if table.is_file() and table.suffix == ".csv"
+    ]
+
+    req_tables = MOUSE_TABLES
+    if spatial:
+        req_tables.append("SPATIAL")
+    table_names = [table.stem for table in tables if table.stem in req_tables]
+
+    dfs = load_tables(mdata_path, table_names)
+
+    dfs = update_mouse_meta_tables_with_asap_ids(
+        dfs,
+        dataset_name,
+        asap_ids_schema,
+        datasetid_mapper,
+        mouseid_mapper,
+        sampleid_mapper,
+        table_names,
+    )
+
+    dfs["STUDY"] = update_study_table_with_doi(dfs["STUDY"], ds_path)
+    dfs["DATA"] = update_data_table_with_gcp_uri(dfs["DATA"], ds_path)
+    if spatial:
+        dfs["SPATIAL"] = update_spatial_table_with_gcp_uri(
+            dfs["SPATIAL"], ds_path, visium=visium
+        )
+
+    return dfs
+
+
+def get_release_metadata_pmdbs(
+    ds_path: Path,
+    schema_version: str,
+    map_path: Path,
+    suffix: str,
+    spatial: bool = False,
+) -> dict:
+
+    # source
+    # spatial
+
+    dataset_name = ds_path.name
+    print(f"release_util: Processing {ds_path.name}")
+    ds_parts = dataset_name.split("-")
+    team = ds_parts[0]
+    source = ds_parts[1]
+    short_dataset_name = "-".join(ds_parts[2:])
+    raw_bucket_name = f"asap-raw-team-{team}-{source}-{short_dataset_name}"
+
+    visium = "geomx" not in dataset_name
+
+    CDE = read_CDE(schema_version)
+    asap_ids_df = read_CDE_asap_ids()
+    asap_ids_schema = asap_ids_df[["Table", "Field"]]
+
+    # # %%
+    (
         datasetid_mapper,
         subjectid_mapper,
         sampleid_mapper,
         gp2id_mapper,
         sourceid_mapper,
+    ) = load_pmdbs_id_mappers(map_path, suffix)
+
+    # ds_path.mkdir(parents=True, exist_ok=True)
+    if schema_version == "v2.1":
+        mdata_path = ds_path / "metadata" / "v2"
+    else:
+        mdata_path = ds_path / "metadata" / schema_version
+
+    tables = [
+        table
+        for table in mdata_path.iterdir()
+        if table.is_file() and table.suffix == ".csv"
+    ]
+
+    req_tables = PMDBS_TABLES
+    if spatial:
+        req_tables.append("SPATIAL")
+
+    table_names = [table.stem for table in tables if table.stem in req_tables]
+
+    dfs = load_tables(mdata_path, table_names)
+
+    dfs = update_pmdbs_meta_tables_with_asap_ids(
+        dfs,
+        dataset_name,
+        asap_ids_schema,
+        datasetid_mapper,
+        subjectid_mapper,
+        sampleid_mapper,
+        gp2id_mapper,
+        sourceid_mapper,
+        pmdbs_tables=table_names,
     )
+
+    dfs["STUDY"] = update_study_table_with_doi(dfs["STUDY"], ds_path)
+
+    dfs["DATA"] = update_data_table_with_gcp_uri(dfs["DATA"], ds_path)
+    if spatial:
+        dfs["SPATIAL"] = update_spatial_table_with_gcp_uri(
+            dfs["SPATIAL"], ds_path, visium=visium
+        )
+
+    return dfs
 
 
 def load_and_process_table(
@@ -616,3 +802,181 @@ def fix_study_table(metadata_path: Path, doi_path: Path | None = None):
 
     # export STUDY
     STUDY.to_csv(metadata_path / "STUDY.csv", index=False)
+
+
+def get_stats_table(dfs: dict[pd.DataFrame], source: str = "pmdbs"):
+    """ """
+    if source == "pmdbs":
+        return get_stat_tabs_pmdbs(dfs)
+    elif source == "mouse":
+        return get_stat_tabs_mouse(dfs)
+    else:
+        raise ValueError(f"Unknown source {source}")
+        return {}, pd.DataFrame()
+
+
+def get_stat_tabs_pmdbs(dfs: dict[pd.DataFrame]):
+    """ """
+
+    # do joins to get the stats we need.
+    # first JOIN SAMPLE and CONDITION on "condition_id" how=left to get our "intervention_id" or PD / control
+    sample_cols = [
+        "ASAP_sample_id",
+        "ASAP_subject_id",
+        "ASAP_team_id",
+        "ASAP_dataset_id",
+        "replicate",
+        "replicate_count",
+        "repeated_sample",
+        "batch",
+        "organism",
+        "tissue",
+        "assay_type",
+        "condition_id",
+    ]
+
+    subject_cols = [
+        "ASAP_subject_id",
+        "source_subject_id",
+        "biobank_name",
+        "sex",
+        "age_at_collection",
+        "race",
+        "primary_diagnosis",
+        "primary_diagnosis_text",
+    ]
+
+    pmdbs_cols = [
+        "ASAP_sample_id",
+        "brain_region",
+        "hemisphere",
+        "region_level_1",
+        "region_level_2",
+        "region_level_3",
+    ]
+
+    condition_cols = [
+        "condition_id",
+        "intervention_name",
+        "intervention_id",
+        "protocol_id",
+        "intervention_aux_table",
+    ]
+
+    SAMPLE_ = dfs["SAMPLE"][sample_cols]
+
+    if "gp2_phenotype" in dfs["SUBJECT"].columns:
+        subject_cols.append("gp2_phenotype")
+        SUBJECT_ = dfs["SUBJECT"][subject_cols]
+    else:
+        SUBJECT_ = dfs["SUBJECT"][subject_cols]
+        SUBJECT_["gp2_phenotype"] = SUBJECT_["primary_diagnosis"]
+
+    PMDBS_ = dfs["PMDBS"][pmdbs_cols]
+    CONDITION_ = dfs["CONDITION"][condition_cols]
+
+    df = pd.merge(SAMPLE_, CONDITION_, on="condition_id", how="left")
+
+    # then JOIN the result with SUBJECT on "ASAP_subject_id" how=left to get "age_at_collection", "sex", "primary_diagnosis"
+    df = pd.merge(df, SUBJECT_, on="ASAP_subject_id", how="left")
+
+    # then JOIN the result with PMDBS on "ASAP_subject_id" how=left to get "brain_region"
+    df = pd.merge(df, PMDBS_, on="ASAP_sample_id", how="left")
+
+    # get stats for the dataset
+    # 0. total number of samples
+
+    age_at_collection = df["age_at_collection"].astype("float")
+
+    N = df["ASAP_sample_id"].nunique()
+
+    brain_region = (df["brain_region"].value_counts().to_dict(),)
+    # fill in primary_diagnosis if gp2_phenotype is not in df
+
+    PD_status = (df["gp2_phenotype"].value_counts().to_dict(),)
+    condition_id = (df["condition_id"].value_counts().to_dict(),)
+    diagnosis = (df["primary_diagnosis"].value_counts().to_dict(),)
+    sex = (df["sex"].value_counts().to_dict(),)
+
+    age = dict(
+        mean=f"{age_at_collection.mean():.1f}",
+        median=f"{age_at_collection.median():.1f}",
+        max=f"{age_at_collection.max():.1f}",
+        min=f"{age_at_collection.min():.1f}",
+    )
+
+    report = dict(
+        N=N,
+        brain_region=brain_region,
+        PD_status=PD_status,
+        condition_id=condition_id,
+        diagnosis=diagnosis,
+        age=age,
+        sex=sex,
+    )
+
+    return report, df
+
+
+def get_stat_tabs_mouse(dfs: dict[pd.DataFrame]):
+    """ """
+    sample_cols = [
+        "ASAP_sample_id",
+        "ASAP_mouse_id",
+        "ASAP_team_id",
+        "ASAP_dataset_id",
+        "replicate",
+        "replicate_count",
+        "repeated_sample",
+        "batch",
+        "organism",
+        "tissue",
+        "assay_type",
+        "condition_id",
+    ]
+
+    subject_cols = [
+        "ASAP_mouse_id",
+        "sex",
+        "age",
+        "strain",
+    ]
+
+    condition_cols = [
+        "condition_id",
+        "intervention_name",
+        "intervention_id",
+        "protocol_id",
+        "intervention_aux_table",
+    ]
+
+    SAMPLE_ = dfs["SAMPLE"][sample_cols]
+
+    SUBJECT_ = dfs["MOUSE"][subject_cols]
+    CONDITION_ = dfs["CONDITION"][condition_cols]
+
+    df = pd.merge(SAMPLE_, CONDITION_, on="condition_id", how="left")
+
+    # then JOIN the result with SUBJECT on "ASAP_subject_id" how=left to get "age_at_collection", "sex", "primary_diagnosis"
+    df = pd.merge(df, SUBJECT_, on="ASAP_mouse_id", how="left")
+
+    # get stats for the dataset
+    # 0. total number of samples
+
+    age = df["age"].value_counts().to_dict()
+
+    N = df["ASAP_sample_id"].nunique()
+
+    # brain_region = (df["brain_region"].value_counts().to_dict(),)
+    # PD_status = (df["gp2_phenotype"].value_counts().to_dict(),)
+    condition_id = (df["condition_id"].value_counts().to_dict(),)
+    # diagnosis = (df["primary_diagnosis"].value_counts().to_dict(),)
+    sex = (df["sex"].value_counts().to_dict(),)
+
+    report = dict(
+        N=N,
+        condition_id=condition_id,
+        age=age,
+        sex=sex,
+    )
+    return report, df

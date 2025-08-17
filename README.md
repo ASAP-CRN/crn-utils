@@ -28,3 +28,37 @@ Should unify the business logic for the following resources and tools:
 # TODO: make this pip-installable with versioned updates... (currently relying on commit to document provenance)
 
 -------------------------------
+
+## REORG 
+> TODO:  full refactor... lots of dead code and bad naming / organization
+
+- dataset utils
+    - doi
+    - asap_ids
+
+
+- release utils
+    - file metadata
+    - manifest
+    - zenodo
+    - asap_ids
+    - release 
+
+- metadata
+    - validate
+    - update_schema
+
+
+- etc
+    - bucket_util
+    - resource_tools
+    - checksums
+    - zenodo_util
+    
+- util
+- constants
+
+### dataset
+
+### release
+

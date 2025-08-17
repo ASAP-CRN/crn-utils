@@ -111,12 +111,20 @@ def ingest_DOI_doc(
 
             print("made affiliation table")
         elif name == "datasets":
-            dataset_title = table_data[0][1].strip().replace("\n", " ")
-            dataset_description = table_data[1][1].strip().replace("\n", " ")
+            dataset_title = (
+                table_data[0][1].strip().replace("\n", " ").replace("\u2019", "'")
+            )
+            dataset_description = (
+                table_data[1][1].strip().replace("\n", " ").replace("\u2019", "'")
+            )
             print("got dataset title/description")
         elif name == "projects":
-            project_title = table_data[0][1].strip().replace("\n", " ")
-            project_description = table_data[1][1].strip().replace("\n", " ")
+            project_title = (
+                table_data[0][1].strip().replace("\n", " ").replace("\u2019", "'")
+            )
+            project_description = (
+                table_data[1][1].strip().replace("\n", " ").replace("\u2019", "'")
+            )
             print("got project title/description")
 
         else:
@@ -565,7 +573,7 @@ def create_draft_doi(zenodo: ZenodoClient, ds_path: Path, version: str = "0.1") 
     if version == "0.1":
         print(f"Warning Draft DOI is defaulting to v0.1")
 
-    metadata.version = version
+    metadata["version"] = version
     zenodo.create_new_deposition(metadata)
 
     return zenodo.deposition, metadata
@@ -574,7 +582,12 @@ def create_draft_doi(zenodo: ZenodoClient, ds_path: Path, version: str = "0.1") 
 def add_anchor_file_to_doi(
     zenodo: ZenodoClient, file_path: Path, doi_id: str | int | None = None
 ) -> dict:
+    if isinstance(doi_id, int):
+        print(f"Warning: You are using the record id {doi_id} instead of the doi")
+        doi_id = str(doi_id)
+
     zenodo.set_deposition_id(doi_id)  # forces .bucket .title .deposition_id update
+
     # upload file to zenodo
     zenodo.upload_file(file_path)
     return zenodo.deposition

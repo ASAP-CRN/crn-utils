@@ -456,7 +456,6 @@ def updated_tables_v3_0tov3_1(tables: dict, STUDY_dataset_info: dict):
     STUDY = tables["STUDY"].copy()
     SAMPLE = tables["SAMPLE"].copy()
     SUBJECT = tables["SUBJECT"].copy()
-    CONDITION = tables["CONDITION"].copy()
 
     # STUDY changes: remove 'team_dataset_id', and "project_dataset", replace with "dataset_title", "dataset_name", and "project_description"
     STUDY["dataset_title"] = STUDY_dataset_info["dataset_title"]
@@ -465,7 +464,9 @@ def updated_tables_v3_0tov3_1(tables: dict, STUDY_dataset_info: dict):
     STUDY.drop(columns=["team_dataset_id", "project_dataset"], inplace=True)
 
     # collect 'age_at_collection' from SUBJECT
-    SAMPLE["age_at_collection"] = SUBJECT["age_at_collection"]
+    SAMPLE["age_at_collection"] = SAMPLE["subject_id"].map(
+        dict(zip(SUBJECT["subject_id"], SUBJECT["age_at_collection"]))
+    )
     SUBJECT.drop(columns=["age_at_collection"], inplace=True)
 
     # infer 'gp2_phenotype'
@@ -476,11 +477,16 @@ def updated_tables_v3_0tov3_1(tables: dict, STUDY_dataset_info: dict):
         "PD": "PD",
         "Prodromal motor PD": "Prodromal",
         "Prodromal Motor PD": "Prodromal",
+        "Other neurological disorder": "Control",  # lee "Other"
+        "Hemiparkinson/hemiatrophy syndrome": "PD",  # wood bulk...
+        "Alzheimer's disease": "PD",
+        "Other neurological disorder": "PD",  # hardy sn
     }
 
     SUBJECT["gp2_phenotype"] = SUBJECT["primary_diagnosis"].map(gp2_phenotype_mapper)
 
-    # force CONDITION table to use gp2_phenotype
+    subj_id_condition_id = dict(zip(SUBJECT["subject_id"], SUBJECT["gp2_phenotype"]))
+    SAMPLE["condition_id"] = SAMPLE["subject_id"].map(subj_id_condition_id)
 
     tables["STUDY"] = STUDY
     tables["SUBJECT"] = SUBJECT
@@ -496,6 +502,7 @@ def update_tables_v3_1tov3_2(tables: dict, CDEv3_2: pd.DataFrame):
 
     """
     for table_name, table in tables.items():
+        print(f"Updating {table_name}")
         tables[table_name] = reorder_table_to_CDE(table, table_name, CDEv3_2)
     return tables
 
@@ -511,6 +518,15 @@ def update_tables_v3_0_to_3_2(
         CDEv3_2 = read_CDE("v3.2")
 
     tables = updated_tables_v3_0tov3_1(tables, STUDY_dataset_info)
+
+    # force CONDITION table to use gp2_phenotype
+    CONDITION = pd.DataFrame(columns=CDEv3_2[CDEv3_2["Table"] == "CONDITION"]["Field"])
+    CONDITION["condition_id"] = tables["SUBJECT"]["gp2_phenotype"].unique()
+    CONDITION["intervention_name"] = "Case-Control"
+    CONDITION = CONDITION.fillna(NULL)
+
+    tables["CONDITION"] = CONDITION
+
     tables = update_tables_v3_1tov3_2(tables, CDEv3_2)
     return tables
 

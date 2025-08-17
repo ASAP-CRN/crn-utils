@@ -50,7 +50,11 @@ def sanitize_validation_string(validation_str):
     )
 
 
-def read_CDE(metadata_version: str = "v3.2", local_path: str | bool | Path = False):
+def read_CDE(
+    metadata_version: str = "v3.2",
+    local_path: str | bool | Path = False,
+    include_asap_ids: bool = False,
+):
     """
     Load CDE from local csv and cache it, return a dataframe and dictionary of dtypes
     """
@@ -103,8 +107,8 @@ def read_CDE(metadata_version: str = "v3.2", local_path: str | bool | Path = Fal
     try:
         GOOGLE_SHEET_ID = "1c0z5KvRELdT2AtQAH2Dus8kwAyyLrR0CROhKOjpU4Vc"
 
-        if metadata_version == "v3.2":
-            metadata_version = "CDE_final"
+        # if metadata_version == "v3.2":
+        #     metadata_version = "CDE_final"
         cde_url = f"https://docs.google.com/spreadsheets/d/{GOOGLE_SHEET_ID}/gviz/tq?tqx=out:csv&sheet={metadata_version}"
 
         print(f"reading from googledoc {cde_url}")
@@ -130,6 +134,10 @@ def read_CDE(metadata_version: str = "v3.2", local_path: str | bool | Path = Fal
         root = Path(__file__).parent.parent.parent
         CDE_df = pd.read_csv(f"{root}/resource/CDE/{resource_fname}.csv")
         print(f"exception:read local file: ../../resource/CDE/{resource_fname}.csv")
+
+    if not include_asap_ids:
+        CDE_df = CDE_df[CDE_df["Required"] != "Assigned"]
+        CDE_df = CDE_df.reset_index(drop=True)
 
     # drop rows with no table name (i.e. ASAP_ids)
     CDE_df = CDE_df.loc[:, column_list]
