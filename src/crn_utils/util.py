@@ -469,7 +469,7 @@ def write_version(version: str, version_path: Path):
     """
     # check if the version has a trailing .?
     if len(version.split(".")) > 2:
-        version = f"{version}.0"
+        version = f"{version}"
     else:
         version = f"{version}.0"
     with open(version_path, "w") as f:

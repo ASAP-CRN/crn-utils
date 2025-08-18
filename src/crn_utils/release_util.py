@@ -42,6 +42,7 @@ __all__ = [
     "get_stat_tabs_pmdbs",
     "get_stat_tabs_mouse",
     "get_stats_table",
+    "get_cohort_stats_table",
 ]
 
 
@@ -840,7 +841,7 @@ def get_stat_tabs_pmdbs(dfs: dict[pd.DataFrame]):
         "source_subject_id",
         "biobank_name",
         "sex",
-        "age_at_collection",
+        # "age_at_collection",
         "race",
         "primary_diagnosis",
         "primary_diagnosis_text",
@@ -862,6 +863,13 @@ def get_stat_tabs_pmdbs(dfs: dict[pd.DataFrame]):
         "protocol_id",
         "intervention_aux_table",
     ]
+
+    if "age_at_collection" in dfs["SUBJECT"].columns:
+        subject_cols.append("age_at_collection")
+    elif "age_at_collection" in dfs["SAMPLE"].columns:
+        sample_cols.append("age_at_collection")
+    else:
+        raise ValueError("No age_at_collection column found in SUBJECT or SAMPLE")
 
     SAMPLE_ = dfs["SAMPLE"][sample_cols]
 
@@ -889,6 +897,7 @@ def get_stat_tabs_pmdbs(dfs: dict[pd.DataFrame]):
     age_at_collection = df["age_at_collection"].astype("float")
 
     N = df["ASAP_sample_id"].nunique()
+    n_subjects = df["ASAP_subject_id"].nunique()
 
     brain_region = (df["brain_region"].value_counts().to_dict(),)
     # fill in primary_diagnosis if gp2_phenotype is not in df
@@ -907,6 +916,7 @@ def get_stat_tabs_pmdbs(dfs: dict[pd.DataFrame]):
 
     report = dict(
         N=N,
+        n_subjects=n_subjects,
         brain_region=brain_region,
         PD_status=PD_status,
         condition_id=condition_id,
@@ -979,4 +989,24 @@ def get_stat_tabs_mouse(dfs: dict[pd.DataFrame]):
         age=age,
         sex=sex,
     )
+    return report, df
+
+
+def get_cohort_stats_table(dfs: dict[pd.DataFrame], source: str = "pmdbs"):
+    """ """
+    if source == "pmdbs":
+        report, df = get_stat_tabs_pmdbs(dfs)
+        N_datasets = df["ASAP_dataset_id"].nunique()
+        N_teams = df["ASAP_team_id"].nunique()
+        report["N_datasets"] = N_datasets
+        report["N_teams"] = N_teams
+
+    elif source == "mouse":
+        report, df = get_stat_tabs_mouse(dfs)
+        # TODO:
+    else:
+        raise ValueError(f"Unknown source {source}")
+        report = {}
+        df = pd.DataFrame()
+
     return report, df
