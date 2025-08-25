@@ -3,6 +3,8 @@ from pathlib import Path
 import os
 import docx
 import json
+from numpy import nan as np_nan
+
 
 from .util import (
     read_CDE,
@@ -894,7 +896,7 @@ def get_stat_tabs_pmdbs(dfs: dict[pd.DataFrame]):
     # get stats for the dataset
     # 0. total number of samples
 
-    age_at_collection = df["age_at_collection"].astype("float")
+    age_at_collection = df["age_at_collection"].replace({"NA": np_nan}).astype("float")
 
     N = df["ASAP_sample_id"].nunique()
     n_subjects = df["ASAP_subject_id"].nunique()
