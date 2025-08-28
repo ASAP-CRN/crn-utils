@@ -818,6 +818,77 @@ def get_stats_table(dfs: dict[pd.DataFrame], source: str = "pmdbs"):
         return {}, pd.DataFrame()
 
 
+_brain_region_coder = {
+    "Anterior_Cingulate_Gyrus": "ACG",
+    "Anterior Cingulate Gyrus": "ACG",
+    "Caudate": "CAU",
+    "Putamen": "PUT",
+    "Hippocampus": "HIP",
+    "Substantia nigra": "SN",
+    "Amygdala": "AMG",
+    "Substantia_Nigra ": "SN",
+    "Substantia_Nigra": "SN",
+    "Prefrontal Cortex": "PFC",
+    "Prefrontal cortex": "PFC",
+    "inferior parietal lobe": "IPL",
+    "Inferior Parietal Lobe": "IPL",
+    "Anterior_Cingulate_Cortex": "ACC",
+    "Anterior Cingulate Cortex": "ACC",
+    "Antaerior Cortex": "ACC",
+    "Antaerior Cingulate": "ACC",
+    "Anterior_cingulate_cortex": "ACC",
+    "Anterior cingulate cortex": "ACC",
+    "Antaerior cortex": "ACC",
+    "Antaerior cingulate": "ACC",
+    "Frontal Cortex": "F_CTX",
+    "Frontal_ctx": "F_CTX",
+    "Frontal cortex": "F_CTX",
+    "Frontal_Cortex": "F_CTX",
+    "frontal_cortex": "F_CTX",
+    "Frontal_Lobe": "F_CTX",
+    "Frontal lobe": "F_CTX",
+    "Parietal Cortex": "P_CTX",
+    "Parietal cortex": "P_CTX",
+    "Parietal_Cortex": "P_CTX",
+    "Parietal lobe": "P_CTX",
+    "Parietal_ctx": "P_CTX",
+    "Parietal": "P_CTX",
+    "Cingulate Cortex": "C_CTX",
+    "Cingulate cortex": "C_CTX",
+    "Cingulate_Cortex": "C_CTX",
+    "Cingulate gyrus": "C_CTX",
+    "temporal_ctx": "T_CTX",
+    "Temporal Cortex": "T_CTX",
+    "Temporal_ctx": "T_CTX",
+    "Temporal cortex": "T_CTX",
+    "Middle_Frontal_Gyrus": "MFG",
+    "Middle frontal gyrus": "MFG",
+    "Middle Frontal Gyrus": "MFG",
+    "Middle Temporal Gyrus": "MTG",
+    "Middle temporal gyrus": "MTG",
+    "Parahippocampal Gyrus": "PARA",
+}
+
+_region_titles = {
+    "ACG": "Anterior Cingulate Gyrus",
+    "CAU": "Caudate",
+    "PUT": "Putamen",
+    "HIP": "Hippocampus",
+    "SN": "Substantia Nigra",
+    "AMG": "Amygdala",
+    "PFC": "Prefrontal Cortex",
+    "IPL": "Inferior Parietal Lobe",
+    "ACC": "Antaerior Cingulate Cortex",
+    "F_CTX": "Frontal Cortex",
+    "P_CTX": "Parietal Cortex",
+    "C_CTX": "Cingulate Cortex",
+    "T_CTX": "Temporal Cortex",
+    "MFG": "Middle Frontal Gyrus",
+    "MTG": "Middle Temporal Gyrus",
+    "PARA": "Para-Hippocampal Gyrus",
+}
+
+
 def get_stat_tabs_pmdbs(dfs: dict[pd.DataFrame]):
     """ """
 
@@ -897,17 +968,57 @@ def get_stat_tabs_pmdbs(dfs: dict[pd.DataFrame]):
     # 0. total number of samples
 
     age_at_collection = df["age_at_collection"].replace({"NA": np_nan}).astype("float")
+    n_samples = df["ASAP_sample_id"].nunique()
 
-    N = df["ASAP_sample_id"].nunique()
     n_subjects = df["ASAP_subject_id"].nunique()
+    brain_code = (
+        df["brain_region"].replace(_brain_region_coder).value_counts().to_dict()
+    )
+    brain_region = (
+        df["brain_region"]
+        .replace(_brain_region_coder)
+        .map(_region_titles)
+        .value_counts()
+        .to_dict()
+    )
 
-    brain_region = (df["brain_region"].value_counts().to_dict(),)
-    # fill in primary_diagnosis if gp2_phenotype is not in df
-
+    sex = (df["sex"].value_counts().to_dict(),)
     PD_status = (df["gp2_phenotype"].value_counts().to_dict(),)
     condition_id = (df["condition_id"].value_counts().to_dict(),)
-    diagnosis = (df["primary_diagnosis"].value_counts().to_dict(),)
-    sex = (df["sex"].value_counts().to_dict(),)
+    age = dict(
+        mean=f"{age_at_collection.mean():.1f}",
+        median=f"{age_at_collection.median():.1f}",
+        max=f"{age_at_collection.max():.1f}",
+        min=f"{age_at_collection.min():.1f}",
+    )
+
+    # does this copy the values?
+    samples = dict(
+        n_samples=n_samples,
+        brain_region=brain_region,
+        brain_code=brain_code,
+        PD_status=PD_status,
+        condition_id=condition_id,
+        age_at_collection=age,
+        sex=sex,
+    )
+
+    # SUBJECT wise
+    sw_df = df[
+        [
+            "ASAP_subject_id",
+            "gp2_phenotype",
+            "primary_diagnosis",
+            "sex",
+            "age_at_collection",
+            "condition_id",
+        ]
+    ].drop_duplicates()
+    # fill in primary_diagnosis if gp2_phenotype is not in df
+    PD_status = (sw_df["gp2_phenotype"].value_counts().to_dict(),)
+    condition_id = (sw_df["condition_id"].value_counts().to_dict(),)
+    diagnosis = (sw_df["primary_diagnosis"].value_counts().to_dict(),)
+    sex = (sw_df["sex"].value_counts().to_dict(),)
 
     age = dict(
         mean=f"{age_at_collection.mean():.1f}",
@@ -916,16 +1027,21 @@ def get_stat_tabs_pmdbs(dfs: dict[pd.DataFrame]):
         min=f"{age_at_collection.min():.1f}",
     )
 
-    report = dict(
-        N=N,
+    subject = dict(
         n_subjects=n_subjects,
-        brain_region=brain_region,
         PD_status=PD_status,
         condition_id=condition_id,
         diagnosis=diagnosis,
-        age=age,
+        age_at_collection=age,
         sex=sex,
     )
+
+    report = dict(
+        subject=subject,
+        samples=samples,
+    )
+
+    # SAMPLE wise
 
     return report, df
 
@@ -975,7 +1091,13 @@ def get_stat_tabs_mouse(dfs: dict[pd.DataFrame]):
     # get stats for the dataset
     # 0. total number of samples
 
-    age = df["age"].value_counts().to_dict()
+    age_at_collection = df["age"].astype("float")
+    age = dict(
+        mean=f"{age_at_collection.mean():.1f}",
+        median=f"{age_at_collection.median():.1f}",
+        max=f"{age_at_collection.max():.1f}",
+        min=f"{age_at_collection.min():.1f}",
+    )
 
     N = df["ASAP_sample_id"].nunique()
 

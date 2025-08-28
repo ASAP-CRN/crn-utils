@@ -159,7 +159,7 @@ CONDITION,intervention_aux_table,Table which defines all experimental conditions
 MOUSE,subject_id,The Subject ID.  This will be a unique ID for the mouse and is alias for mouse_id below. Note: is is clearly wrong to call it subject_ but lets us use the same key as the SAMPLE table. ,String,Required,,1
 MOUSE,strain,Strain:   Mouse strain details,String,Required,,0
 MOUSE,sex,Sex: sex of animal,String,Required,"[""Male"",""Female""]",0
-MOUSE,age,Age: age of animal in days,Int,Required,,0
+MOUSE,age,Age: age of animal in days,Integer,Required,,0
 MOUSE,aux_table,"Table which defines additional mouse ""subject"" information",String,Optional,,0
 SPATIAL,sample_id,"Sample ID.: ID of each individual sample used in the study (e.g. cortex of anterior cingulate gyrus); if from the same brain several regions are included in the study, each region (i.e. each sample) has different ID and listed as a separate entry.",String,Required,,1
 SPATIAL,geomx_config,GeoMx (.ini) config file ref. Pipeline processing parameters that are used by the GeoMx NGS pipeline to assist in converting the FASTQ files to DCC files. It is from the GeoMx instrument study readout package. Leave blank if Visium. Files should be in /spatial.,String,Optional,,0

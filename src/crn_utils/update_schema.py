@@ -461,13 +461,18 @@ def updated_tables_v3_0tov3_1(tables: dict, STUDY_dataset_info: dict):
     STUDY["dataset_title"] = STUDY_dataset_info["dataset_title"]
     STUDY["dataset_description"] = STUDY_dataset_info["dataset_description"]
     STUDY["dataset_name"] = STUDY_dataset_info["dataset_name"]
-    STUDY.drop(columns=["team_dataset_id", "project_dataset"], inplace=True)
+    if "team_dataset_id" in STUDY.columns:
+        STUDY.drop(columns=["team_dataset_id"], inplace=True)
+    if "project_dataset" in STUDY.columns:
+        STUDY.drop(columns=["project_dataset"], inplace=True)
 
     # collect 'age_at_collection' from SUBJECT
-    SAMPLE["age_at_collection"] = SAMPLE["subject_id"].map(
-        dict(zip(SUBJECT["subject_id"], SUBJECT["age_at_collection"]))
-    )
-    SUBJECT.drop(columns=["age_at_collection"], inplace=True)
+
+    if "age_at_collection" not in SAMPLE.columns:
+        SAMPLE["age_at_collection"] = SAMPLE["subject_id"].map(
+            dict(zip(SUBJECT["subject_id"], SUBJECT["age_at_collection"]))
+        )
+        SUBJECT.drop(columns=["age_at_collection"], inplace=True)
 
     # infer 'gp2_phenotype'
     gp2_phenotype_mapper = {

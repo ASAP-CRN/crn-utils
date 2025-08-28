@@ -1,6 +1,8 @@
 __all__ = [
     "MOUSE_TABLES",
     "PMDBS_TABLES",
+    "CELL_TABLES",
+    "IPSC_TABLES",
 ]
 
 MOUSE_TABLES = [
@@ -24,3 +26,16 @@ PMDBS_TABLES = [
     "CLINPATH",
     "CONDITION",
 ]
+
+
+CELL_TABLES = [
+    "STUDY",
+    "PROTOCOL",
+    "ASSAY_RNAseq",
+    "SAMPLE",
+    "CELL",
+    "CONDITION",
+    "DATA",
+]
+
+IPSC_TABLES = CELL_TABLES
