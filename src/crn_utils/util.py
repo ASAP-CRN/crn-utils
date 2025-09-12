@@ -35,6 +35,7 @@ SUPPORTED_METADATA_VERSIONS = [
     "v3.1",
     "v3.2",
     "v3.2-beta",
+    "v3.3",
 ]
 
 
@@ -54,6 +55,7 @@ def read_CDE(
     metadata_version: str = "v3.2",
     local_path: str | bool | Path = False,
     include_asap_ids: bool = False,
+    include_aliases: bool = False,
 ):
     """
     Load CDE from local csv and cache it, return a dataframe and dictionary of dtypes
@@ -70,6 +72,7 @@ def read_CDE(
         "Validation",
     ]
 
+    # set up fallback
     if metadata_version == "v1":
         resource_fname = "ASAP_CDE_v1"
     elif metadata_version == "v2":
@@ -82,15 +85,29 @@ def read_CDE(
         resource_fname = "ASAP_CDE_v3.0"
     elif metadata_version in ["v3.1"]:
         resource_fname = "ASAP_CDE_v3.1"
-    elif metadata_version in ["v3.2"]:
+    elif metadata_version in ["v3.2", "v3.2-beta"]:
         resource_fname = "ASAP_CDE_v3.2"
+    elif metadata_version == "v3.3":
+        resource_fname = "ASAP_CDE_v3.3"
     else:
-        resource_fname = "ASAP_CDE_v3.1"
+        resource_fname = "ASAP_CDE_v3.2"
 
     # add the Shared_key column for v3
-    if metadata_version in ["v3.2", "v3.2-beta", "v3.1", "v3", "v3.0", "v3.0-beta"]:
+    if metadata_version in [
+        "v3.3",
+        "v3.2",
+        "v3.2-beta",
+        "v3.1",
+        "v3",
+        "v3.0",
+        "v3.0-beta",
+    ]:
         column_list.append("Shared_key")
         # column_list += ["Shared_key"]
+
+    # insert "DisplayName" after "Field"
+    if metadata_version in ["v3.2", "v3.2-beta", "v3.3"]:
+        column_list.insert(2, "DisplayName")
 
     if metadata_version in SUPPORTED_METADATA_VERSIONS:
         print(f"metadata_version: {resource_fname}")
@@ -102,19 +119,17 @@ def read_CDE(
 
     if local_path:
         cde_url = Path(local_path) / f"{resource_fname}.csv"
-        print(cde_url)
-
-    try:
-        GOOGLE_SHEET_ID = "1c0z5KvRELdT2AtQAH2Dus8kwAyyLrR0CROhKOjpU4Vc"
-
-        # if metadata_version == "v3.2":
-        #     metadata_version = "CDE_final"
-        cde_url = f"https://docs.google.com/spreadsheets/d/{GOOGLE_SHEET_ID}/gviz/tq?tqx=out:csv&sheet={metadata_version}"
-
+        print(f"reading from local file: {cde_url}")
+    else:
         print(f"reading from googledoc {cde_url}")
 
+    try:
+        # if metadata_version == "v3.2":
+        #     metadata_version = "CDE_final"
+        # cde_url = f"https://docs.google.com/spreadsheets/d/{GOOGLE_SHEET_ID}/gviz/tq?tqx=out:csv&sheet={metadata_version}"
+
         CDE_df = pd.read_csv(cde_url)
-        print(f"read url")
+        print(f"read CDE")
 
         # read_source = "url" if not local_path else "local file"
     except:
@@ -133,31 +148,55 @@ def read_CDE(
         # print(f"exception:read local file: {new_resource_fname}")
         root = Path(__file__).parent.parent.parent
         CDE_df = pd.read_csv(f"{root}/resource/CDE/{resource_fname}.csv")
-        print(f"exception:read local file: ../../resource/CDE/{resource_fname}.csv")
+        print(f"exception:read fallback file: ../../resource/CDE/{resource_fname}.csv")
 
+    # drop ASAP_ids if not requested
     if not include_asap_ids:
         CDE_df = CDE_df[CDE_df["Required"] != "Assigned"]
         CDE_df = CDE_df.reset_index(drop=True)
+        print(f"dropped ASAP_ids")
+
+    # drop Alias if not requested
+    if not include_aliases:
+        CDE_df = CDE_df[CDE_df["Required"] != "Alias"]
+        CDE_df = CDE_df.reset_index(drop=True)
+        print(f"dropped Alias")
 
     # drop rows with no table name (i.e. ASAP_ids)
     CDE_df = CDE_df.loc[:, column_list]
     CDE_df = CDE_df.dropna(subset=["Table"])
     CDE_df = CDE_df.reset_index(drop=True)
     CDE_df = CDE_df.drop_duplicates()
-    if metadata_version in ["v3.2", "v3.2-beta", "v3.1", "v3", "v3.0", "v3.0-beta"]:
+
+    # force Shared_key to be int
+    if metadata_version in [
+        "v3.3",
+        "v3.2",
+        "v3.2-beta",
+        "v3.1",
+        "v3",
+        "v3.0",
+        "v3.0-beta",
+    ]:
         CDE_df["Shared_key"] = CDE_df["Shared_key"].fillna(0).astype(int)
     # force extraneous columns to be dropped.
-
     # CDE_df["Validation"] = CDE_df["Validation"].apply(sanitize_validation_string)
 
     return clean_cde_schema(CDE_df)
 
 
-def archive_CDE(metadata_version, resource_path: str | Path):
+def archive_CDE(
+    metadata_version, resource_path: str | Path, CDE_df: pd.DataFrame | None = None
+):
     """
     Archive CDE data to a CSV file
     """
-    CDE_df = read_CDE(metadata_version=metadata_version)
+    if CDE_df is None:
+        CDE_df = read_CDE(
+            metadata_version=metadata_version,
+            include_asap_ids=True,
+            include_aliases=True,
+        )
 
     resource_path = Path(resource_path)
     if not resource_path.exists():

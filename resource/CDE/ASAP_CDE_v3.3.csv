@@ -51,6 +51,8 @@ SAMPLE,ASAP_sample_id,ASAP Sample ID,Unique ID issued by ASAP CRN Cloud.,String,
 SAMPLE,ASAP_subject_id,ASAP Subject ID,Unique ID issued by ASAP CRN Cloud.,String,Assigned,can be assigned NULL for datasets where subject doesn't make sense,1
 SAMPLE,sample_id,Sample ID,"ID of each individual sample used in the study (e.g. cortex of anterior cingulate gyrus); if from the same brain several regions are included in the study, each region (i.e. each sample) has different ID and listed as a separate entry.",String,Required,,1
 SAMPLE,subject_id,Subject ID,Subject level ID for source of sample.,String,Required,,1
+SAMPLE,mouse_id,Mouse ID Alias,Used in place of subject_id for mouse studies.,String,Alias,,1
+SAMPLE,cell_id,Cell ID Alias,Used in place of subject_id for ipsc/in vitro studies.,String,Alias,,1
 SAMPLE,source_sample_id,Source Sample ID,ID provided by Brain bank or other source.,String,Required,,0
 SAMPLE,replicate,Replicate,"Indicator for replicates of the sample.  Replicates could be biological or tecnical.  Indicate biological replicates as capitalized ""Rep"" + replicated number (i.e. Rep1, Rep2, etc) and technical replicates with lowercase ""rep"" + replicate number (i.e., rep1, rep2 etc.)",String,Required,,0
 SAMPLE,replicate_count,Total Replicate Count,"Number of replicates of this sample.  Typically this will be 1, but if replicates have been collected indicate how many total.",Integer,Required,,1
@@ -183,6 +185,7 @@ CONDITION,ASAP_team_id,ASAP Team ID,Unique ID issued by ASAP CRN Cloud for each 
 CONDITION,intervention_aux_table,Intervention Table Auxilarry Information,Table which defines all experimental conditions for each sample,String,Optional,,0
 MOUSE,ASAP_mouse_id,ASAP Team ID,Unique ID issued by ASAP CRN Cloud.,String,Assigned,,1
 MOUSE,subject_id,The Subject ID,This will be a unique ID for the mouse and is alias for mouse_id below. Note: it is clearly wrong to call it subject_ but lets us use the same key as the SAMPLE table.,String,Required,,1
+MOUSE,mouse_id,Mouse ID Alias,Used in place of subject_id for mouse studies.,String,Alias,,1
 MOUSE,strain,Strain,Mouse strain details.,String,Required,,1
 MOUSE,sex,Sex,Sex of animal.,String,Required,"[""Male"",""Female""]",1
 MOUSE,age,Age,Age of animal in days.,Integer,Required,,0
@@ -191,6 +194,7 @@ MOUSE,ASAP_team_id,ASAP Team ID,Unique ID issued by ASAP CRN Cloud for each cont
 MOUSE,aux_table,Mouse Table Auxillary Information,"Table which defines additional mouse ""subject"" information.",String,Optional,,0
 SPATIAL,ASAP_sample_id,ASAP Sample ID,Unique ID issued by ASAP CRN Cloud.,String,Assigned,,1
 SPATIAL,sample_id,Sample ID,"ID of each individual sample used in the study (e.g. cortex of anterior cingulate gyrus); if from the same brain several regions are included in the study, each region (i.e. each sample) has different ID and listed as a separate entry.",String,Required,,1
+SPATIAL,mouse_id,Mouse ID Alias,Used in place of subject_id for mouse studies.,String,Alias,,1
 SPATIAL,geomx_config,GeoMx Config File,Config file (.ini) reference. Pipeline processing parameters that are used by the GeoMx NGS pipeline to assist in converting the FASTQ files to DCC files. It is from the GeoMx instrument study readout package. Leave blank if Visium. Files should be in /spatial.,String,Optional,,1
 SPATIAL,geomx_dsp_config,GeoMx DSP Config File,Config file (.pkc) reference. Leave blank if Visium. Files should be in /spatial.,String,Optional,,1
 SPATIAL,geomx_annotation_file,Geomx Annotation File,Reference to the lab worksheet (.xlsx) from the GeoMx instrument study readout package. Leave blank if Visium. Files should be in /spatial.,String,Optional,,0
@@ -202,6 +206,7 @@ SPATIAL,ASAP_dataset_id,ASAP Dataset ID,Unique ID issued by ASAP CRN Cloud for e
 SPATIAL,ASAP_team_id,ASAP Team ID,Unique ID issued by ASAP CRN Cloud for each contributing Team.,String,Assigned,,0
 CELL,ASAP_cell_id,ASAP Cell ID,Unique ID issued by ASAP CRN.,String,Assigned,,1
 CELL,subject_id,The Subject ID,This will be a unique ID for the cell source.  Note.is is clearly wrong to call it subject_ but lets us use the same key as the SAMPLE table.,String,Required,,1
+CELL,cell_id,Cell ID Alias,Used in place of subject_id for ipsc/in vitro studies.,String,Alias,,1
 CELL,cell_line,Cell Line Name,Name of cell-line or other source of in-vitro sample.,String,Required,,1
 CELL,perturbation,Perturbation,"Reference to any genetic peturbation performed. ""NA"" if none",String,Required,,1
 CELL,clone_level,Clone Level,Indication of what level of clone or sub-clone this in-vitro cell belongs to.  generation?,Enum,Required,['tbd'],0
