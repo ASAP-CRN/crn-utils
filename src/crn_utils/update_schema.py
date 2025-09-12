@@ -468,7 +468,7 @@ def updated_tables_v3_0tov3_1(tables: dict, STUDY_dataset_info: dict):
 
     # collect 'age_at_collection' from SUBJECT
 
-    if "age_at_collection" not in SAMPLE.columns:
+    if "age_at_collection" in SUBJECT.columns:
         SAMPLE["age_at_collection"] = SAMPLE["subject_id"].map(
             dict(zip(SUBJECT["subject_id"], SUBJECT["age_at_collection"]))
         )
@@ -482,13 +482,19 @@ def updated_tables_v3_0tov3_1(tables: dict, STUDY_dataset_info: dict):
         "PD": "PD",
         "Prodromal motor PD": "Prodromal",
         "Prodromal Motor PD": "Prodromal",
-        "Other neurological disorder": "Control",  # lee "Other"
+        # "Other neurological disorder": "Control",  # lee "Other"
         "Hemiparkinson/hemiatrophy syndrome": "PD",  # wood bulk...
         "Alzheimer's disease": "PD",
         "Other neurological disorder": "PD",  # hardy sn
     }
 
     SUBJECT["gp2_phenotype"] = SUBJECT["primary_diagnosis"].map(gp2_phenotype_mapper)
+    # HACK: for team Lee "Other neurological disorder" is actually "Control".  Look in "primary_diagnosis_text" for "Mild Cognitive Impairment"
+    SUBJECT.loc[
+        (SUBJECT["primary_diagnosis"] == "Other neurological disorder")
+        & (SUBJECT["primary_diagnosis_text"] == "Mild Cognitive Impairment"),
+        "gp2_phenotype",
+    ] = "Control"
 
     subj_id_condition_id = dict(zip(SUBJECT["subject_id"], SUBJECT["gp2_phenotype"]))
     SAMPLE["condition_id"] = SAMPLE["subject_id"].map(subj_id_condition_id)

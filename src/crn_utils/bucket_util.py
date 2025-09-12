@@ -83,9 +83,9 @@ def gsutil_cp(source, destination, directory=False):
     project = "dnastack-asap-parkinsons"
 
     if directory:
-        cmd = f"gsutil -u {project} cp -r '{source}' {destination}"
+        cmd = f"gsutil -u {project} cp -r '{source}' '{destination}'"
     else:
-        cmd = f"gsutil -u {project} cp '{source}' {destination}"
+        cmd = f"gsutil -u {project} cp '{source}' '{destination}'"
 
     # print(cmd)
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
@@ -183,7 +183,7 @@ def gsutil_rsync(source, destination):
 
     project = "dnastack-asap-parkinsons"
 
-    cmd = f"gsutil -u {project} -m rsync -d {source} {destination}"
+    cmd = f"gsutil -u {project} -m rsync -d -r '{source}' '{destination}'"
     # print(cmd)
 
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)

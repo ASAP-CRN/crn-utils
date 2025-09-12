@@ -261,6 +261,74 @@ def gen_raw_bucket_summary(
             print(f"No spatial files found for {dataset_name}")
 
 
+def gen_dev_bucket_summary(
+    raw_bucket_name: str, dl_path: Path, dataset_name: str, flatten: bool = False
+):
+
+    ## OTHER and everything else...
+    # create a list of the curated files in /artifacts
+
+    prefix = f"artifacts/**"
+    bucket_path = (
+        f"{raw_bucket_name.split('/')[-1]}"  # dev_bucket_name has gs:// prefix
+    )
+    artifacts = gsutil_ls2(bucket_path, prefix, project="dnastack-asap-parkinsons")
+    # drop empty strings, files that start with ".", and folders
+    artifact_files = [
+        f for f in artifacts if f != "" and Path(f).name[0] != "." and f[-1] != "/"
+    ]
+
+    if len(artifact_files) > 0:
+        bucket_files_md5 = get_md5_hashes(bucket_path, prefix)
+        artifact_files_df = pd.DataFrame(artifact_files, columns=["artifact_files"])
+
+        artifact_files_df["file_name"] = artifact_files_df["artifact_files"].apply(
+            lambda x: x.split("/")[-1]
+        )
+        artifact_files_df["bucket_md5"] = artifact_files_df["file_name"].map(
+            bucket_files_md5
+        )
+
+        artifact_files_df.to_csv(
+            dl_path / f"{dataset_name}-artifact_files.csv", index=False
+        )
+
+        # merge in md5s.
+        # dump md5s to file
+        with open(dl_path / f"{dataset_name}-raw_fastqs-md5s.json", "w") as f:
+            json.dump(bucket_files_md5, f)
+
+    else:
+        print(f"No artifact files found for {dataset_name}")
+
+    # create a list of the files in the raw_bucket/fastqs
+    prefix = "fastqs/*.fastq.gz" if flatten else "fastqs/**/*.fastq.gz"
+    bucket_path = (
+        f"{raw_bucket_name.split('/')[-1]}"  # dev_bucket_name has gs:// prefix
+    )
+    fastqs = gsutil_ls2(bucket_path, prefix, project="dnastack-asap-parkinsons")
+    raw_files = [f for f in fastqs if f != ""]
+
+    if len(raw_files) > 0:
+        # should just use the list of raw_files?
+        bucket_files_md5 = get_md5_hashes(bucket_path, prefix)
+        raw_files_df = pd.DataFrame(raw_files, columns=["raw_files"])
+
+        raw_files_df["file_name"] = raw_files_df["raw_files"].apply(
+            lambda x: x.split("/")[-1]
+        )
+        raw_files_df["bucket_md5"] = raw_files_df["file_name"].map(bucket_files_md5)
+        raw_files_df.to_csv(dl_path / f"{dataset_name}-raw_fastqs.csv", index=False)
+
+        # merge in md5s.
+        # dump md5s to file
+        with open(dl_path / f"{dataset_name}-raw_fastqs-md5s.json", "w") as f:
+            json.dump(bucket_files_md5, f)
+
+    else:
+        print(f"No spatial files found for {dataset_name}")
+
+
 def gen_spatial_bucket_summary(raw_bucket_name: str, dl_path: Path, dataset_name: str):
     if "cohort" in dataset_name:
         print(f"No raw bucket for cohort datasets: {dataset_name}")

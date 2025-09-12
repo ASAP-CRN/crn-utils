@@ -828,6 +828,11 @@ _brain_region_coder = {
     "Amygdala": "AMG",
     "Substantia_Nigra ": "SN",
     "Substantia_Nigra": "SN",
+    "SND": "SN",  # team edwards SN sub-nuclei and adjascent regions
+    "SNV": "SN",  # team edwards SN sub-nuclei and adjascent regions
+    "VTA": "SN",  # team edwards SN sub-nuclei and adjascent regions
+    "SNM": "SN",  # team edwards SN sub-nuclei and adjascent regions
+    "SNL": "SN",  # team edwards SN sub-nuclei and adjascent regions
     "Prefrontal Cortex": "PFC",
     "Prefrontal cortex": "PFC",
     "inferior parietal lobe": "IPL",
