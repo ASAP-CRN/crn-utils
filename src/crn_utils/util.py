@@ -17,7 +17,7 @@ __all__ = [
     "prep_table",
     "load_tables",
     "export_meta_tables",
-    "create_metadata_package",
+    # "create_metadata_package",
     "get_dataset_version",
     "get_release_version",
     "get_cde_version",
@@ -437,7 +437,9 @@ def export_meta_tables(dfs, export_path):
     return 0
 
 
-def create_metadata_package(metadata_source: Path, package_destination: Path):
+# depricate (there is a create_metadata_package in release_util.py) and this is no longer used
+# TODO: remove
+def _create_metadata_package(metadata_source: Path, package_destination: Path):
     """
     Move the metadata folders in the metadata_source to the package_destination
 

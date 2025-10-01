@@ -3,6 +3,7 @@ __all__ = [
     "PMDBS_TABLES",
     "CELL_TABLES",
     "IPSC_TABLES",
+    "PROTEOMICS_TABLES",
 ]
 
 MOUSE_TABLES = [
@@ -39,3 +40,11 @@ CELL_TABLES = [
 ]
 
 IPSC_TABLES = CELL_TABLES.copy()
+
+PROTEOMICS_TABLES = [
+    "STUDY",
+    "SAMPLE",
+    "PROTEOMICS",
+    "CONDITION",
+    "DATA",
+]

@@ -62,6 +62,53 @@ def create_metadata_package(
     write_version(schema_version, final_metadata_path / "cde_version")
 
 
+def prep_multiplexed_metadata(
+    ds_path: Path,
+    schema_version: str,
+    map_path: Path,
+    suffix: str,
+    spatial: bool = False,
+    flatten: bool = False,
+    map_only: bool = False,
+):
+"""
+"""
+    pass
+
+
+
+def prep_invitro_metadata(
+    ds_path: Path,
+    schema_version: str,
+    map_path: Path,
+    suffix: str,
+    spatial: bool = False,
+    flatten: bool = False,
+    map_only: bool = False,
+):
+
+"""
+"""
+
+    pass
+
+
+def prep_proteomics_metadata(
+    ds_path: Path,
+    schema_version: str,
+    map_path: Path,
+    suffix: str,
+    spatial: bool = False,
+    flatten: bool = False,
+    map_only: bool = False,
+):
+
+"""
+
+"""
+    pass
+
+
 def prep_sc_release_metadata(
     ds_path: Path,
     schema_version: str,
@@ -71,6 +118,9 @@ def prep_sc_release_metadata(
     source: str = "pmdbs",
     flatten: bool = False,
 ):
+"""
+"""
+
 
     if source == "pmdbs":
         prep_release_metadata_pmdbs(

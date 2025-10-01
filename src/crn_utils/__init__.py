@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-__version__ = "0.1.0"
+__version__ = "0.2.1"
 
 from .asap_ids import *
 from .bucket_util import *
@@ -17,3 +17,6 @@ from .constants import *
 
 from .validate import *
 from .file_metadata import *
+from .proteomics import *
+from .release_util import *
+from .doi import *
