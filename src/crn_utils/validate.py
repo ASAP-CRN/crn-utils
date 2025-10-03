@@ -429,7 +429,7 @@ def calculate_missingness(
     thresh_str = f"{100*missing_threshold:.1f}%"
 
     report += f"""\n
-### Overall Missing Fields (\> {thresh_str} missingness)
+### Overall Missing Fields (\\> {thresh_str} missingness)
 """
 
     tmp1 = fmtlist(required_missing)
@@ -448,7 +448,7 @@ _Missing **Optional** fields_ {tmp2}
 **Optional fields:**
 {optional_missingness_by_ds.to_markdown()}    
 
-### Missing Fields by Dataset (\> {thresh_str} missingness):
+### Missing Fields by Dataset (\\> {thresh_str} missingness):
 
 _Missing **Required** fields_
 
