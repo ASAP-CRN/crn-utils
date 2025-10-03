@@ -71,10 +71,8 @@ def prep_multiplexed_metadata(
     flatten: bool = False,
     map_only: bool = False,
 ):
-"""
-"""
+    """ """
     pass
-
 
 
 def prep_invitro_metadata(
@@ -86,9 +84,7 @@ def prep_invitro_metadata(
     flatten: bool = False,
     map_only: bool = False,
 ):
-
-"""
-"""
+    """ """
 
     pass
 
@@ -102,10 +98,7 @@ def prep_proteomics_metadata(
     flatten: bool = False,
     map_only: bool = False,
 ):
-
-"""
-
-"""
+    """ """
     pass
 
 
@@ -118,9 +111,7 @@ def prep_sc_release_metadata(
     source: str = "pmdbs",
     flatten: bool = False,
 ):
-"""
-"""
-
+    """ """
 
     if source == "pmdbs":
         prep_release_metadata_pmdbs(
