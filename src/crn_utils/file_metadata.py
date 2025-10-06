@@ -35,7 +35,6 @@ __all__ = [
     "get_fastqs_df",
     "get_spatial_df",
     "add_bucket_md5",
-    "check_md5s",
 ]
 
 # define collections, collection names and datasets

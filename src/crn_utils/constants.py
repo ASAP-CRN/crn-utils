@@ -47,4 +47,5 @@ PROTEOMICS_TABLES = [
     "PROTEOMICS",
     "CONDITION",
     "DATA",
+    "SDRF",
 ]

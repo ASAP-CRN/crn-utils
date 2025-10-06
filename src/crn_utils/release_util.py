@@ -34,7 +34,7 @@ from .doi import update_study_table_with_doi
 
 
 __all__ = [
-    "prep_sc_release_metadata",
+    "prep_release_metadata",
     # "prep_release_metadata_mouse",
     # "prep_release_metadata_pmdbs",
     "get_crn_release_metadata",
@@ -102,7 +102,7 @@ def prep_proteomics_metadata(
     pass
 
 
-def prep_sc_release_metadata(
+def prep_release_metadata(
     ds_path: Path,
     schema_version: str,
     map_path: Path,
@@ -111,7 +111,13 @@ def prep_sc_release_metadata(
     source: str = "pmdbs",
     flatten: bool = False,
 ):
-    """ """
+    """
+    prepare the metadata for a release.  This includes:
+    - mapping to ASAP IDs
+    - adding file metadata
+    - updating the mappers
+
+    """
 
     if source == "pmdbs":
         prep_release_metadata_pmdbs(
@@ -119,6 +125,11 @@ def prep_sc_release_metadata(
         )
     elif source == "mouse":
         prep_release_metadata_mouse(
+            ds_path, schema_version, map_path, suffix, spatial, flatten
+        )
+
+    elif source in ["cell", "invitro", "ipsc"]:
+        prep_release_metadata_cell(
             ds_path, schema_version, map_path, suffix, spatial, flatten
         )
     else:
@@ -869,6 +880,7 @@ _brain_region_coder = {
     "Amygdala": "AMG",
     "Substantia_Nigra ": "SN",
     "Substantia_Nigra": "SN",
+    "AMY": "AMG",  # team Jakobsson
     "SND": "SN",  # team edwards SN sub-nuclei and adjascent regions
     "SNV": "SN",  # team edwards SN sub-nuclei and adjascent regions
     "VTA": "SN",  # team edwards SN sub-nuclei and adjascent regions
