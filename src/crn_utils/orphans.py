@@ -432,3 +432,54 @@ def make_minor_manifest_tables(
 #     args = parser.parse_args()
 
 #     make_manifest_tables(args.release_version, args.root_path)
+
+
+#####################
+# asap_ids orphans
+#####################
+
+
+def generate_mouse_ids(
+    mouseid_mapper: dict, subject_df: pd.DataFrame, source: str = "mouse"
+):
+    """
+    Generate ASAP_subject_ids for mouse subjects.
+
+    Args:
+        mouseid_mapper (dict): Existing subject ID mapper
+        subject_df (pd.DataFrame): DataFrame containing subject information
+        source (str): Source identifier for the IDs
+
+    Returns:
+        dict: Updated subject ID mapper
+    """
+    # Initialize the mapper if it's None
+    if mouseid_mapper is None:
+        mouseid_mapper = {}
+
+    # Make a copy to avoid modifying the original
+    mapper = mouseid_mapper.copy()
+
+    # Get the next available ID number
+    existing_ids = [
+        id for id in mapper.values() if id.startswith(f"ASAP_{source.upper()}_")
+    ]
+    if existing_ids:
+        # Extract numbers from existing IDs and find the max
+        max_num = (
+            max([int(id.split("_")[-1]) for id in existing_ids]) if existing_ids else 0
+        )
+        next_num = max_num + 1
+    else:
+        next_num = 1
+
+    # Process each subject
+    for _, row in subject_df.iterrows():
+        subject_id = row.get("subject_id")
+        if subject_id and subject_id not in mapper:
+            # Generate new ID
+            asap_id = f"ASAP_{source.upper()}_{next_num:06d}"
+            mapper[subject_id] = asap_id
+            next_num += 1
+
+    return mapper

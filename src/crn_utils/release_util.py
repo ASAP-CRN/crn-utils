@@ -35,9 +35,6 @@ from .doi import update_study_table_with_doi
 
 __all__ = [
     "prep_release_metadata",
-    # "prep_release_metadata_mouse",
-    # "prep_release_metadata_pmdbs",
-    "get_crn_release_metadata",
     "load_and_process_table",
     "process_schema",
     "create_metadata_package",
@@ -60,33 +57,6 @@ def create_metadata_package(
     # export_meta_tables(dfs, metadata_path)
     write_version(schema_version, metadata_path / "cde_version")
     write_version(schema_version, final_metadata_path / "cde_version")
-
-
-def prep_multiplexed_metadata(
-    ds_path: Path,
-    schema_version: str,
-    map_path: Path,
-    suffix: str,
-    spatial: bool = False,
-    flatten: bool = False,
-    map_only: bool = False,
-):
-    """ """
-    pass
-
-
-def prep_invitro_metadata(
-    ds_path: Path,
-    schema_version: str,
-    map_path: Path,
-    suffix: str,
-    spatial: bool = False,
-    flatten: bool = False,
-    map_only: bool = False,
-):
-    """ """
-
-    pass
 
 
 def prep_proteomics_metadata(
@@ -134,6 +104,119 @@ def prep_release_metadata(
         )
     else:
         raise ValueError(f"Unknown source {source}")
+
+
+def prep_release_metadata_cell(
+    ds_path: Path,
+    schema_version: str,
+    map_path: Path,
+    suffix: str,
+    spatial: bool = False,
+    flatten: bool = False,
+    map_only: bool = False,
+):
+    # source
+    # spatial
+
+    dataset_name = ds_path.name
+    print(f"release_util: Processing {ds_path.name}")
+    ds_parts = dataset_name.split("-")
+    team = ds_parts[0]
+    source = ds_parts[1]
+    short_dataset_name = "-".join(ds_parts[2:])
+    raw_bucket_name = f"asap-raw-team-{team}-{source}-{short_dataset_name}"
+
+    visium = "geomx" not in dataset_name
+
+    CDE = read_CDE(schema_version)
+    asap_ids_df = read_CDE_asap_ids()
+    asap_ids_schema = asap_ids_df[["Table", "Field"]]
+
+    # # %%
+    datasetid_mapper, mouseid_mapper, sampleid_mapper = load_cell_id_mappers(
+        map_path, suffix
+    )
+
+    # ds_path.mkdir(parents=True, exist_ok=True)
+    mdata_path = ds_path / "metadata" / schema_version
+    tables = [
+        table
+        for table in mdata_path.iterdir()
+        if table.is_file() and table.suffix == ".csv"
+    ]
+
+    req_tables = MOUSE_TABLES
+    if spatial:
+        req_tables.append("SPATIAL")
+    table_names = [table.stem for table in tables if table.stem in req_tables]
+
+    dfs = load_tables(mdata_path, table_names)
+
+    if not map_only:
+        datasetid_mapper, mouseid_mapper, sampleid_mapper = update_mouse_id_mappers(
+            dfs["MOUSE"],
+            dfs["SAMPLE"],
+            dataset_name,
+            datasetid_mapper,
+            mouseid_mapper,
+            sampleid_mapper,
+        )
+
+    dfs = update_mouse_meta_tables_with_asap_ids(
+        dfs,
+        dataset_name,
+        asap_ids_schema,
+        datasetid_mapper,
+        mouseid_mapper,
+        sampleid_mapper,
+        table_names,
+    )
+
+    # TODO: need to make this read an env variable or something safe.
+    #### CREATE file metadata summaries
+    key_file_path = Path.home() / f"Projects/ASAP/{team}-credentials.json"
+    res = authenticate_with_service_account(key_file_path)
+
+    file_metadata_path = ds_path / "file_metadata"
+    if not file_metadata_path.exists():
+        file_metadata_path.mkdir(parents=True, exist_ok=True)
+
+    gen_raw_bucket_summary(
+        raw_bucket_name, file_metadata_path, dataset_name, flatten=flatten
+    )
+
+    make_file_metadata(ds_path, file_metadata_path, dfs["DATA"], spatial=spatial)
+
+    if spatial:
+        gen_spatial_bucket_summary(raw_bucket_name, file_metadata_path, dataset_name)
+
+    dfs["STUDY"] = update_study_table_with_doi(dfs["STUDY"], ds_path)
+    dfs["DATA"] = update_data_table_with_gcp_uri(dfs["DATA"], ds_path)
+    if spatial:
+
+        dfs["SPATIAL"] = update_spatial_table_with_gcp_uri(
+            dfs["SPATIAL"], ds_path, visium=visium
+        )
+
+    # HACK:
+    # need to change file_metadata so artifacts.csv and (eventually curated_files.csv) point to curated bucket
+
+    # export the tables to the metadata directory in a release subdirectory
+    out_dir = ds_path / "metadata/release"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    export_meta_tables(dfs, out_dir)
+    write_version(schema_version, out_dir / "cde_version")
+
+    if not map_only:
+        export_map_path = map_path  # root_path / "asap-ids/temp"
+        export_mouse_id_mappers(
+            export_map_path,
+            suffix,
+            datasetid_mapper,
+            mouseid_mapper,
+            sampleid_mapper,
+        )
 
 
 def prep_release_metadata_mouse(
@@ -373,180 +456,6 @@ def prep_release_metadata_pmdbs(
             gp2id_mapper,
             sourceid_mapper,
         )
-
-
-def get_crn_release_metadata(
-    ds_path: Path,
-    schema_version: str,
-    map_path: Path,
-    suffix: str,
-    spatial: bool = False,
-    source: str = "pmdbs",
-):
-    """
-    only maps by default
-    """
-
-    if source == "pmdbs":
-        dfs = get_release_metadata_pmdbs(
-            ds_path, schema_version, map_path, suffix, spatial
-        )
-    elif source == "mouse":
-        dfs = get_release_metadata_mouse(
-            ds_path, schema_version, map_path, suffix, spatial
-        )
-
-    elif source == "cell":
-        # prep_release_metadata_cell(
-        #     ds_path, schema_version, map_path, suffix, spatial, flatten, map_only
-        # )
-        print(f"WARNING.. cell source not implimented")
-        return {}
-    else:
-        raise ValueError(f"Unknown source {source}")
-
-    return dfs
-
-
-def get_release_metadata_mouse(
-    ds_path: Path,
-    schema_version: str,
-    map_path: Path,
-    suffix: str,
-    spatial: bool = False,
-) -> dict:
-    # source
-    # spatial
-
-    dataset_name = ds_path.name
-    print(f"release_util: Processing {ds_path.name}")
-    ds_parts = dataset_name.split("-")
-    team = ds_parts[0]
-    source = ds_parts[1]
-    short_dataset_name = "-".join(ds_parts[2:])
-    raw_bucket_name = f"asap-raw-team-{team}-{source}-{short_dataset_name}"
-
-    visium = "geomx" not in dataset_name
-
-    CDE = read_CDE(schema_version)
-    asap_ids_df = read_CDE_asap_ids()
-    asap_ids_schema = asap_ids_df[["Table", "Field"]]
-
-    # # %%
-    datasetid_mapper, mouseid_mapper, sampleid_mapper = load_mouse_id_mappers(
-        map_path, suffix
-    )
-
-    # ds_path.mkdir(parents=True, exist_ok=True)
-    mdata_path = ds_path / "metadata" / schema_version
-    tables = [
-        table
-        for table in mdata_path.iterdir()
-        if table.is_file() and table.suffix == ".csv"
-    ]
-
-    req_tables = MOUSE_TABLES
-    if spatial:
-        req_tables.append("SPATIAL")
-    table_names = [table.stem for table in tables if table.stem in req_tables]
-
-    dfs = load_tables(mdata_path, table_names)
-
-    dfs = update_mouse_meta_tables_with_asap_ids(
-        dfs,
-        dataset_name,
-        asap_ids_schema,
-        datasetid_mapper,
-        mouseid_mapper,
-        sampleid_mapper,
-        table_names,
-    )
-
-    dfs["STUDY"] = update_study_table_with_doi(dfs["STUDY"], ds_path)
-    dfs["DATA"] = update_data_table_with_gcp_uri(dfs["DATA"], ds_path)
-    if spatial:
-        dfs["SPATIAL"] = update_spatial_table_with_gcp_uri(
-            dfs["SPATIAL"], ds_path, visium=visium
-        )
-
-    return dfs
-
-
-def get_release_metadata_pmdbs(
-    ds_path: Path,
-    schema_version: str,
-    map_path: Path,
-    suffix: str,
-    spatial: bool = False,
-) -> dict:
-
-    # source
-    # spatial
-
-    dataset_name = ds_path.name
-    print(f"release_util: Processing {ds_path.name}")
-    ds_parts = dataset_name.split("-")
-    team = ds_parts[0]
-    source = ds_parts[1]
-    short_dataset_name = "-".join(ds_parts[2:])
-    raw_bucket_name = f"asap-raw-team-{team}-{source}-{short_dataset_name}"
-
-    visium = "geomx" not in dataset_name
-
-    CDE = read_CDE(schema_version)
-    asap_ids_df = read_CDE_asap_ids()
-    asap_ids_schema = asap_ids_df[["Table", "Field"]]
-
-    # # %%
-    (
-        datasetid_mapper,
-        subjectid_mapper,
-        sampleid_mapper,
-        gp2id_mapper,
-        sourceid_mapper,
-    ) = load_pmdbs_id_mappers(map_path, suffix)
-
-    # ds_path.mkdir(parents=True, exist_ok=True)
-    if schema_version == "v2.1":
-        mdata_path = ds_path / "metadata" / "v2"
-    else:
-        mdata_path = ds_path / "metadata" / schema_version
-
-    tables = [
-        table
-        for table in mdata_path.iterdir()
-        if table.is_file() and table.suffix == ".csv"
-    ]
-
-    req_tables = PMDBS_TABLES
-    if spatial:
-        req_tables.append("SPATIAL")
-
-    table_names = [table.stem for table in tables if table.stem in req_tables]
-
-    dfs = load_tables(mdata_path, table_names)
-
-    dfs = update_pmdbs_meta_tables_with_asap_ids(
-        dfs,
-        dataset_name,
-        asap_ids_schema,
-        datasetid_mapper,
-        subjectid_mapper,
-        sampleid_mapper,
-        gp2id_mapper,
-        sourceid_mapper,
-        pmdbs_tables=table_names,
-    )
-
-    dfs["STUDY"] = update_study_table_with_doi(dfs["STUDY"], ds_path)
-
-    dfs["DATA"] = update_data_table_with_gcp_uri(dfs["DATA"], ds_path)
-    if spatial:
-        dfs["SPATIAL"] = update_spatial_table_with_gcp_uri(
-            dfs["SPATIAL"], ds_path, visium=visium
-        )
-
-    return dfs
 
 
 def load_and_process_table(
