@@ -965,12 +965,14 @@ def generate_sample_ids(
 ###############################################
 ### CELLs
 def load_cell_id_mappers(map_path, suffix):
-    source = "CELL"
+    source = "INVITRO"
     prototypes = ["dataset", "cell", "samp"]
     outputs = ()
     for prot in prototypes:
         if prot == "dataset":
             fname = f"ASAP_{prot}_{suffix}.json"
+        elif prot == "cell":
+            fname = f"ASAP_{source}_{suffix}.json"
         else:
             fname = f"ASAP_{source}_{prot}_{suffix}.json"
 
@@ -1006,25 +1008,60 @@ def update_cell_id_mappers(
     else:
         cell_col = "subject_id"
 
-
     cell_ids_df = cell_df[[cell_col]]
 
     # add ASAP_subject_id to the SUBJECT tables
     cellid_mapper = generate_cell_ids(cellid_mapper, cell_ids_df)
-
-    print(f"cellid_mapper: {mouseid_mapper}")
 
     sample_ids_df = sample_df[["sample_id", cell_col]]
     sampleid_mapper = generate_cell_sample_ids(
         cellid_mapper, sampleid_mapper, sample_ids_df
     )
 
-    return datasetid_mapper, cellid_mapper, cellid_mapper
+    return datasetid_mapper, cellid_mapper, sampleid_mapper
 
-# TODO: refactor.  the abstraction is set up so a single function toggled on source should work for 
-#.  cell or mouse.  
-def export_cell_id_mappers(map_path, suffix, datasetid_mapper, cellid_mapper):
-    source = "CELL"
+
+# isolate generation of the IDs and adding to mappers from updating the tables.
+def update_cell_id_mappers(
+    cell_df: pd.DataFrame,
+    sample_df: pd.DataFrame,
+    long_dataset_name: str,
+    datasetid_mapper: dict,
+    cellid_mapper: dict,
+    sampleid_mapper: dict,
+):
+    """
+    read in the CELL (cell_df) and SAMPLE (sample_df) data tables, generate new ids, update the id_mappers
+
+    return updated id_mappers
+    """
+    _, datasetid_mapper = generate_asap_dataset_id(datasetid_mapper, long_dataset_name)
+
+    # subject_id is the alias for cell_id
+    if "subject_id" not in cell_df.columns:
+        cell_col = "cell_id"
+    else:
+        cell_col = "subject_id"
+
+    cell_ids_df = cell_df[[cell_col]]
+
+    # add ASAP_subject_id to the SUBJECT tables
+    cellid_mapper = generate_cell_ids(cellid_mapper, cell_ids_df)
+
+    sample_ids_df = sample_df[["sample_id", cell_col]]
+    sampleid_mapper = generate_cell_sample_ids(
+        cellid_mapper, sampleid_mapper, sample_ids_df
+    )
+
+    return datasetid_mapper, cellid_mapper, sampleid_mapper
+
+
+# TODO: refactor.  the abstraction is set up so a single function toggled on source should work for
+# .  cell or mouse.
+def export_cell_id_mappers(
+    map_path, suffix, datasetid_mapper, cellid_mapper, sampleid_mapper
+):
+    source = "INVITRO"
     sample_mapper_path = map_path / f"ASAP_{source}_samp_{suffix}.json"
     cell_mapper_path = map_path / f"ASAP_{source}_{suffix}.json"
     dataset_mapper_path = map_path / f"ASAP_dataset_{suffix}.json"
@@ -1058,17 +1095,13 @@ def generate_cell_sample_ids(
             f"found {len(samp_intersec)} sample_id's that have already been mapped!! BEWARE a sample_id naming collision!! If you are just reprocessing tables, it shoud be okay."
         )
 
-
     # subject_id is the alias for cell_id
     if "subject_id" not in sample_df.columns:
         cell_col = "cell_id"
     else:
         cell_col = "subject_id"
 
-
-    to_map = sample_df[
-        ~sample_df[cell_col].apply(lambda x: x in samp_intersec)
-    ].copy()
+    to_map = sample_df[~sample_df[cell_col].apply(lambda x: x in samp_intersec)].copy()
 
     if not bool(to_map.shape[0]):
         print(
@@ -1076,18 +1109,16 @@ def generate_cell_sample_ids(
         )
         return ud_sampleid_mapper
 
-    uniq_cell = to_map[cell_col.unique()
+    uniq_cell = to_map[cell_col].unique()
     # check for subject_id collisions in the sampleid_mapper
     if cell_intersec := set(uniq_cell) & set(ud_sampleid_mapper.values()):
-        print(
-            f"found {len(cell_intersec)} cell_id collisions in the cellid_mapper"
-        )
+        print(f"found {len(cell_intersec)} cell_id collisions in the cellid_mapper")
 
     df_chunks = []
     for cell_id in uniq_cell:
 
-        df_subset = to_map[to_map[cell_col] == subj_id].copy()
-        asap_id = mouseid_mapper[cell_id]
+        df_subset = to_map[to_map[cell_col] == cell_id].copy()
+        asap_id = cellid_mapper[cell_id]
 
         dups = (
             df_subset[df_subset.duplicated(keep=False, subset=["sample_id"])]
@@ -1103,11 +1134,11 @@ def generate_cell_sample_ids(
         )
 
         asap_id = cellid_mapper[cell_id]
-        if bool(ud_cellid_mapper):
+        if bool(ud_sampleid_mapper):
             # see if there are any samples already with this asap_id
             sns = [
                 get_sampr(v)
-                for v in ud_cellid_mapper.values()
+                for v in ud_sampleid_mapper.values()
                 if get_id(v) == asap_id
             ]
             if len(sns) > 0:
@@ -1183,15 +1214,16 @@ def generate_cell_ids(cellid_mapper: dict, cell_df: pd.DataFrame) -> dict:
             max([int(id.split("_")[-1]) for id in existing_ids]) if existing_ids else 0
         )
         next_num = max_num + 1
+        print(f"found {len(existing_ids)} existing IDs. starting from {next_num}")
     else:
         next_num = 1
+        print(f"no existing IDs found. starting from {next_num}")
 
     # subject_id is the alias for cell_id
     if "subject_id" not in cell_df.columns:
         cell_col = "cell_id"
     else:
         cell_col = "subject_id"
-
 
     # Process each subject
     for _, row in cell_df.iterrows():
@@ -1205,6 +1237,7 @@ def generate_cell_ids(cellid_mapper: dict, cell_df: pd.DataFrame) -> dict:
 
     return mapper
 
+
 def update_cell_meta_tables_with_asap_ids(
     dfs: dict,
     long_dataset_name: str,
@@ -1214,7 +1247,6 @@ def update_cell_meta_tables_with_asap_ids(
     sampleid_mapper: dict,
     cell_tables: list | None = None,
 ) -> dict:
-
     """
     process the metadata tables to add ASAP_IDs to the tables with the mappers
 
@@ -1237,7 +1269,7 @@ def update_cell_meta_tables_with_asap_ids(
     ]["Table"].to_list()
     ASAP_subject_id_tables = asap_ids_schema[
         (asap_ids_schema["Field"] == "ASAP_subject_id")
-        | (asap_ids_schema["Field"] == "ASAP_mouse_id")
+        | (asap_ids_schema["Field"] == "ASAP_cell_id")
     ]["Table"].to_list()
 
     DATASET_ID = datasetid_mapper[long_dataset_name]
@@ -1247,8 +1279,6 @@ def update_cell_meta_tables_with_asap_ids(
     else:  # this should NEVER happen
         print(f"STUDY table not found in dataset {long_dataset_name}")
         TEAM_ID = "TEAM_" + long_dataset_name.split("-")[0].upper()
-
-
 
     # now we add the IDs
     for tab in cell_tables:
@@ -1260,15 +1290,15 @@ def update_cell_meta_tables_with_asap_ids(
 
             # first do the ASAP_subject_id
             if "subject_id" in dfs[tab].columns:
-                ASAP_subject_id = dfs[tab]["subject_id"].map(mouseid_mapper)
+                ASAP_cell_id = dfs[tab]["subject_id"].map(cellid_mapper)
             # elif "mouse_id" in dfs[tab].columns:
-            #     ASAP_subject_id = dfs[tab]["mouse_id"].map(mouseid_mapper)
+            #     ASAP_subject_id = dfs[tab]["mouse_id"].map(cellid_mapper)
             elif "cell_id" in dfs[tab].columns:
-                ASAP_subject_id = dfs[tab]["cell_id"].map(mouseid_mapper)                
+                ASAP_cell_id = dfs[tab]["cell_id"].map(cellid_mapper)
             else:
-                print(f"subject_id or mouse_id not found in {tab}")
+                print(f"subject_id or cell_id not found in {tab}")
                 continue
-            dfs[tab].insert(0, "ASAP_mouse_id", ASAP_subject_id)
+            dfs[tab].insert(0, "ASAP_cell_id", ASAP_cell_id)
 
         if tab in ASAP_sample_id_tables:
             # second do the ASAP_sample_id
@@ -1281,6 +1311,115 @@ def update_cell_meta_tables_with_asap_ids(
         dfs[tab].insert(0, "ASAP_team_id", TEAM_ID)
 
     return dfs
+
+
+###############################################
+### MULTIPLEX specific functions
+###############################################
+# should we map the subject_id to PMDBS or create temporary MULTIPLEX?
+
+
+### MULTIPLEX
+def load_multiplex_id_mappers(map_path, suffix):
+    source = "MULTIPLEX"
+
+    prototypes = ["dataset", "multiplex" "subj", "gp2", "sourcesubj"]
+    outputs = ()
+    for prot in prototypes:
+        if prot == "dataset":
+            fname = f"ASAP_{prot}_{suffix}.json"
+        else:
+            fname = f"ASAP_{source}_{prot}_{suffix}.json"
+
+        try:
+            id_mapper = load_id_mapper(map_path / fname)
+        except FileNotFoundError:
+            id_mapper = {}
+            print(f"{map_path / fname} not found... starting from scratch")
+        outputs += (id_mapper,)
+
+    return outputs
+
+
+def export_multiplex_id_mappers(
+    map_path,
+    suffix,
+    datasetid_mapper,
+    subjectid_mapper,
+    multiplexid_mapper,
+    gp2id_mapper,
+    sourceid_mapper,
+):
+    multiplex_mapper_path = map_path / f"ASAP_MULTIPLEX_samp_{suffix}.json"
+    write_id_mapper(multiplexid_mapper, multiplex_mapper_path)
+
+    source = "PMDBS"
+    subject_mapper_path = map_path / f"ASAP_{source}_subj_{suffix}.json"
+    gp2_mapper_path = map_path / f"ASAP_{source}_gp2_{suffix}.json"
+    source_mapper_path = map_path / f"ASAP_{source}_sourcesubj_{suffix}.json"
+    dataset_mapper_path = map_path / f"ASAP_dataset_{suffix}.json"
+    # update the dataset_id_mapper
+    write_id_mapper(datasetid_mapper, dataset_mapper_path)
+    write_id_mapper(subjectid_mapper, subject_mapper_path)
+    write_id_mapper(gp2id_mapper, gp2_mapper_path)
+    write_id_mapper(sourceid_mapper, source_mapper_path)
+    # print(f"wrote updated PMDBS ID mappers")
+
+
+# isolate generation of the IDs and adding to mappers from updating the tables.
+def update_multiplex_id_mappers(
+    clinpath_df,
+    sample_df,
+    long_dataset_name,
+    datasetid_mapper,
+    subjectid_mapper,
+    multiplexid_mapper,
+    gp2id_mapper,
+    sourceid_mapper,
+):
+    """
+    read in the CLINPATH and SAMPLE data tables, generate new ids, update the id_mappers
+
+    return updated id_mappers
+    """
+
+    _, datasetid_mapper = generate_asap_dataset_id(datasetid_mapper, long_dataset_name)
+
+    subjec_ids_df = clinpath_df[["subject_id", "source_subject_id", "GP2_id"]]
+
+    # add ASAP_subject_id to the SUBJECT tables
+    output = generate_human_subject_ids(
+        subjectid_mapper, gp2id_mapper, sourceid_mapper, subjec_ids_df
+    )
+    subjectid_mapper, gp2id_mapper, sourceid_mapper = output
+
+    sample_ids_df = sample_df[["sample_id", "subject_id", "source_sample_id"]]
+    sampleid_mapper = generate_human_sample_ids(
+        subjectid_mapper, sampleid_mapper, sample_ids_df
+    )
+
+    return (
+        datasetid_mapper,
+        subjectid_mapper,
+        sampleid_mapper,
+        gp2id_mapper,
+        sourceid_mapper,
+    )
+
+
+# TODO: refactor.  the abstraction is set up so a single function toggled on source should work for
+# .  cell or mouse.
+def export_multiplex_id_mappers(
+    map_path, suffix, datasetid_mapper, cellid_mapper, sampleid_mapper
+):
+    source = "INVITRO"
+    sample_mapper_path = map_path / f"ASAP_{source}_samp_{suffix}.json"
+    cell_mapper_path = map_path / f"ASAP_{source}_{suffix}.json"
+    dataset_mapper_path = map_path / f"ASAP_dataset_{suffix}.json"
+    # update the dataset_id_mapper
+    write_id_mapper(datasetid_mapper, dataset_mapper_path)
+    write_id_mapper(cellid_mapper, cell_mapper_path)
+    write_id_mapper(sampleid_mapper, sample_mapper_path)
 
 
 # REDACT API for now...
