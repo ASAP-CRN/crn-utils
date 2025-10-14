@@ -34,10 +34,7 @@ from .doi import update_study_table_with_doi
 
 
 __all__ = [
-    "prep_sc_release_metadata",
-    # "prep_release_metadata_mouse",
-    # "prep_release_metadata_pmdbs",
-    "get_crn_release_metadata",
+    "prep_release_metadata",
     "load_and_process_table",
     "process_schema",
     "create_metadata_package",
@@ -45,6 +42,7 @@ __all__ = [
     "get_stat_tabs_mouse",
     "get_stats_table",
     "get_cohort_stats_table",
+    "get_crn_release_metadata",
 ]
 
 
@@ -62,33 +60,6 @@ def create_metadata_package(
     write_version(schema_version, final_metadata_path / "cde_version")
 
 
-def prep_multiplexed_metadata(
-    ds_path: Path,
-    schema_version: str,
-    map_path: Path,
-    suffix: str,
-    spatial: bool = False,
-    flatten: bool = False,
-    map_only: bool = False,
-):
-    """ """
-    pass
-
-
-def prep_invitro_metadata(
-    ds_path: Path,
-    schema_version: str,
-    map_path: Path,
-    suffix: str,
-    spatial: bool = False,
-    flatten: bool = False,
-    map_only: bool = False,
-):
-    """ """
-
-    pass
-
-
 def prep_proteomics_metadata(
     ds_path: Path,
     schema_version: str,
@@ -102,7 +73,7 @@ def prep_proteomics_metadata(
     pass
 
 
-def prep_sc_release_metadata(
+def prep_release_metadata(
     ds_path: Path,
     schema_version: str,
     map_path: Path,
@@ -111,7 +82,13 @@ def prep_sc_release_metadata(
     source: str = "pmdbs",
     flatten: bool = False,
 ):
-    """ """
+    """
+    prepare the metadata for a release.  This includes:
+    - mapping to ASAP IDs
+    - adding file metadata
+    - updating the mappers
+
+    """
 
     if source == "pmdbs":
         prep_release_metadata_pmdbs(
@@ -121,8 +98,119 @@ def prep_sc_release_metadata(
         prep_release_metadata_mouse(
             ds_path, schema_version, map_path, suffix, spatial, flatten
         )
+
+    elif source in ["cell", "invitro", "ipsc"]:
+        prep_release_metadata_cell(
+            ds_path, schema_version, map_path, suffix, spatial, flatten
+        )
     else:
         raise ValueError(f"Unknown source {source}")
+
+
+def prep_release_metadata_cell(
+    ds_path: Path,
+    schema_version: str,
+    map_path: Path,
+    suffix: str,
+    spatial: bool = False,
+    flatten: bool = False,
+    map_only: bool = False,
+):
+    # source
+    # spatial
+
+    dataset_name = ds_path.name
+    print(f"release_util: Processing {ds_path.name}")
+    ds_parts = dataset_name.split("-")
+    team = ds_parts[0]
+    source = ds_parts[1]
+    short_dataset_name = "-".join(ds_parts[2:])
+    raw_bucket_name = f"asap-raw-team-{team}-{source}-{short_dataset_name}"
+
+    visium = "geomx" not in dataset_name
+
+    CDE = read_CDE(schema_version)
+    asap_ids_df = read_CDE_asap_ids()
+    asap_ids_schema = asap_ids_df[["Table", "Field"]]
+
+    # # %%
+    datasetid_mapper, cellid_mapper, sampleid_mapper = load_cell_id_mappers(
+        map_path, suffix
+    )
+
+    # ds_path.mkdir(parents=True, exist_ok=True)
+    mdata_path = ds_path / "metadata" / schema_version
+    tables = [
+        table
+        for table in mdata_path.iterdir()
+        if table.is_file() and table.suffix == ".csv"
+    ]
+
+    req_tables = CELL_TABLES
+    table_names = [table.stem for table in tables if table.stem in req_tables]
+
+    dfs = load_tables(mdata_path, table_names)
+
+    if not map_only:
+        datasetid_mapper, cellid_mapper, sampleid_mapper = update_cell_id_mappers(
+            dfs["CELL"].copy(),
+            dfs["SAMPLE"].copy(),
+            dataset_name,
+            datasetid_mapper,
+            cellid_mapper,
+            sampleid_mapper,
+        )
+
+    dfs = update_cell_meta_tables_with_asap_ids(
+        dfs,
+        dataset_name,
+        asap_ids_schema,
+        datasetid_mapper,
+        cellid_mapper,
+        sampleid_mapper,
+        table_names,
+    )
+
+    # TODO: need to make this read an env variable or something safe.
+    #### CREATE file metadata summaries
+    key_file_path = Path.home() / f"Projects/ASAP/{team}-credentials.json"
+    res = authenticate_with_service_account(key_file_path)
+
+    file_metadata_path = ds_path / "file_metadata"
+    if not file_metadata_path.exists():
+        file_metadata_path.mkdir(parents=True, exist_ok=True)
+
+    gen_raw_bucket_summary(
+        raw_bucket_name, file_metadata_path, dataset_name, flatten=flatten
+    )
+
+    make_file_metadata(ds_path, file_metadata_path, dfs["DATA"], spatial=spatial)
+
+    if spatial:
+        gen_spatial_bucket_summary(raw_bucket_name, file_metadata_path, dataset_name)
+
+    dfs["STUDY"] = update_study_table_with_doi(dfs["STUDY"], ds_path)
+    dfs["DATA"] = update_data_table_with_gcp_uri(dfs["DATA"], ds_path)
+
+    # HACK:
+    # need to change file_metadata so artifacts.csv and (eventually curated_files.csv) point to curated bucket
+
+    # export the tables to the metadata directory in a release subdirectory
+    out_dir = ds_path / "metadata/release"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    export_meta_tables(dfs, out_dir)
+    write_version(schema_version, out_dir / "cde_version")
+
+    if not map_only:
+        export_map_path = map_path  # root_path / "asap-ids/temp"
+        export_cell_id_mappers(
+            export_map_path,
+            suffix,
+            datasetid_mapper,
+            cellid_mapper,
+            sampleid_mapper,
+        )
 
 
 def prep_release_metadata_mouse(
@@ -364,6 +452,11 @@ def prep_release_metadata_pmdbs(
         )
 
 
+############################
+## get release metadata
+#########################
+
+
 def get_crn_release_metadata(
     ds_path: Path,
     schema_version: str,
@@ -386,13 +479,67 @@ def get_crn_release_metadata(
         )
 
     elif source == "cell":
-        # prep_release_metadata_cell(
-        #     ds_path, schema_version, map_path, suffix, spatial, flatten, map_only
-        # )
-        print(f"WARNING.. cell source not implimented")
-        return {}
+        dfs = get_release_metadata_cell(
+            ds_path, schema_version, map_path, suffix, spatial
+        )
     else:
         raise ValueError(f"Unknown source {source}")
+
+    return dfs
+
+
+def get_release_metadata_cell(
+    ds_path: Path,
+    schema_version: str,
+    map_path: Path,
+    suffix: str,
+    spatial: bool = False,
+) -> dict:
+    # source
+    # spatial
+
+    dataset_name = ds_path.name
+    print(f"release_util: Processing {ds_path.name}")
+    ds_parts = dataset_name.split("-")
+    team = ds_parts[0]
+    source = ds_parts[1]
+    short_dataset_name = "-".join(ds_parts[2:])
+    raw_bucket_name = f"asap-raw-team-{team}-{source}-{short_dataset_name}"
+
+    CDE = read_CDE(schema_version)
+    asap_ids_df = read_CDE_asap_ids()
+    asap_ids_schema = asap_ids_df[["Table", "Field"]]
+
+    # # %%
+    datasetid_mapper, cellid_mapper, sampleid_mapper = load_cell_id_mappers(
+        map_path, suffix
+    )
+
+    # ds_path.mkdir(parents=True, exist_ok=True)
+    mdata_path = ds_path / "metadata" / schema_version
+    tables = [
+        table
+        for table in mdata_path.iterdir()
+        if table.is_file() and table.suffix == ".csv"
+    ]
+
+    req_tables = CELL_TABLES
+    table_names = [table.stem for table in tables if table.stem in req_tables]
+
+    dfs = load_tables(mdata_path, table_names)
+
+    dfs = update_cell_meta_tables_with_asap_ids(
+        dfs,
+        dataset_name,
+        asap_ids_schema,
+        datasetid_mapper,
+        cellid_mapper,
+        sampleid_mapper,
+        table_names,
+    )
+
+    dfs["STUDY"] = update_study_table_with_doi(dfs["STUDY"], ds_path)
+    dfs["DATA"] = update_data_table_with_gcp_uri(dfs["DATA"], ds_path)
 
     return dfs
 
@@ -536,6 +683,9 @@ def get_release_metadata_pmdbs(
         )
 
     return dfs
+
+
+####################
 
 
 def load_and_process_table(
@@ -854,6 +1004,8 @@ def get_stats_table(dfs: dict[pd.DataFrame], source: str = "pmdbs"):
         return get_stat_tabs_pmdbs(dfs)
     elif source == "mouse":
         return get_stat_tabs_mouse(dfs)
+    elif source in ["cell", "invitro", "ipsc"]:
+        return get_stat_tabs_cell(dfs)
     else:
         raise ValueError(f"Unknown source {source}")
         return {}, pd.DataFrame()
@@ -869,6 +1021,7 @@ _brain_region_coder = {
     "Amygdala": "AMG",
     "Substantia_Nigra ": "SN",
     "Substantia_Nigra": "SN",
+    "AMY": "AMG",  # team Jakobsson
     "SND": "SN",  # team edwards SN sub-nuclei and adjascent regions
     "SNV": "SN",  # team edwards SN sub-nuclei and adjascent regions
     "VTA": "SN",  # team edwards SN sub-nuclei and adjascent regions
@@ -1089,6 +1242,61 @@ def get_stat_tabs_pmdbs(dfs: dict[pd.DataFrame]):
 
     # SAMPLE wise
 
+    return report, df
+
+
+def get_stat_tabs_cell(dfs: dict[pd.DataFrame]):
+    """ """
+    sample_cols = [
+        "ASAP_sample_id",
+        "ASAP_cell_id",
+        "ASAP_team_id",
+        "ASAP_dataset_id",
+        "replicate",
+        "replicate_count",
+        "repeated_sample",
+        "batch",
+        "organism",
+        "tissue",
+        "assay_type",
+        "condition_id",
+    ]
+
+    subject_cols = [
+        "ASAP_cell_id",
+        "cell_line",
+    ]
+
+    condition_cols = [
+        "condition_id",
+        "intervention_name",
+        "intervention_id",
+        "protocol_id",
+        "intervention_aux_table",
+    ]
+
+    SAMPLE_ = dfs["SAMPLE"][sample_cols]
+
+    SUBJECT_ = dfs["CELL"][subject_cols]
+    CONDITION_ = dfs["CONDITION"][condition_cols]
+
+    df = pd.merge(SAMPLE_, CONDITION_, on="condition_id", how="left")
+
+    # then JOIN the result with SUBJECT on "ASAP_subject_id" how=left to get "age_at_collection", "sex", "primary_diagnosis"
+    df = pd.merge(df, SUBJECT_, on="ASAP_cell_id", how="left")
+
+    # get stats for the dataset
+    N = df["ASAP_sample_id"].nunique()
+
+    # brain_region = (df["brain_region"].value_counts().to_dict(),)
+    # PD_status = (df["gp2_phenotype"].value_counts().to_dict(),)
+    condition_id = (df["condition_id"].value_counts().to_dict(),)
+    # diagnosis = (df["primary_diagnosis"].value_counts().to_dict(),)
+
+    report = dict(
+        N=N,
+        condition_id=condition_id,
+    )
     return report, df
 
 
