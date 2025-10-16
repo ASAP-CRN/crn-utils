@@ -18,9 +18,15 @@ from .constants import *
 
 from .validate import NULL
 
-__all__ = ["prep_proteomics_metadata"]
+__all__ = [
+    "prep_proteomics_metadata",
+    "prep_subject_table",
+    "prep_mouse_table",
+    "prep_cell_table",
+]
 
 
+# TODO: this is a hack based on initial inputs... need to robustify
 def prep_proteomics_metadata(
     sdrf_df: pd.DataFrame, schema: pd.DataFrame, tables: list[str] | None = None
 ) -> dict[str, pd.DataFrame]:
@@ -36,6 +42,10 @@ def prep_proteomics_metadata(
         # "PROTEOMICS",
         # "CONDITION",
         # "DATA",
+
+        # CELL, MOUSE, or SUBJECT (+CLINPATH, etc) will be defined elsewhere
+    # add SDRF table
+
     dfs = {}
     for table in tables:
         if table == "STUDY":
@@ -46,8 +56,8 @@ def prep_proteomics_metadata(
             df = prep_proteomics_table(sdrf_df, schema)
         elif table == "SAMPLE":
             df = prep_sample_table(sdrf_df, schema)
-        # elif table == "CONDITION":
-        #     df = prep_condition_table(sdrf_df, schema)
+        elif table == "SDRF":
+            df = prep_sdrf_table(sdrf_df)
         elif table == "DATA":
             df = prep_data_table(sdrf_df, schema)
         else:
@@ -69,12 +79,7 @@ def prep_proteomics_metadata(
     condition_df["intervention_aux_table"] = NULL
     dfs["CONDITION"] = condition_df
 
-    # add SDRF table
-    print(f"sdrf_df columns: {sdrf_df.columns}")
-
     # SDRF_df = prep_sdrf_table(sdrf_df, schema_version)
-    dfs["SDRF"] = prep_sdrf_table(sdrf_df)
-    print(f"SDRF columns: {dfs['SDRF'].columns}")
 
     return dfs
 
@@ -98,6 +103,57 @@ def prep_study_table(sdrf_df: pd.DataFrame, schema: pd.DataFrame):
 #     return protocol_df
 
 
+def prep_subject_table(sdrf_df: pd.DataFrame, schema: pd.DataFrame):
+    """
+    convert a SDRF to the ASAP metadata tables.
+
+    """
+    subject_df = pd.DataFrame(
+        columns=schema[schema["Table"] == "SUBJECT"]["Field"].tolist()
+    )
+    subject_df["sample_id"] = create_strf_sample_id(sdrf_df)
+    #
+    # TODO: add other columns
+
+    return subject_df
+
+
+def prep_mouse_table(sdrf_df: pd.DataFrame, schema: pd.DataFrame):
+    """
+    convert a SDRF to the ASAP metadata tables.
+
+    """
+    mouse_df = pd.DataFrame(
+        columns=schema[schema["Table"] == "MOUSE"]["Field"].tolist()
+    )
+    mouse_df["sample_id"] = create_strf_sample_id(sdrf_df)
+    mouse_df["strain"] = sdrf_df["characteristics[breed]"]
+    mouse_df["sex"] = sdrf_df["characteristics[sex]"]
+    mouse_df["age"] = sdrf_df["characteristics[age]"]
+    mouse_df["aux_table"] = NULL
+
+    return mouse_df
+
+
+def prep_cell_table(sdrf_df: pd.DataFrame, schema: pd.DataFrame):
+    """
+    convert a SDRF to the ASAP metadata tables.
+
+    """
+    cell_df = pd.DataFrame(columns=schema[schema["Table"] == "CELL"]["Field"].tolist())
+    sample_id = create_strf_sample_id(sdrf_df)
+    cell_df["cell_line"] = sdrf_df["characteristics[cell type]"]
+    cell_df["perturbation"] = NULL
+    cell_df["clone_level"] = NULL
+    cell_df["aux_table"] = NULL
+
+    cell_lines = cell_df["cell_line"].unique()
+    print(f"cell_lines: {cell_lines}")
+    cell_df["subject_id"] = cell_df["cell_line"].str.rstrip("cell").str.strip()
+    cell_df.drop_duplicates(inplace=True)
+    return cell_df
+
+
 def prep_proteomics_table(sdrf_df: pd.DataFrame, schema: pd.DataFrame):
     """
     convert a SDRF to the ASAP metadata tables.
@@ -106,7 +162,8 @@ def prep_proteomics_table(sdrf_df: pd.DataFrame, schema: pd.DataFrame):
     proteomics_df = pd.DataFrame(
         columns=schema[schema["Table"] == "PROTEOMICS"]["Field"].tolist()
     )
-    proteomics_df["sample_id"] = sdrf_df["source name"]
+
+    proteomics_df["sample_id"] = create_strf_sample_id(sdrf_df)
     proteomics_df["source_id"] = sdrf_df["source name"]
     proteomics_df["technology"] = sdrf_df["technology type"]
     proteomics_df["assay"] = sdrf_df["characteristics[sample type]"]
@@ -118,8 +175,16 @@ def prep_proteomics_table(sdrf_df: pd.DataFrame, schema: pd.DataFrame):
     proteomics_df["technical_replicate"] = sdrf_df["comment[technical replicate]"]
     proteomics_df["raw_file"] = sdrf_df["comment[file uri]"]
     proteomics_df["summary_file"] = NULL  # sdrf_df["comment[quant file]"]
-    proteomics_df["SDRF_proteomics_table"] = "SDRF.csv"
+    if "comment[sample run]" in sdrf_df.columns:
+        print("found `sample run` column")
+        proteomics_df["sample_run"] = sdrf_df["comment[sample run]"]
+    else:  # TODO: depricate this hack and force input SDRF to contain this column
+        print(proteomics_df["source_id"].apply(lambda x: x.split(".")[-1]))
+        proteomics_df["sample_run"] = proteomics_df["source_id"].apply(
+            lambda x: x.split("_")[-1]
+        )
 
+    proteomics_df["SDRF_proteomics_table"] = "SDRF.csv"
     return proteomics_df
 
 
@@ -133,8 +198,8 @@ def prep_sample_table(sdrf_df: pd.DataFrame, schema: pd.DataFrame):
         columns=schema[schema["Table"] == "SAMPLE"]["Field"].tolist()
     )
 
-    sample_df["sample_id"] = sdrf_df["source name"]
-    sample_df["source_id"] = sdrf_df["assay name"]
+    sample_df["sample_id"] = create_strf_sample_id(sdrf_df)
+    sample_df["source_id"] = sdrf_df["source name"]
 
     sample_df["organism"] = sdrf_df["characteristics[organism]"]
     sample_df["assay_type"] = "Proteomic"
@@ -191,7 +256,7 @@ def prep_data_table(sdrf_df: pd.DataFrame, schema: pd.DataFrame):
 
     """
     data_df = pd.DataFrame(columns=schema[schema["Table"] == "DATA"]["Field"].tolist())
-    data_df["sample_id"] = sdrf_df["source name"]
+    data_df["sample_id"] = create_strf_sample_id(sdrf_df)
     data_df["file_description"] = sdrf_df["comment[proteomics data acquisition method]"]
     data_df["file_type"] = "Raw"
     data_df["file_name"] = sdrf_df["comment[data file]"]
@@ -234,6 +299,7 @@ def prep_sdrf_table(sdrf_df: pd.DataFrame):
     convert a SDRF to the ASAP metadata tables.
 
     """
+
     column_names = [
         "source name",
         "characteristics[organism]",
@@ -246,14 +312,10 @@ def prep_sdrf_table(sdrf_df: pd.DataFrame):
         "characteristics[developmental stage]",
         "characteristics[age]",
         "characteristics[mass]",
+        "characteristics[condition]",
         "characteristics[sample type]",
-        "characteristics[individual]",
-        "characteristics[strain/breed]",
-        "characteristics[cell line]",
-        "characteristics[ancestry category]",
         "assay name",
         "technology type",
-        "comment[proteomics data acquisition method]",
         "comment[label]",
         "comment[instrument]",
         "comment[fraction identifier]",
@@ -267,6 +329,7 @@ def prep_sdrf_table(sdrf_df: pd.DataFrame):
         "comment[fragment mass tolerance]",
         "comment[file uri]",
         "comment[data file]",
+        "comment[proteomics data acquisition method]",
         "comment[reduction reagent]",
         "comment[alkylation reagent]",
         "comment[condition]",
@@ -276,7 +339,14 @@ def prep_sdrf_table(sdrf_df: pd.DataFrame):
         "comment[database]",
         "comment[search engine]",
         "comment[quant file]",
+        "factor value[condition]",
+        "comment[sample run]",
+        "characteristics[individual]",
+        "characteristics[strain/breed]",
+        "characteristics[cell line]",
+        "characteristics[ancestry category]",
     ]
+
     sdrf_out = pd.DataFrame(columns=column_names)
     for col in column_names:
         if col not in sdrf_df.columns:
@@ -285,3 +355,16 @@ def prep_sdrf_table(sdrf_df: pd.DataFrame):
             sdrf_out[col] = sdrf_df[col]
 
     return sdrf_out
+
+
+def create_strf_sample_id(sdrf_df: pd.DataFrame) -> pd.Series:
+    """
+    create a sample_id column from the SDRF
+    """
+    source_name = sdrf_df["source name"]
+    assay_name = sdrf_df["assay name"].str.replace(" ", "_")
+    label = sdrf_df["comment[label]"].str.replace(" ", "_")
+
+    sample_id = source_name + ";" + assay_name + ";" + label
+
+    return sample_id

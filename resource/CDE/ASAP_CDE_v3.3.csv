@@ -48,7 +48,9 @@ SUBJECT,ASAP_team_id,ASAP Team ID,Unique ID issued by ASAP CRN Cloud.,String,Ass
 SUBJECT,ASAP_subject_id,ASAP Subject ID,Unique ID issued by ASAP CRN Cloud.,String,Assigned,,0
 SUBJECT,primary_diagnosis_text,Primary Diagnosis Text,"If the primary_diagnosis is ""Other neurological disorders"" diagnosis must be specified here.",string,Optional,,0
 SAMPLE,ASAP_sample_id,ASAP Sample ID,Unique ID issued by ASAP CRN Cloud.,String,Assigned,,1
-SAMPLE,ASAP_subject_id,ASAP Subject ID,Unique ID issued by ASAP CRN Cloud.,String,Assigned,can be assigned NULL for datasets where subject doesn't make sense,1
+SAMPLE,ASAP_subject_id,ASAP Subject ID,Unique ID issued by ASAP CRN Cloud for Human / PMDBS datasets.,String,Assigned,Will not be assigned NULL for datasets where subject doesn't make sense,1
+SAMPLE,ASAP_mouse_id,ASAP Mouse ID,Unique ID issued by ASAP CRN Cloud for Mouse datasets.,String,Assigned,Will not be assigned NULL for datasets where mouse doesn't make sense,1
+SAMPLE,ASAP_cell_id,ASAP Cell ID,Unique ID issued by ASAP CRN Cloud for in-vitro datasets.,String,Assigned,Will not be assigned NULL for datasets where cell doesn't make sense,1
 SAMPLE,sample_id,Sample ID,"ID of each individual sample used in the study (e.g. cortex of anterior cingulate gyrus); if from the same brain several regions are included in the study, each region (i.e. each sample) has different ID and listed as a separate entry.",String,Required,,1
 SAMPLE,subject_id,Subject ID,Subject level ID for source of sample.,String,Required,,1
 SAMPLE,mouse_id,Mouse ID Alias,Used in place of subject_id for mouse studies.,String,Alias,,1
@@ -100,7 +102,7 @@ DATA,replicate,Replicate,"Indicator for replicates of the sample.  Replicates co
 DATA,replicate_count,Total Replicate Count,"Number of replicates of this sample.  Typically this will be 1, but if replicates have been collected indicate how many total.",Integer,Required,,0
 DATA,repeated_sample,Repeated Sample,Indicator that this is a repeated sample.  This will be treated as a boolean.  i.e. enter 0 unless sample is a replicate.,Integer,Required,,1
 DATA,batch,Batch,"Label to enumerate the batch. This will probablby numerica, but could be coded as letters.",String,Required,,0
-DATA,file_type,File Type,"Type of file uploaded for this sample.  We are asking for ""fastq"" for raw data transfer.",Enum,Required,"[""fastq"",""Per sample raw file"", ""Per sample processed file"", ""Combined analysis files"", ""annData"", ""vHDF"", ""plink2"", ""VCF"", ""csv"",""RDS"", ""h5"", ""Seurat Object"", ""bam"", ""cram""]",0
+DATA,file_type,File Type,"Type of file uploaded for this sample.  We are asking for ""fastq"" for raw data transfer.",Enum,Required,"[""fastq"",""Per sample raw file"", ""Per sample processed file"", ""Combined analysis files"", ""annData"", ""vHDF"", ""plink2"", ""VCF"", ""csv"",""RDS"", ""h5"", ""Seurat Object"", ""bam"", ""cram"",""Raw""]",0
 DATA,file_name,File Name,"Full name of file containing the sample data.  For paired-end data (e.g. `sequencing_end` = ""single"") the ROOT of the file can be specified, and the others will be inferred.",String,Required,,0
 DATA,file_description,File Description,Short description of the file.,String,Required,,1
 DATA,file_MD5,File MD5,Checksum hash of the uploaded file using MD5.,String,Required,,0
@@ -215,13 +217,20 @@ CELL,ASAP_team_id,ASAP Team ID,Unique ID issued by ASAP CRN Cloud for each contr
 CELL,aux_table,Cell Table Auxillary Information,"Table which defines additional mouse ""subject"" information",String,Optional,,0
 PROTEOMICS,ASAP_sample_id,ASAP Sample ID,Unique ID issued by ASAP CRN Cloud.,String,Assigned,,1
 PROTEOMICS,sample_id,Sample ID,"ID of each individual sample used in the study (e.g. cortex of anterior cingulate gyrus); if from the same brain several regions are included in the study, each region (i.e. each sample) has different ID and listed as a separate entry",String,Required,,1
-PROTEOMICS,source_id,Source ID,"ID for the source of each sample, possibly encoded in an auxillary table.",String,Required,,1
-PROTEOMICS,technology,Technology,Technology used for measurement.,String,Required,,1
+PROTEOMICS,source_id,Source ID,"ID for the source of each sample, possibly encoded in an auxillary table.  Avoid spaces ("" "") and hyphens (""-"")",String,Required,,1
+PROTEOMICS,subject_id,Subject ID,Can be multiple samples from each Subject,String,Required,,1
+PROTEOMICS,mouse_id,Mouse ID Alias,Used in place of subject_id for mouse studies.,String,Alias,,1
+PROTEOMICS,cell_id,Cell ID Alias,Used in place of subject_id for ipsc/in vitro studies.,String,Alias,,1
+PROTEOMICS,sample_run,Sample Run,Id for the run per sample. Distinguishes from total runs.,String,Required,,0
+PROTEOMICS,technology,Technology,Technology used for measurement.,String,Required,,0
+PROTEOMICS,protocol,Protocols,Reference to the Protocol used for preparation of samples.  e.g. protocols.io reference,String,Required,,0
 PROTEOMICS,assay,Assay,Name or reference to assay.,String,Required,,0
 PROTEOMICS,instrument,Instrument Name,Name of instrument used.,String,Required,,0
 PROTEOMICS,technical_replicate,Technical Replicate,"Indicator for technical replicate:  number or boolean, or table reference.",String,Required,,0
 PROTEOMICS,raw_file,Raw File Name,Name and uri for file containing the raw data associated with this sample.,String,Required,,0
 PROTEOMICS,summary_file,Summary File Name,Name and uri for file containing summarized downstream results associated with this sample.,String,Required,,0
 PROTEOMICS,SDRF_proteomics_table,SDRF-Proteomics Metadata Table,Table which defines SDRF-Proteomics metadata table,String,Required,,0
+PROTEOMICS,disease,Diesease,"Reference to disease context, if applicable.  ""NA"" if not.",String,Required,,0
+PROTEOMICS,source,Sample Source,"Reference to source of samples. i.e. ""human"", ""pmdbs"", ""mouse"", ""invitro""",String,Required,,0
 PROTEOMICS,ASAP_dataset_id,ASAP Dataset ID,Unique ID issued by ASAP CRN Cloud for each contributed Dataset.,String,Assigned,,0
 PROTEOMICS,ASAP_team_id,ASAP Team ID,Unique ID issued by ASAP CRN Cloud for each contributing Team.,String,Assigned,,0

@@ -41,9 +41,11 @@ CELL_TABLES = [
 
 IPSC_TABLES = CELL_TABLES.copy()
 
+# TODO: allow for aliasing of CELL, SUBJECT, or MOUSE
 PROTEOMICS_TABLES = [
     "STUDY",
     "SAMPLE",
+    "CELL",  # optional, could be SUBJECT, or MOUSE
     "PROTEOMICS",
     "CONDITION",
     "DATA",

@@ -153,8 +153,8 @@ def prep_release_metadata_cell(
 
     if not map_only:
         datasetid_mapper, cellid_mapper, sampleid_mapper = update_cell_id_mappers(
-            dfs["CELL"].copy(),
-            dfs["SAMPLE"].copy(),
+            dfs["CELL"],
+            dfs["SAMPLE"],
             dataset_name,
             datasetid_mapper,
             cellid_mapper,
