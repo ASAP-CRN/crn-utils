@@ -60,25 +60,13 @@ def create_metadata_package(
     write_version(schema_version, final_metadata_path / "cde_version")
 
 
-def prep_proteomics_metadata(
-    ds_path: Path,
-    schema_version: str,
-    map_path: Path,
-    suffix: str,
-    spatial: bool = False,
-    flatten: bool = False,
-    map_only: bool = False,
-):
-    """ """
-    pass
-
-
 def prep_release_metadata(
     ds_path: Path,
     schema_version: str,
     map_path: Path,
     suffix: str,
     spatial: bool = False,
+    proteomics: bool = False,
     source: str = "pmdbs",
     flatten: bool = False,
 ):
@@ -463,6 +451,7 @@ def get_crn_release_metadata(
     map_path: Path,
     suffix: str,
     spatial: bool = False,
+    proteomics: bool = False,
     source: str = "pmdbs",
 ):
     """
@@ -471,16 +460,20 @@ def get_crn_release_metadata(
 
     if source == "pmdbs":
         dfs = get_release_metadata_pmdbs(
-            ds_path, schema_version, map_path, suffix, spatial
+            ds_path, schema_version, map_path, suffix, spatial, proteomics
+        )
+    elif source == "human ":
+        dfs = get_release_metadata_human(
+            ds_path, schema_version, map_path, suffix, spatial, proteomics
         )
     elif source == "mouse":
         dfs = get_release_metadata_mouse(
-            ds_path, schema_version, map_path, suffix, spatial
+            ds_path, schema_version, map_path, suffix, spatial, proteomics
         )
 
     elif source == "cell":
         dfs = get_release_metadata_cell(
-            ds_path, schema_version, map_path, suffix, spatial
+            ds_path, schema_version, map_path, suffix, proteomics
         )
     else:
         raise ValueError(f"Unknown source {source}")
@@ -493,7 +486,7 @@ def get_release_metadata_cell(
     schema_version: str,
     map_path: Path,
     suffix: str,
-    spatial: bool = False,
+    proteomics: bool = False,
 ) -> dict:
     # source
     # spatial
@@ -550,6 +543,7 @@ def get_release_metadata_mouse(
     map_path: Path,
     suffix: str,
     spatial: bool = False,
+    proteomics: bool = False,
 ) -> dict:
     # source
     # spatial
@@ -605,6 +599,8 @@ def get_release_metadata_mouse(
             dfs["SPATIAL"], ds_path, visium=visium
         )
 
+    # TODO add proteoimics mouse stuff here
+
     return dfs
 
 
@@ -614,6 +610,7 @@ def get_release_metadata_pmdbs(
     map_path: Path,
     suffix: str,
     spatial: bool = False,
+    proteomics: bool = False,
 ) -> dict:
 
     # source
@@ -681,6 +678,89 @@ def get_release_metadata_pmdbs(
         dfs["SPATIAL"] = update_spatial_table_with_gcp_uri(
             dfs["SPATIAL"], ds_path, visium=visium
         )
+
+    # TODO add proteoimics pmdbs stuff here
+
+    return dfs
+
+
+# TODO: add non PMDBS human wrinkles now
+def get_release_metadata_human(
+    ds_path: Path,
+    schema_version: str,
+    map_path: Path,
+    suffix: str,
+    spatial: bool = False,
+    proteomics: bool = False,
+) -> dict:
+
+    # source
+    # spatial
+
+    dataset_name = ds_path.name
+    print(f"release_util: Processing {ds_path.name}")
+    ds_parts = dataset_name.split("-")
+    team = ds_parts[0]
+    source = ds_parts[1]
+    short_dataset_name = "-".join(ds_parts[2:])
+    raw_bucket_name = f"asap-raw-team-{team}-{source}-{short_dataset_name}"
+
+    visium = "geomx" not in dataset_name
+
+    CDE = read_CDE(schema_version)
+    asap_ids_df = read_CDE_asap_ids()
+    asap_ids_schema = asap_ids_df[["Table", "Field"]]
+
+    # # %%
+    (
+        datasetid_mapper,
+        subjectid_mapper,
+        sampleid_mapper,
+        gp2id_mapper,
+        sourceid_mapper,
+    ) = load_pmdbs_id_mappers(map_path, suffix)
+
+    # ds_path.mkdir(parents=True, exist_ok=True)
+    if schema_version == "v2.1":
+        mdata_path = ds_path / "metadata" / "v2"
+    else:
+        mdata_path = ds_path / "metadata" / schema_version
+
+    tables = [
+        table
+        for table in mdata_path.iterdir()
+        if table.is_file() and table.suffix == ".csv"
+    ]
+
+    req_tables = PMDBS_TABLES
+    if spatial:
+        req_tables.append("SPATIAL")
+
+    table_names = [table.stem for table in tables if table.stem in req_tables]
+
+    dfs = load_tables(mdata_path, table_names)
+
+    dfs = update_pmdbs_meta_tables_with_asap_ids(
+        dfs,
+        dataset_name,
+        asap_ids_schema,
+        datasetid_mapper,
+        subjectid_mapper,
+        sampleid_mapper,
+        gp2id_mapper,
+        sourceid_mapper,
+        pmdbs_tables=table_names,
+    )
+
+    dfs["STUDY"] = update_study_table_with_doi(dfs["STUDY"], ds_path)
+
+    dfs["DATA"] = update_data_table_with_gcp_uri(dfs["DATA"], ds_path)
+    if spatial:
+        dfs["SPATIAL"] = update_spatial_table_with_gcp_uri(
+            dfs["SPATIAL"], ds_path, visium=visium
+        )
+
+    # TODO add proteoimics pmdbs stuff here
 
     return dfs
 
