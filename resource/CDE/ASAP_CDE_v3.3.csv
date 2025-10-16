@@ -278,15 +278,10 @@ SDRF,characteristics[individual],,SDRF,String,Required,,0
 SDRF,characteristics[strain/breed],,SDRF,String,Required,,0
 SDRF,characteristics[cell line],,SDRF,String,Required,,0
 SDRF,characteristics[ancestry category],,SDRF,String,Required,,0
-MULTISAMPLE,ASAP_sample_id,ASAP Sample ID,Unique ID issued by ASAP CRN Cloud.,String,Assigned,,1
-MULTISAMPLE,ASAP_subject_id,ASAP Subject ID,Unique ID issued by ASAP CRN Cloud for Human / PMDBS datasets.,String,Assigned,Will not be assigned NULL for datasets where subject doesn't make sense,1
-MULTISAMPLE,ASAP_mouse_id,ASAP Mouse ID,Unique ID issued by ASAP CRN Cloud for Mouse datasets.,String,Assigned,Will not be assigned NULL for datasets where mouse doesn't make sense,1
-MULTISAMPLE,ASAP_cell_id,ASAP Cell ID,Unique ID issued by ASAP CRN Cloud for in-vitro datasets.,String,Assigned,Will not be assigned NULL for datasets where cell doesn't make sense,1
-MULTISAMPLE,sample_id,Sample ID,"ID of each individual sample used in the study (e.g. cortex of anterior cingulate gyrus); if from the same brain several regions are included in the study, each region (i.e. each sample) has different ID and listed as a separate entry.",String,Required,,1
-MULTISAMPLE,subject_id,Subject ID,Subject level ID for source of sample.,String,Required,,1
-MULTISAMPLE,mouse_id,Mouse ID Alias,Used in place of subject_id for mouse studies.,String,Alias,,1
-MULTISAMPLE,cell_id,Cell ID Alias,Used in place of subject_id for ipsc/in vitro studies.,String,Alias,,1
-MULTISAMPLE,source_sample_id,Source Sample ID,ID provided by Brain bank or other source.,String,Required,,0
+MULTISAMPLE,ASAP_multi_sample_id,ASAP Mltiplex Sample ID,Unique ID issued by ASAP CRN Cloud for multiplexed (parsebio) data,String,Assigned,,1
+MULTISAMPLE,multi_sample_id,Multiplex Sample ID,ID of each individual sample used in the multiplexed (parsebio) study,String,Required,,1
+MULTISAMPLE,subject_ids,Subject IDs,"Subject level IDs for source of sample.  Separated by ""|""",String,Required,,1
+MULTISAMPLE,source_sample_ids,Source Sample IDs,"IDs provided by Brain bank or other source.  Separated by ""|""",String,Required,,0
 MULTISAMPLE,replicate,Replicate,"Indicator for replicates of the sample.  Replicates could be biological or tecnical.  Indicate biological replicates as capitalized ""Rep"" + replicated number (i.e. Rep1, Rep2, etc) and technical replicates with lowercase ""rep"" + replicate number (i.e., rep1, rep2 etc.)",String,Required,,0
 MULTISAMPLE,replicate_count,Total Replicate Count,"Number of replicates of this sample.  Typically this will be 1, but if replicates have been collected indicate how many total.",Integer,Required,,1
 MULTISAMPLE,repeated_sample,Repeated Sample,Indicator that this is a repeated sample.  This will be treated as a boolean.  i.e. enter 0 unless sample is a replicate.,Integer,Required,,0
@@ -313,8 +308,8 @@ MULTISAMPLE,cell_type_ontology_term_id,Cell Type Ontology Term ID,Included for c
 MULTISAMPLE,source_RIN,Source RIN,"RIN provided by Tissue/Brain/Biobank, if applicable.",Float,Optional,,0
 MULTISAMPLE,DV200,DV200 Value,Value is the percentage of RNA fragments larger than 200 nucleotides.,Float,Optional,,0
 MULTISAMPLE,suspension_type,Suspension Type,"Cell, nucleus, or na, as corresponding to assay. Included for compatibilty with CELLxGENE. Use https://github.com/chanzuckerberg/single-cell-curation/blob/main/schema/3.0.0/schema.md#suspension_type defined in the data schema for additional guidance.",String,Optional,,0
-MULTIDATA,ASAP_sample_id,ASAP Sample ID,Unique ID issued by ASAP CRN Cloud.,String,Assigned,,1
-MULTIDATA,sample_id,Sample ID,"ID of each individual sample used in the study (e.g. cortex of anterior cingulate gyrus); if from the same brain several regions are included in the study, each region (i.e. each sample) has different ID and listed as a separate entry.",String,Required,,1
+MULTIDATA,ASAP_multi_sample_id,ASAP Mltiplex Sample ID,Unique ID issued by ASAP CRN Cloud for multiplexed (parsebio) data,String,Assigned,,1
+MULTIDATA,multi_sample_id,Multiplex Sample ID,ID of each individual sample used in the multiplexed (parsebio) study,String,Required,,1
 MULTIDATA,replicate,Replicate,"Indicator for replicates of the sample.  Replicates could be biological or tecnical.  Indicate biological replicates as capitalized ""Rep"" + replicated number (i.e. Rep1, Rep2, etc) and technical replicates with lowercase ""rep"" + replicate number (i.e., rep1, rep2 etc.)",String,Required,,1
 MULTIDATA,replicate_count,Total Replicate Count,"Number of replicates of this sample.  Typically this will be 1, but if replicates have been collected indicate how many total.",Integer,Required,,0
 MULTIDATA,repeated_sample,Repeated Sample,Indicator that this is a repeated sample.  This will be treated as a boolean.  i.e. enter 0 unless sample is a replicate.,Integer,Required,,1
