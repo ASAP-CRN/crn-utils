@@ -252,8 +252,28 @@ def clean_cde_schema(cde_schema):
     return cleaned_schema
 
 
+# new function
 def read_CDE_asap_ids(
-    schema_version: str = "v3.1", local_path: str | bool | Path = False
+    schema_version: str = "v3.3", local_path: str | bool | Path = False
+):
+    """
+    Load CDE from local csv and cache it, return a dataframe and dictionary of dtypes
+    """
+
+    df = read_CDE(schema_version, local_path, include_asap_ids=True)
+
+    df = df[df["Required"] == "Assigned"]
+    # drop rows with no table name (i.e. ASAP_ids)
+    df = df[["Table", "Field", "Description", "DataType", "Required", "Validation"]]
+    df = df.dropna(subset=["Table"])
+    df = df.reset_index(drop=True)
+
+    return df
+
+
+# original function
+def _read_CDE_asap_ids(
+    schema_version: str = "v3.3", local_path: str | bool | Path = False
 ):
     """
     Load CDE from local csv and cache it, return a dataframe and dictionary of dtypes

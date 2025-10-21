@@ -80,16 +80,16 @@ def prep_release_metadata(
 
     if source == "pmdbs":
         prep_release_metadata_pmdbs(
-            ds_path, schema_version, map_path, suffix, spatial, flatten
+            ds_path, schema_version, map_path, suffix, spatial, proteomics, flatten
         )
     elif source == "mouse":
         prep_release_metadata_mouse(
-            ds_path, schema_version, map_path, suffix, spatial, flatten
+            ds_path, schema_version, map_path, suffix, spatial, proteomics, flatten
         )
 
     elif source in ["cell", "invitro", "ipsc"]:
         prep_release_metadata_cell(
-            ds_path, schema_version, map_path, suffix, spatial, flatten
+            ds_path, schema_version, map_path, suffix, proteomics, flatten
         )
     else:
         raise ValueError(f"Unknown source {source}")
@@ -100,7 +100,7 @@ def prep_release_metadata_cell(
     schema_version: str,
     map_path: Path,
     suffix: str,
-    spatial: bool = False,
+    proteomics: bool = False,
     flatten: bool = False,
     map_only: bool = False,
 ):
@@ -121,6 +121,8 @@ def prep_release_metadata_cell(
     asap_ids_df = read_CDE_asap_ids()
     asap_ids_schema = asap_ids_df[["Table", "Field"]]
 
+    print(asap_ids_schema)
+
     # # %%
     datasetid_mapper, cellid_mapper, sampleid_mapper = load_cell_id_mappers(
         map_path, suffix
@@ -134,7 +136,8 @@ def prep_release_metadata_cell(
         if table.is_file() and table.suffix == ".csv"
     ]
 
-    req_tables = CELL_TABLES
+    req_tables = PROTEOMICS_TABLES if proteomics else CELL_TABLES
+
     table_names = [table.stem for table in tables if table.stem in req_tables]
 
     dfs = load_tables(mdata_path, table_names)
@@ -172,10 +175,7 @@ def prep_release_metadata_cell(
         raw_bucket_name, file_metadata_path, dataset_name, flatten=flatten
     )
 
-    make_file_metadata(ds_path, file_metadata_path, dfs["DATA"], spatial=spatial)
-
-    if spatial:
-        gen_spatial_bucket_summary(raw_bucket_name, file_metadata_path, dataset_name)
+    make_file_metadata(ds_path, file_metadata_path, dfs["DATA"], spatial=False)
 
     dfs["STUDY"] = update_study_table_with_doi(dfs["STUDY"], ds_path)
     dfs["DATA"] = update_data_table_with_gcp_uri(dfs["DATA"], ds_path)
@@ -207,6 +207,7 @@ def prep_release_metadata_mouse(
     map_path: Path,
     suffix: str,
     spatial: bool = False,
+    proteomics: bool = False,
     flatten: bool = False,
     map_only: bool = False,
 ):
@@ -240,7 +241,9 @@ def prep_release_metadata_mouse(
         if table.is_file() and table.suffix == ".csv"
     ]
 
+    # TODO: make this accomodate proteomics
     req_tables = MOUSE_TABLES
+
     if spatial:
         req_tables.append("SPATIAL")
     table_names = [table.stem for table in tables if table.stem in req_tables]
@@ -320,6 +323,7 @@ def prep_release_metadata_pmdbs(
     map_path: Path,
     suffix: str,
     spatial: bool = False,
+    proteomics: bool = False,
     flatten: bool = False,
     map_only: bool = False,
 ):
@@ -356,6 +360,9 @@ def prep_release_metadata_pmdbs(
         for table in mdata_path.iterdir()
         if table.is_file() and table.suffix == ".csv"
     ]
+
+    # TODO: make this accomodate proteomics
+    req_tables = MOUSE_TABLES
 
     req_tables = PMDBS_TABLES
     if spatial:
@@ -460,20 +467,39 @@ def get_crn_release_metadata(
 
     if source == "pmdbs":
         dfs = get_release_metadata_pmdbs(
-            ds_path, schema_version, map_path, suffix, spatial, proteomics
+            ds_path,
+            schema_version,
+            map_path,
+            suffix,
+            spatial=spatial,
+            proteomics=proteomics,
         )
     elif source == "human ":
         dfs = get_release_metadata_human(
-            ds_path, schema_version, map_path, suffix, spatial, proteomics
+            ds_path,
+            schema_version,
+            map_path,
+            suffix,
+            spatial=spatial,
+            proteomics=proteomics,
         )
     elif source == "mouse":
         dfs = get_release_metadata_mouse(
-            ds_path, schema_version, map_path, suffix, spatial, proteomics
+            ds_path,
+            schema_version,
+            map_path,
+            suffix,
+            spatial=spatial,
+            proteomics=proteomics,
         )
 
-    elif source == "cell":
+    elif source in ["cell", "invitro", "ipsc"]:
         dfs = get_release_metadata_cell(
-            ds_path, schema_version, map_path, suffix, proteomics
+            ds_path, schema_version, map_path, suffix, proteomics=proteomics
+        )
+    elif source == "proteomics":
+        dfs = get_release_metadata_cell(
+            ds_path, schema_version, map_path, suffix, proteomics=True
         )
     else:
         raise ValueError(f"Unknown source {source}")

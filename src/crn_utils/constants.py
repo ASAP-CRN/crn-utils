@@ -4,6 +4,7 @@ __all__ = [
     "CELL_TABLES",
     "IPSC_TABLES",
     "PROTEOMICS_TABLES",
+    "MULTIPLEX_TABLES",
 ]
 
 MOUSE_TABLES = [
@@ -50,4 +51,18 @@ PROTEOMICS_TABLES = [
     "CONDITION",
     "DATA",
     "SDRF",
+]
+
+
+# TODO: allow for aliasing of CELL, SUBJECT, or MOUSE
+MULTIPLEX_TABLES = [
+    "STUDY",
+    "PROTOCOL",
+    "SUBJECT",
+    "MULTISAMPLE",
+    "ASSAY_RNAseq",
+    "MULTIDATA",
+    "PMDBS",
+    "CLINPATH",
+    "CONDITION",
 ]

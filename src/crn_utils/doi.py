@@ -196,7 +196,7 @@ def ingest_DOI_doc(
         if affiliation == "":
             affiliation = None
         else:
-            to_append["affiliation"] = affiliation
+            to_append["affiliation"] = affiliation.replace(", United States.", ".")
 
         if oricid == "":
             oricid = None
@@ -732,7 +732,12 @@ def finalize_DOI(ds_path: Path, deposition: dict, prerelease: bool = False):
     # else:
     #     prerelease = False
 
-    conceptdoi = deposition["conceptdoi"]
+    # TODO: fix this bug... conceptdoi seems to have been depricated...
+    # conceptdoi = deposition["conceptdoi"]
+    if "conceptdoi" in deposition:
+        conceptdoi = deposition["conceptdoi"]
+    else:
+        conceptdoi = f"10.5281/zenodo.{deposition["conceptrecid"]}"
     conceptdoi_url = doi_url.replace(doi, conceptdoi)
 
     doi_path = ds_path / "DOI"
