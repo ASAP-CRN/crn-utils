@@ -1105,7 +1105,11 @@ def fix_study_table(metadata_path: Path, doi_path: Path | None = None):
 
 
 def get_stats_table(dfs: dict[pd.DataFrame], source: str = "pmdbs"):
-    """ """
+    """
+    generate the datasets stats for making the CRN release report
+    Note that proteomics for now is also "cell" based ("invitro")
+
+    """
     if source == "pmdbs":
         return get_stat_tabs_pmdbs(dfs)
     elif source == "mouse":
