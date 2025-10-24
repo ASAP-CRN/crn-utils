@@ -1273,10 +1273,6 @@ def get_stat_tabs_pmdbs(dfs: dict[pd.DataFrame]):
     # then JOIN the result with PMDBS on "ASAP_subject_id" how=left to get "brain_region"
     df = pd.merge(df, PMDBS_, on="ASAP_sample_id", how="left")
 
-    # get stats for the dataset
-    # 0. total number of samples
-
-    age_at_collection = df["age_at_collection"].replace({"NA": np_nan}).astype("float")
     n_samples = df["ASAP_sample_id"].nunique()
 
     n_subjects = df["ASAP_subject_id"].nunique()
@@ -1291,9 +1287,27 @@ def get_stat_tabs_pmdbs(dfs: dict[pd.DataFrame]):
         .to_dict()
     )
 
-    sex = (df["sex"].value_counts().to_dict(),)
-    PD_status = (df["gp2_phenotype"].value_counts().to_dict(),)
-    condition_id = (df["condition_id"].value_counts().to_dict(),)
+    # get stats for the dataset
+    # 0. total number of samples
+    # SAMPLE wise
+    sw_df = df[
+        [
+            "ASAP_subject_id",
+            "gp2_phenotype",
+            "primary_diagnosis",
+            "age_at_collection",
+            "brain_region",
+            "brain_code",
+            "condition_id",
+        ]
+    ].drop_duplicates()
+
+    age_at_collection = (
+        sw_df["age_at_collection"].replace({"NA": np_nan}).astype("float")
+    )
+    sex = (sw_df["sex"].value_counts().to_dict(),)
+    PD_status = (sw_df["gp2_phenotype"].value_counts().to_dict(),)
+    condition_id = (sw_df["condition_id"].value_counts().to_dict(),)
     age = dict(
         mean=f"{age_at_collection.mean():.1f}",
         median=f"{age_at_collection.median():.1f}",
@@ -1328,6 +1342,9 @@ def get_stat_tabs_pmdbs(dfs: dict[pd.DataFrame]):
     condition_id = (sw_df["condition_id"].value_counts().to_dict(),)
     diagnosis = (sw_df["primary_diagnosis"].value_counts().to_dict(),)
     sex = (sw_df["sex"].value_counts().to_dict(),)
+    age_at_collection = (
+        sw_df["age_at_collection"].replace({"NA": np_nan}).astype("float")
+    )
 
     age = dict(
         mean=f"{age_at_collection.mean():.1f}",
