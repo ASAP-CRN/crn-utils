@@ -374,9 +374,9 @@ def gen_spatial_bucket_summary(raw_bucket_name: str, dl_path: Path, dataset_name
 
 
 ####################
-
-
 def get_artifacts_df(dl_path: Path, dataset_id: str, team_id: str):
+    """ """
+
     keep_cols = [
         "ASAP_dataset_id",
         "ASAP_team_id",
@@ -454,6 +454,7 @@ def get_fastqs_df(dl_path: Path, dataset_id: str, team_id: str) -> pd.DataFrame:
 
 
 def get_spatial_df(dl_path: Path, dataset_id: str, team_id: str) -> pd.DataFrame:
+    """ """
 
     keep_cols = [
         "ASAP_dataset_id",

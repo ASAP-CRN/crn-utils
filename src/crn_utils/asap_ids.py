@@ -542,7 +542,7 @@ def update_pmdbs_meta_tables_with_asap_ids(
     """
 
     if pmdbs_tables is None:
-        pmdbs_tables = PMDBS_TABLES + ["SPATIAL"]
+        pmdbs_tables = PMDBS_TABLES.copy() + ["SPATIAL"]
         print(f"default {pmdbs_tables=}")
     # pmdbs_tables = ['STUDY', 'PROTOCOL','SUBJECT', 'ASSAY_RNAseq', 'SAMPLE', 'PMDBS', 'CONDITION', 'CLINPATH', 'DATA']
     # pmdbs_tables = asap_ids_schema['Table'].to_list()
@@ -620,7 +620,7 @@ def update_mouse_meta_tables_with_asap_ids(
     """
     # default to mouse scPMDBS / bulkPMDBS
     if mouse_tables is None:
-        mouse_tables = MOUSE_TABLES + ["SPATIAL"]
+        mouse_tables = MOUSE_TABLES.copy() + ["SPATIAL"]
 
     ASAP_sample_id_tables = asap_ids_schema[
         asap_ids_schema["Field"] == "ASAP_sample_id"

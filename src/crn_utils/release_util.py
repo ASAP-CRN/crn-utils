@@ -242,7 +242,7 @@ def prep_release_metadata_mouse(
     ]
 
     # TODO: make this accomodate proteomics
-    req_tables = MOUSE_TABLES
+    req_tables = MOUSE_TABLES.copy()
 
     if spatial:
         req_tables.append("SPATIAL")
@@ -362,9 +362,9 @@ def prep_release_metadata_pmdbs(
     ]
 
     # TODO: make this accomodate proteomics
-    req_tables = MOUSE_TABLES
+    req_tables = MOUSE_TABLES.copy()
 
-    req_tables = PMDBS_TABLES
+    req_tables = PMDBS_TABLES.copy()
     if spatial:
         req_tables.append("SPATIAL")
 
@@ -542,7 +542,7 @@ def get_release_metadata_cell(
         if table.is_file() and table.suffix == ".csv"
     ]
 
-    req_tables = CELL_TABLES
+    req_tables = CELL_TABLES if not proteomics else PROTEOMICS_TABLES
     table_names = [table.stem for table in tables if table.stem in req_tables]
 
     dfs = load_tables(mdata_path, table_names)
@@ -601,7 +601,7 @@ def get_release_metadata_mouse(
         if table.is_file() and table.suffix == ".csv"
     ]
 
-    req_tables = MOUSE_TABLES
+    req_tables = MOUSE_TABLES.copy()
     if spatial:
         req_tables.append("SPATIAL")
     table_names = [table.stem for table in tables if table.stem in req_tables]
@@ -677,7 +677,7 @@ def get_release_metadata_pmdbs(
         if table.is_file() and table.suffix == ".csv"
     ]
 
-    req_tables = PMDBS_TABLES
+    req_tables = PMDBS_TABLES.copy()
     if spatial:
         req_tables.append("SPATIAL")
 
@@ -758,7 +758,7 @@ def get_release_metadata_human(
         if table.is_file() and table.suffix == ".csv"
     ]
 
-    req_tables = PMDBS_TABLES
+    req_tables = PMDBS_TABLES.copy()
     if spatial:
         req_tables.append("SPATIAL")
 
@@ -885,7 +885,7 @@ def process_schema(
 #     parser.add_argument("--vout", default="v3",
 
 
-#     tables = MOUSE_TABLES + ["SPATIAL"]
+#     tables = MOUSE_TABLES.copy() + ["SPATIAL"]
 #     cde_version = "v3.1"
 #     source_path = metadata_path / "og"
 #     export_path = metadata_path / "v3.1"
@@ -1395,12 +1395,20 @@ def get_stat_tabs_cell(dfs: dict[pd.DataFrame]):
     # then JOIN the result with SUBJECT on "ASAP_subject_id" how=left to get "age_at_collection", "sex", "primary_diagnosis"
     df = pd.merge(df, SUBJECT_, on="ASAP_cell_id", how="left")
 
+    # collapse to remove replicates...
+    uq_df = df[
+        [
+            "ASAP_sample_id",
+            "condition_id",
+        ]
+    ].drop_duplicates()
+
     # get stats for the dataset
-    N = df["ASAP_sample_id"].nunique()
+    N = uq_df["ASAP_sample_id"].nunique()
 
     # brain_region = (df["brain_region"].value_counts().to_dict(),)
     # PD_status = (df["gp2_phenotype"].value_counts().to_dict(),)
-    condition_id = (df["condition_id"].value_counts().to_dict(),)
+    condition_id = (uq_df["condition_id"].value_counts().to_dict(),)
     # diagnosis = (df["primary_diagnosis"].value_counts().to_dict(),)
 
     report = dict(
@@ -1455,7 +1463,16 @@ def get_stat_tabs_mouse(dfs: dict[pd.DataFrame]):
     # get stats for the dataset
     # 0. total number of samples
 
-    age_at_collection = df["age"].astype("float")
+    uq_df = df[
+        [
+            "ASAP_sample_id",
+            "condition_id",
+            "sex",
+            "age",
+        ]
+    ].drop_duplicates()
+
+    age_at_collection = uq_df["age"].astype("float")
     age = dict(
         mean=f"{age_at_collection.mean():.1f}",
         median=f"{age_at_collection.median():.1f}",
@@ -1463,13 +1480,13 @@ def get_stat_tabs_mouse(dfs: dict[pd.DataFrame]):
         min=f"{age_at_collection.min():.1f}",
     )
 
-    N = df["ASAP_sample_id"].nunique()
+    N = uq_df["ASAP_sample_id"].nunique()
 
     # brain_region = (df["brain_region"].value_counts().to_dict(),)
     # PD_status = (df["gp2_phenotype"].value_counts().to_dict(),)
-    condition_id = (df["condition_id"].value_counts().to_dict(),)
+    condition_id = (uq_df["condition_id"].value_counts().to_dict(),)
     # diagnosis = (df["primary_diagnosis"].value_counts().to_dict(),)
-    sex = (df["sex"].value_counts().to_dict(),)
+    sex = (uq_df["sex"].value_counts().to_dict(),)
 
     report = dict(
         N=N,
@@ -1490,6 +1507,7 @@ def get_cohort_stats_table(dfs: dict[pd.DataFrame], source: str = "pmdbs"):
         report["N_teams"] = N_teams
 
     elif source == "mouse":
+        print("💔💔💔💔💔. no mouse cohorts yet.")
         report, df = get_stat_tabs_mouse(dfs)
         # TODO:
     else:
