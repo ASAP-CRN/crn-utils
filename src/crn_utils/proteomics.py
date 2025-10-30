@@ -27,6 +27,7 @@ __all__ = [
 
 
 # TODO: this is a hack based on initial inputs... need to robustify
+# .  hopefully future proteoimcs datasets will just have CRN Cloud metadata submitted
 def prep_proteomics_metadata(
     sdrf_df: pd.DataFrame, schema: pd.DataFrame, tables: list[str] | None = None
 ) -> dict[str, pd.DataFrame]:
