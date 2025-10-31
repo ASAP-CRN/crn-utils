@@ -48,7 +48,9 @@ SUBJECT,ASAP_team_id,ASAP Team ID,Unique ID issued by ASAP CRN Cloud.,String,Ass
 SUBJECT,ASAP_subject_id,ASAP Subject ID,Unique ID issued by ASAP CRN Cloud.,String,Assigned,,0
 SUBJECT,primary_diagnosis_text,Primary Diagnosis Text,"If the primary_diagnosis is ""Other neurological disorders"" diagnosis must be specified here.",string,Optional,,0
 SAMPLE,ASAP_sample_id,ASAP Sample ID,Unique ID issued by ASAP CRN Cloud.,String,Assigned,,1
-SAMPLE,ASAP_subject_id,ASAP Subject ID,Unique ID issued by ASAP CRN Cloud.,String,Assigned,can be assigned NULL for datasets where subject doesn't make sense,1
+SAMPLE,ASAP_subject_id,ASAP Subject ID,Unique ID issued by ASAP CRN Cloud for Human / PMDBS datasets.,String,Assigned,Will not be assigned NULL for datasets where subject doesn't make sense,1
+SAMPLE,ASAP_mouse_id,ASAP Mouse ID,Unique ID issued by ASAP CRN Cloud for Mouse datasets.,String,Assigned,Will not be assigned NULL for datasets where mouse doesn't make sense,1
+SAMPLE,ASAP_cell_id,ASAP Cell ID,Unique ID issued by ASAP CRN Cloud for in-vitro datasets.,String,Assigned,Will not be assigned NULL for datasets where cell doesn't make sense,1
 SAMPLE,sample_id,Sample ID,"ID of each individual sample used in the study (e.g. cortex of anterior cingulate gyrus); if from the same brain several regions are included in the study, each region (i.e. each sample) has different ID and listed as a separate entry.",String,Required,,1
 SAMPLE,subject_id,Subject ID,Subject level ID for source of sample.,String,Required,,1
 SAMPLE,mouse_id,Mouse ID Alias,Used in place of subject_id for mouse studies.,String,Alias,,1
@@ -100,7 +102,7 @@ DATA,replicate,Replicate,"Indicator for replicates of the sample.  Replicates co
 DATA,replicate_count,Total Replicate Count,"Number of replicates of this sample.  Typically this will be 1, but if replicates have been collected indicate how many total.",Integer,Required,,0
 DATA,repeated_sample,Repeated Sample,Indicator that this is a repeated sample.  This will be treated as a boolean.  i.e. enter 0 unless sample is a replicate.,Integer,Required,,1
 DATA,batch,Batch,"Label to enumerate the batch. This will probablby numerica, but could be coded as letters.",String,Required,,0
-DATA,file_type,File Type,"Type of file uploaded for this sample.  We are asking for ""fastq"" for raw data transfer.",Enum,Required,"[""fastq"",""Per sample raw file"", ""Per sample processed file"", ""Combined analysis files"", ""annData"", ""vHDF"", ""plink2"", ""VCF"", ""csv"",""RDS"", ""h5"", ""Seurat Object"", ""bam"", ""cram""]",0
+DATA,file_type,File Type,"Type of file uploaded for this sample.  We are asking for ""fastq"" for raw data transfer.",Enum,Required,"[""fastq"",""Per sample raw file"", ""Per sample processed file"", ""Combined analysis files"", ""annData"", ""vHDF"", ""plink2"", ""VCF"", ""csv"",""RDS"", ""h5"", ""Seurat Object"", ""bam"", ""cram"",""Raw""]",0
 DATA,file_name,File Name,"Full name of file containing the sample data.  For paired-end data (e.g. `sequencing_end` = ""single"") the ROOT of the file can be specified, and the others will be inferred.",String,Required,,0
 DATA,file_description,File Description,Short description of the file.,String,Required,,1
 DATA,file_MD5,File MD5,Checksum hash of the uploaded file using MD5.,String,Required,,0
@@ -215,13 +217,112 @@ CELL,ASAP_team_id,ASAP Team ID,Unique ID issued by ASAP CRN Cloud for each contr
 CELL,aux_table,Cell Table Auxillary Information,"Table which defines additional mouse ""subject"" information",String,Optional,,0
 PROTEOMICS,ASAP_sample_id,ASAP Sample ID,Unique ID issued by ASAP CRN Cloud.,String,Assigned,,1
 PROTEOMICS,sample_id,Sample ID,"ID of each individual sample used in the study (e.g. cortex of anterior cingulate gyrus); if from the same brain several regions are included in the study, each region (i.e. each sample) has different ID and listed as a separate entry",String,Required,,1
-PROTEOMICS,source_id,Source ID,"ID for the source of each sample, possibly encoded in an auxillary table.",String,Required,,1
-PROTEOMICS,technology,Technology,Technology used for measurement.,String,Required,,1
+PROTEOMICS,source_id,Source ID,"ID for the source of each sample, possibly encoded in an auxillary table.  Avoid spaces ("" "") and hyphens (""-"")",String,Required,,1
+PROTEOMICS,subject_id,Subject ID,Can be multiple samples from each Subject,String,Required,,1
+PROTEOMICS,mouse_id,Mouse ID Alias,Used in place of subject_id for mouse studies.,String,Alias,,1
+PROTEOMICS,cell_id,Cell ID Alias,Used in place of subject_id for ipsc/in vitro studies.,String,Alias,,1
+PROTEOMICS,sample_run,Sample Run,Id for the run per sample. Distinguishes from total runs.,String,Required,,0
+PROTEOMICS,technology,Technology,Technology used for measurement.,String,Required,,0
+PROTEOMICS,protocol,Protocols,Reference to the Protocol used for preparation of samples.  e.g. protocols.io reference,String,Required,,0
 PROTEOMICS,assay,Assay,Name or reference to assay.,String,Required,,0
 PROTEOMICS,instrument,Instrument Name,Name of instrument used.,String,Required,,0
 PROTEOMICS,technical_replicate,Technical Replicate,"Indicator for technical replicate:  number or boolean, or table reference.",String,Required,,0
 PROTEOMICS,raw_file,Raw File Name,Name and uri for file containing the raw data associated with this sample.,String,Required,,0
 PROTEOMICS,summary_file,Summary File Name,Name and uri for file containing summarized downstream results associated with this sample.,String,Required,,0
 PROTEOMICS,SDRF_proteomics_table,SDRF-Proteomics Metadata Table,Table which defines SDRF-Proteomics metadata table,String,Required,,0
+PROTEOMICS,disease,Diesease,"Reference to disease context, if applicable.  ""NA"" if not.",String,Required,,0
+PROTEOMICS,source,Sample Source,"Reference to source of samples. i.e. ""human"", ""pmdbs"", ""mouse"", ""invitro""",String,Required,,0
 PROTEOMICS,ASAP_dataset_id,ASAP Dataset ID,Unique ID issued by ASAP CRN Cloud for each contributed Dataset.,String,Assigned,,0
 PROTEOMICS,ASAP_team_id,ASAP Team ID,Unique ID issued by ASAP CRN Cloud for each contributing Team.,String,Assigned,,0
+SDRF,source name,SDRF - Source Name,SDRF,String,Required,,0
+SDRF,characteristics[organism],SDRF - organism,SDRF,String,Required,,0
+SDRF,characteristics[organism part],SDRF - organism part,SDRF,String,Required,,0
+SDRF,characteristics[disease],SDRF - disease,SDRF,String,Required,,0
+SDRF,characteristics[cell type],SDRF - cell type,SDRF,String,Required,,0
+SDRF,characteristics[biological replicate],SDRF - biological replicate,SDRF,String,Required,,0
+SDRF,characteristics[enrichment process],SDRF - enrichment process,SDRF,String,Required,,0
+SDRF,characteristics[sex],SDRF - sex,SDRF,String,Required,,0
+SDRF,characteristics[developmental stage],SDRF - developmental stage,SDRF,String,Required,,0
+SDRF,characteristics[age],,SDRF,String,Required,,0
+SDRF,characteristics[mass],,SDRF,String,Required,,0
+SDRF,characteristics[condition],,SDRF,String,Required,,0
+SDRF,characteristics[sample type],,SDRF,String,Required,,0
+SDRF,assay name,,SDRF,String,Required,,0
+SDRF,technology type,,SDRF,String,Required,,0
+SDRF,comment[label],,SDRF,String,Required,,0
+SDRF,comment[instrument],,SDRF,String,Required,,0
+SDRF,comment[fraction identifier],,SDRF,String,Required,,0
+SDRF,comment[technical replicate],,SDRF,String,Required,,0
+SDRF,comment[cleavage agent details],,SDRF,String,Required,,0
+SDRF,comment[cleavage agent details].1,,SDRF,String,Required,,0
+SDRF,comment[modification parameters],,SDRF,String,Required,,0
+SDRF,comment[modification parameters].1,,SDRF,String,Required,,0
+SDRF,comment[dissociation method],,SDRF,String,Required,,0
+SDRF,comment[precursor mass tolerance],,SDRF,String,Required,,0
+SDRF,comment[fragment mass tolerance],,SDRF,String,Required,,0
+SDRF,comment[file uri],,SDRF,String,Required,,0
+SDRF,comment[data file],,SDRF,String,Required,,0
+SDRF,comment[proteomics data acquisition method],,SDRF,String,Required,,0
+SDRF,comment[reduction reagent],,SDRF,String,Required,,0
+SDRF,comment[alkylation reagent],,SDRF,String,Required,,0
+SDRF,comment[condition],,SDRF,String,Required,,0
+SDRF,comment[ms1 scan range],,SDRF,String,Required,,0
+SDRF,comment[ms2 analyzer type],,SDRF,String,Required,,0
+SDRF,comment[ms2 analyzer type].1,,SDRF,String,Required,,0
+SDRF,comment[database],,SDRF,String,Required,,0
+SDRF,comment[search engine],,SDRF,String,Required,,0
+SDRF,comment[quant file],,SDRF,String,Required,,0
+SDRF,factor value[condition],,SDRF,String,Required,,0
+SDRF,comment[sample run],,SDRF,String,Required,,0
+SDRF,characteristics[individual],,SDRF,String,Required,,0
+SDRF,characteristics[strain/breed],,SDRF,String,Required,,0
+SDRF,characteristics[cell line],,SDRF,String,Required,,0
+SDRF,characteristics[ancestry category],,SDRF,String,Required,,0
+MULTISAMPLE,ASAP_multi_sample_id,ASAP Mltiplex Sample ID,Unique ID issued by ASAP CRN Cloud for multiplexed (parsebio) data,String,Assigned,,1
+MULTISAMPLE,multi_sample_id,Multiplex Sample ID,ID of each individual sample used in the multiplexed (parsebio) study,String,Required,,1
+MULTISAMPLE,subject_ids,Subject IDs,"Subject level IDs for source of sample.  Separated by ""|""",String,Required,,1
+MULTISAMPLE,source_sample_ids,Source Sample IDs,"IDs provided by Brain bank or other source.  Separated by ""|""",String,Required,,0
+MULTISAMPLE,replicate,Replicate,"Indicator for replicates of the sample.  Replicates could be biological or tecnical.  Indicate biological replicates as capitalized ""Rep"" + replicated number (i.e. Rep1, Rep2, etc) and technical replicates with lowercase ""rep"" + replicate number (i.e., rep1, rep2 etc.)",String,Required,,0
+MULTISAMPLE,replicate_count,Total Replicate Count,"Number of replicates of this sample.  Typically this will be 1, but if replicates have been collected indicate how many total.",Integer,Required,,1
+MULTISAMPLE,repeated_sample,Repeated Sample,Indicator that this is a repeated sample.  This will be treated as a boolean.  i.e. enter 0 unless sample is a replicate.,Integer,Required,,0
+MULTISAMPLE,batch,Batch,"Label to enumerate the batch. This will probablby numerica, but could be coded as letters.",String,Required,,0
+MULTISAMPLE,organism,Organism,"Organism of the subject. Currently this is only ""Human"", ""Mouse""",Enum,Required,"[""Human"", ""Mouse"",""Dog"",""Fly"",""Other""]",0
+MULTISAMPLE,tissue,Tissue,"Type of tissue.  e.g. ""Brain"" or other organ.  For this PMDBS database it should always be ""Brain"".  ""Colon"", ""iPSC"", ""Blood"",  ""CSF"", etc.",String,Required,,1
+MULTISAMPLE,assay_type,Type of Assay,Refers to the ASSAY_* table. Expand as nescessary,Enum,Required,"['scRNAseq','snRNAseq','bulkRNAseq','spatialRNAseq', 'ATACseq','Proteomic','Metabolomic','DNAseq','WGS']",0
+MULTISAMPLE,condition_id,Experimental Condition,"Code for the experimental condition of the sample. e.g. ""PD"", ""Control"", ""Prodromal"", ""Other"".  Defined further in CONDITION table.",String,Required,,0
+MULTISAMPLE,organism_ontology_term_id,Organism Ontology Term ID,"Organisim ID according to the NCBITaxon e.g. 9606 for Homo Sapiens, 10090 for mouse",Enum,Required,"[""NCBITaxon:9606"",""NCBITaxon:10090""]",0
+MULTISAMPLE,age_at_collection,Age at Collection,"Numerical age of subject/animal at sample collection. Matches SUBJECT.'age_at_collection' for Human/PMDBS, matches MOUSE.age for Mouse datasets. days",Float,Required,,0
+MULTISAMPLE,ASAP_dataset_id,ASAP Dataset ID,Unique ID issued by ASAP CRN Cloud for each contributed Dataset.,String,Assigned,,0
+MULTISAMPLE,ASAP_team_id,ASAP Team ID,Unique ID issued by ASAP CRN Cloud for each contributing Team.,String,Assigned,,0
+MULTISAMPLE,time,Time,"Time from baseline in days. Units in days, 0 is baseline to facilitate longitudinal analysis.",Float,Optional,,0
+MULTISAMPLE,alternate_id,Alternate ID,Alternate sample identifier. e.g. cell line,String,Optional,,0
+MULTISAMPLE,development_stage_ontology_term_id,Development Stage Ontology Term,HsapDv if human. Included for compatibilty with CELLxGENE. https://www.ebi.ac.uk/ols/ontologies/hsapdv,String,Optional,,0
+MULTISAMPLE,sex_ontology_term_id,Sex Ontology Term ID,"PATO:0000384 for male, PATO:0000383 for female, or unknown if unavailable.",Enum,Optional,"[""PATO:0000384 (male)"", ""PATO:0000383 (female)"", ""Unknown""]",0
+MULTISAMPLE,self_reported_ethnicity_ontology_term_id,Self Reported Ethnicity Ontology,"HANCESTRO use multiethnic if more than one ethnicity is reported. If human and information unavailable, use unknown. Included for compatibilty with CELLxGENE. https://www.ebi.ac.uk/ols/ontologies/hancestro",String,Optional,,0
+MULTISAMPLE,disease_ontology_term_id,Disease Ontology Term ID,MONDO or PATO:0000461 for 'normal'. Included for compatibilty with CELLxGENE. https://www.ebi.ac.uk/ols/ontologies/mondo https://github.com/chanzuckerberg/single-cell-curation/blob/main/schema/3.0.0/schema.md#suspension_type,String,Optional,,0
+MULTISAMPLE,tissue_ontology_term_id,Tissue Ontology Term ID,UBERON. Included for compatibilty with CELLxGENE. https://www.ebi.ac.uk/ols/ontologies/uberon  as per  https://github.com/chanzuckerberg/single-cell-curation/blob/main/schema/3.0.0/schema.md#suspension_type,String,Optional,,0
+MULTISAMPLE,assay_ontology_term_id,Assay Ontology Term ID,EFO. Included for compatibilty with CELLxGENE. https://www.ebi.ac.uk/ols/ontologies/efo,String,Optional,,0
+MULTISAMPLE,donor_id,Donor ID,free-text identifier that distinguishes the unique individual that data were derived from. Included for compatibilty with CELLxGENE.,String,Optional,,0
+MULTISAMPLE,pm_PH,Post-mortem PH,PH measured in the tissue. PH is designated as a number ranging between 0 and 14.,Float,Optional,(0-14),0
+MULTISAMPLE,cell_type_ontology_term_id,Cell Type Ontology Term ID,Included for compatibilty with CELLxGENE. https://www.ebi.ac.uk/ols/ontologies/cl,String,Optional,,0
+MULTISAMPLE,source_RIN,Source RIN,"RIN provided by Tissue/Brain/Biobank, if applicable.",Float,Optional,,0
+MULTISAMPLE,DV200,DV200 Value,Value is the percentage of RNA fragments larger than 200 nucleotides.,Float,Optional,,0
+MULTISAMPLE,suspension_type,Suspension Type,"Cell, nucleus, or na, as corresponding to assay. Included for compatibilty with CELLxGENE. Use https://github.com/chanzuckerberg/single-cell-curation/blob/main/schema/3.0.0/schema.md#suspension_type defined in the data schema for additional guidance.",String,Optional,,0
+MULTIDATA,ASAP_multi_sample_id,ASAP Mltiplex Sample ID,Unique ID issued by ASAP CRN Cloud for multiplexed (parsebio) data,String,Assigned,,1
+MULTIDATA,multi_sample_id,Multiplex Sample ID,ID of each individual sample used in the multiplexed (parsebio) study,String,Required,,1
+MULTIDATA,replicate,Replicate,"Indicator for replicates of the sample.  Replicates could be biological or tecnical.  Indicate biological replicates as capitalized ""Rep"" + replicated number (i.e. Rep1, Rep2, etc) and technical replicates with lowercase ""rep"" + replicate number (i.e., rep1, rep2 etc.)",String,Required,,1
+MULTIDATA,replicate_count,Total Replicate Count,"Number of replicates of this sample.  Typically this will be 1, but if replicates have been collected indicate how many total.",Integer,Required,,0
+MULTIDATA,repeated_sample,Repeated Sample,Indicator that this is a repeated sample.  This will be treated as a boolean.  i.e. enter 0 unless sample is a replicate.,Integer,Required,,1
+MULTIDATA,batch,Batch,"Label to enumerate the batch. This will probablby numerica, but could be coded as letters.",String,Required,,0
+MULTIDATA,file_type,File Type,"Type of file uploaded for this sample.  We are asking for ""fastq"" for raw data transfer.",Enum,Required,"[""fastq"",""Per sample raw file"", ""Per sample processed file"", ""Combined analysis files"", ""annData"", ""vHDF"", ""plink2"", ""VCF"", ""csv"",""RDS"", ""h5"", ""Seurat Object"", ""bam"", ""cram"",""Raw""]",0
+MULTIDATA,file_name,File Name,"Full name of file containing the sample data.  For paired-end data (e.g. `sequencing_end` = ""single"") the ROOT of the file can be specified, and the others will be inferred.",String,Required,,0
+MULTIDATA,file_description,File Description,Short description of the file.,String,Required,,1
+MULTIDATA,file_MD5,File MD5,Checksum hash of the uploaded file using MD5.,String,Required,,0
+MULTIDATA,adjustment,Data Adjustment,"Indication of whether the data has been adjusted.  i.e. Is the data ""raw"" or ""processed""?",Enum,Required,"['Raw','Processed']",0
+MULTIDATA,content,File Content,Description of file content. What is the variable measurement values?,Enum,Required,"['Counts','Probabilities','Genotypes','Dosages','Reads']",0
+MULTIDATA,gcp_uri,Raw Data URI,Location of raw data file in the raw google cloud platform (GCP) bucket.,String,Assigned,,0
+MULTIDATA,ASAP_dataset_id,ASAP Dataset ID,Unique ID issued by ASAP CRN Cloud for each contributed Dataset.,String,Assigned,,0
+MULTIDATA,ASAP_team_id,ASAP Team ID,Unique ID issued by ASAP CRN Cloud for each contributing Team.,String,Assigned,,0
+MULTIDATA,header,File Header,Description of file header. What are the primary header labels?,String,Optional,,0
+MULTIDATA,annotation,File Annotation,"Additional annotation columns present in file. I.e. 'tissue','UMI','barcode','cluster', or'cell location' .. Additional colunns in the annData or HDF files when relevant to technologies like single cell or spatial. ['SNP','ENSG','interval'] SNP is rsID or positional annotation. Interval is in chr_start_stop format. ENSG is ensemble ID.",String,Optional,,0
+MULTIDATA,configuration_file,Configuration File,"Reference file: Incl. software version, reference assembly, parameters for analysis, in YAML format",String,Optional,,0

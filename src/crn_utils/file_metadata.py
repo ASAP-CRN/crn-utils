@@ -187,7 +187,11 @@ def update_spatial_table_with_gcp_uri(
 
 
 def gen_raw_bucket_summary(
-    raw_bucket_name: str, dl_path: Path, dataset_name: str, flatten: bool = False
+    raw_bucket_name: str,
+    dl_path: Path,
+    dataset_name: str,
+    flatten: bool = False,
+    raw_type: str = "fastq",
 ):
     if "cohort" in dataset_name:
         print(f"No raw bucket for cohort datasets: {dataset_name}")
@@ -232,7 +236,11 @@ def gen_raw_bucket_summary(
             print(f"No artifact files found for {dataset_name}")
 
         # create a list of the files in the raw_bucket/fastqs
-        prefix = "fastqs/*.fastq.gz" if flatten else "fastqs/**/*.fastq.gz"
+        if raw_type == "raw":
+            prefix = "raw/*.raw" if flatten else "raw/**/*.raw"
+        else:  # raw_type == "fastq":
+            prefix = "fastqs/*.fastq.gz" if flatten else "fastqs/**/*.fastq.gz"
+
         bucket_path = (
             f"{raw_bucket_name.split('/')[-1]}"  # dev_bucket_name has gs:// prefix
         )
@@ -248,9 +256,11 @@ def gen_raw_bucket_summary(
                 lambda x: x.split("/")[-1]
             )
             raw_files_df["bucket_md5"] = raw_files_df["file_name"].map(bucket_files_md5)
+
+            # TODO: fix this so the file manifest isn't always fastqs.  There are downstream implications (file name is assumed in release utils)
             raw_files_df.to_csv(dl_path / f"{dataset_name}-raw_fastqs.csv", index=False)
 
-            # merge in md5s.
+            # TODO: merge in md5s.
             # dump md5s to file
             with open(dl_path / f"{dataset_name}-raw_fastqs-md5s.json", "w") as f:
                 json.dump(bucket_files_md5, f)
@@ -364,9 +374,9 @@ def gen_spatial_bucket_summary(raw_bucket_name: str, dl_path: Path, dataset_name
 
 
 ####################
-
-
 def get_artifacts_df(dl_path: Path, dataset_id: str, team_id: str):
+    """ """
+
     keep_cols = [
         "ASAP_dataset_id",
         "ASAP_team_id",
@@ -444,6 +454,7 @@ def get_fastqs_df(dl_path: Path, dataset_id: str, team_id: str) -> pd.DataFrame:
 
 
 def get_spatial_df(dl_path: Path, dataset_id: str, team_id: str) -> pd.DataFrame:
+    """ """
 
     keep_cols = [
         "ASAP_dataset_id",

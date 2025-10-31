@@ -252,9 +252,29 @@ def clean_cde_schema(cde_schema):
     return cleaned_schema
 
 
+# new function
 def read_CDE_asap_ids(
-    schema_version: str = "v3.1", local_path: str | bool | Path = False
-):
+    schema_version: str = "v3.3", local_path: str | bool | Path = False
+) -> pd.DataFrame:
+    """
+    Load CDE from local csv and cache it, return a dataframe and dictionary of dtypes
+    """
+
+    df = read_CDE(schema_version, local_path, include_asap_ids=True)
+
+    df = df[df["Required"] == "Assigned"]
+    # drop rows with no table name (i.e. ASAP_ids)
+    df = df[["Table", "Field", "Description", "DataType", "Required", "Validation"]]
+    df = df.dropna(subset=["Table"])
+    df = df.reset_index(drop=True)
+
+    return df
+
+
+# original function
+def _read_CDE_asap_ids(
+    schema_version: str = "v3.3", local_path: str | bool | Path = False
+) -> pd.DataFrame:
     """
     Load CDE from local csv and cache it, return a dataframe and dictionary of dtypes
     """
@@ -298,7 +318,7 @@ def read_CDE_asap_ids(
     return df
 
 
-def compare_CDEs(df1, df2):
+def compare_CDEs(df1: pd.DataFrame, df2: pd.DataFrame) -> str | list[str]:
     """
     Compares two pandas dataframes and returns if they are identical or not.
     If they are not identical, it returns the differences between the two dataframes.
@@ -353,7 +373,7 @@ def export_table(table_name: str, df: pd.DataFrame, out_dir: str):
     df.to_csv(out_dir / f"{table_name}.csv", index=False)
 
 
-def read_meta_table(table_path):
+def read_meta_table(table_path: str | Path) -> pd.DataFrame:
     # read the whole table
     try:
         table_df = pd.read_csv(table_path, dtype=str)
@@ -387,7 +407,7 @@ def read_meta_table(table_path):
 
 ######## HELPERS ########
 # Define a function to only capitalize the first letter of a string
-def capitalize_first_letter(s):
+def capitalize_first_letter(s) -> str:
     if (
         not isinstance(s, str) or len(s) == 0
     ):  # Check if the value is a string and non-empty
@@ -420,7 +440,7 @@ def prep_table(df_in: pd.DataFrame, CDE: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def load_tables(table_path, tables):
+def load_tables(table_path: Path, tables: list[str]) -> dict[str, pd.DataFrame]:
     dfs = {}
     for tab in tables:
         # print(f"loading {tab}")
@@ -428,12 +448,15 @@ def load_tables(table_path, tables):
     return dfs
 
 
-def export_meta_tables(dfs, export_path):
+def export_meta_tables(dfs: dict[str, pd.DataFrame], export_path: Path):
     for tab in dfs.keys():
         if tab not in dfs:  # BUG:?  can this ever be true
             print(f"Table {tab} not found in dataset tables")
             continue
         dfs[tab].to_csv(export_path / f"{tab}.csv")
+    else:
+        print(f"Exported {len(dfs)} tables to {export_path}")
+        return 1
     return 0
 
 
@@ -472,7 +495,7 @@ def _create_metadata_package(metadata_source: Path, package_destination: Path):
     return copied
 
 
-def get_dataset_version(dataset_name: str, datasets_path: Path):
+def get_dataset_version(dataset_name: str, datasets_path: Path) -> str:
     """
     Get the version of the dataset from the dataset name
     """
@@ -484,7 +507,7 @@ def get_dataset_version(dataset_name: str, datasets_path: Path):
     return ds_ver
 
 
-def get_release_version(release_path: Path):
+def get_release_version(release_path: Path) -> str:
     """
     Get the version of the release from the release_path
     """

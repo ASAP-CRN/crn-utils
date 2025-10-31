@@ -845,6 +845,7 @@ class ZenodoClient(object):
                 " ** the object is not pointing to a project. Use either .set_deposition_id() or .create_deposition() before changing metadata ** "
             )
             return
+
         data_payload = {"metadata": metadata}
         r = requests.put(
             f"{self._endpoint}/deposit/depositions/{self.deposition_id}",

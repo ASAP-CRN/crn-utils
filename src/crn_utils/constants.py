@@ -4,6 +4,7 @@ __all__ = [
     "CELL_TABLES",
     "IPSC_TABLES",
     "PROTEOMICS_TABLES",
+    "MULTIPLEX_TABLES",
 ]
 
 MOUSE_TABLES = [
@@ -41,11 +42,27 @@ CELL_TABLES = [
 
 IPSC_TABLES = CELL_TABLES.copy()
 
+# TODO: allow for aliasing of CELL, SUBJECT, or MOUSE
 PROTEOMICS_TABLES = [
     "STUDY",
     "SAMPLE",
+    "CELL",  # optional, could be SUBJECT, or MOUSE
     "PROTEOMICS",
     "CONDITION",
     "DATA",
     "SDRF",
+]
+
+
+# TODO: allow for aliasing of CELL, SUBJECT, or MOUSE
+MULTIPLEX_TABLES = [
+    "STUDY",
+    "PROTOCOL",
+    "SUBJECT",
+    "MULTISAMPLE",
+    "ASSAY_RNAseq",
+    "MULTIDATA",
+    "PMDBS",
+    "CLINPATH",
+    "CONDITION",
 ]

@@ -60,25 +60,13 @@ def create_metadata_package(
     write_version(schema_version, final_metadata_path / "cde_version")
 
 
-def prep_proteomics_metadata(
-    ds_path: Path,
-    schema_version: str,
-    map_path: Path,
-    suffix: str,
-    spatial: bool = False,
-    flatten: bool = False,
-    map_only: bool = False,
-):
-    """ """
-    pass
-
-
 def prep_release_metadata(
     ds_path: Path,
     schema_version: str,
     map_path: Path,
     suffix: str,
     spatial: bool = False,
+    proteomics: bool = False,
     source: str = "pmdbs",
     flatten: bool = False,
 ):
@@ -92,16 +80,16 @@ def prep_release_metadata(
 
     if source == "pmdbs":
         prep_release_metadata_pmdbs(
-            ds_path, schema_version, map_path, suffix, spatial, flatten
+            ds_path, schema_version, map_path, suffix, spatial, proteomics, flatten
         )
     elif source == "mouse":
         prep_release_metadata_mouse(
-            ds_path, schema_version, map_path, suffix, spatial, flatten
+            ds_path, schema_version, map_path, suffix, spatial, proteomics, flatten
         )
 
     elif source in ["cell", "invitro", "ipsc"]:
         prep_release_metadata_cell(
-            ds_path, schema_version, map_path, suffix, spatial, flatten
+            ds_path, schema_version, map_path, suffix, proteomics, flatten
         )
     else:
         raise ValueError(f"Unknown source {source}")
@@ -112,7 +100,7 @@ def prep_release_metadata_cell(
     schema_version: str,
     map_path: Path,
     suffix: str,
-    spatial: bool = False,
+    proteomics: bool = False,
     flatten: bool = False,
     map_only: bool = False,
 ):
@@ -133,6 +121,8 @@ def prep_release_metadata_cell(
     asap_ids_df = read_CDE_asap_ids()
     asap_ids_schema = asap_ids_df[["Table", "Field"]]
 
+    print(asap_ids_schema)
+
     # # %%
     datasetid_mapper, cellid_mapper, sampleid_mapper = load_cell_id_mappers(
         map_path, suffix
@@ -146,15 +136,16 @@ def prep_release_metadata_cell(
         if table.is_file() and table.suffix == ".csv"
     ]
 
-    req_tables = CELL_TABLES
+    req_tables = PROTEOMICS_TABLES if proteomics else CELL_TABLES
+
     table_names = [table.stem for table in tables if table.stem in req_tables]
 
     dfs = load_tables(mdata_path, table_names)
 
     if not map_only:
         datasetid_mapper, cellid_mapper, sampleid_mapper = update_cell_id_mappers(
-            dfs["CELL"].copy(),
-            dfs["SAMPLE"].copy(),
+            dfs["CELL"],
+            dfs["SAMPLE"],
             dataset_name,
             datasetid_mapper,
             cellid_mapper,
@@ -184,10 +175,7 @@ def prep_release_metadata_cell(
         raw_bucket_name, file_metadata_path, dataset_name, flatten=flatten
     )
 
-    make_file_metadata(ds_path, file_metadata_path, dfs["DATA"], spatial=spatial)
-
-    if spatial:
-        gen_spatial_bucket_summary(raw_bucket_name, file_metadata_path, dataset_name)
+    make_file_metadata(ds_path, file_metadata_path, dfs["DATA"], spatial=False)
 
     dfs["STUDY"] = update_study_table_with_doi(dfs["STUDY"], ds_path)
     dfs["DATA"] = update_data_table_with_gcp_uri(dfs["DATA"], ds_path)
@@ -219,6 +207,7 @@ def prep_release_metadata_mouse(
     map_path: Path,
     suffix: str,
     spatial: bool = False,
+    proteomics: bool = False,
     flatten: bool = False,
     map_only: bool = False,
 ):
@@ -252,7 +241,9 @@ def prep_release_metadata_mouse(
         if table.is_file() and table.suffix == ".csv"
     ]
 
-    req_tables = MOUSE_TABLES
+    # TODO: make this accomodate proteomics
+    req_tables = MOUSE_TABLES.copy()
+
     if spatial:
         req_tables.append("SPATIAL")
     table_names = [table.stem for table in tables if table.stem in req_tables]
@@ -332,6 +323,7 @@ def prep_release_metadata_pmdbs(
     map_path: Path,
     suffix: str,
     spatial: bool = False,
+    proteomics: bool = False,
     flatten: bool = False,
     map_only: bool = False,
 ):
@@ -369,7 +361,10 @@ def prep_release_metadata_pmdbs(
         if table.is_file() and table.suffix == ".csv"
     ]
 
-    req_tables = PMDBS_TABLES
+    # TODO: make this accomodate proteomics
+    req_tables = MOUSE_TABLES.copy()
+
+    req_tables = PMDBS_TABLES.copy()
     if spatial:
         req_tables.append("SPATIAL")
 
@@ -463,6 +458,7 @@ def get_crn_release_metadata(
     map_path: Path,
     suffix: str,
     spatial: bool = False,
+    proteomics: bool = False,
     source: str = "pmdbs",
 ):
     """
@@ -471,16 +467,39 @@ def get_crn_release_metadata(
 
     if source == "pmdbs":
         dfs = get_release_metadata_pmdbs(
-            ds_path, schema_version, map_path, suffix, spatial
+            ds_path,
+            schema_version,
+            map_path,
+            suffix,
+            spatial=spatial,
+            proteomics=proteomics,
+        )
+    elif source == "human ":
+        dfs = get_release_metadata_human(
+            ds_path,
+            schema_version,
+            map_path,
+            suffix,
+            spatial=spatial,
+            proteomics=proteomics,
         )
     elif source == "mouse":
         dfs = get_release_metadata_mouse(
-            ds_path, schema_version, map_path, suffix, spatial
+            ds_path,
+            schema_version,
+            map_path,
+            suffix,
+            spatial=spatial,
+            proteomics=proteomics,
         )
 
-    elif source == "cell":
+    elif source in ["cell", "invitro", "ipsc"]:
         dfs = get_release_metadata_cell(
-            ds_path, schema_version, map_path, suffix, spatial
+            ds_path, schema_version, map_path, suffix, proteomics=proteomics
+        )
+    elif source == "proteomics":
+        dfs = get_release_metadata_cell(
+            ds_path, schema_version, map_path, suffix, proteomics=True
         )
     else:
         raise ValueError(f"Unknown source {source}")
@@ -493,7 +512,7 @@ def get_release_metadata_cell(
     schema_version: str,
     map_path: Path,
     suffix: str,
-    spatial: bool = False,
+    proteomics: bool = False,
 ) -> dict:
     # source
     # spatial
@@ -523,7 +542,7 @@ def get_release_metadata_cell(
         if table.is_file() and table.suffix == ".csv"
     ]
 
-    req_tables = CELL_TABLES
+    req_tables = CELL_TABLES if not proteomics else PROTEOMICS_TABLES
     table_names = [table.stem for table in tables if table.stem in req_tables]
 
     dfs = load_tables(mdata_path, table_names)
@@ -550,6 +569,7 @@ def get_release_metadata_mouse(
     map_path: Path,
     suffix: str,
     spatial: bool = False,
+    proteomics: bool = False,
 ) -> dict:
     # source
     # spatial
@@ -581,7 +601,7 @@ def get_release_metadata_mouse(
         if table.is_file() and table.suffix == ".csv"
     ]
 
-    req_tables = MOUSE_TABLES
+    req_tables = MOUSE_TABLES.copy()
     if spatial:
         req_tables.append("SPATIAL")
     table_names = [table.stem for table in tables if table.stem in req_tables]
@@ -605,6 +625,8 @@ def get_release_metadata_mouse(
             dfs["SPATIAL"], ds_path, visium=visium
         )
 
+    # TODO add proteoimics mouse stuff here
+
     return dfs
 
 
@@ -614,6 +636,7 @@ def get_release_metadata_pmdbs(
     map_path: Path,
     suffix: str,
     spatial: bool = False,
+    proteomics: bool = False,
 ) -> dict:
 
     # source
@@ -654,7 +677,7 @@ def get_release_metadata_pmdbs(
         if table.is_file() and table.suffix == ".csv"
     ]
 
-    req_tables = PMDBS_TABLES
+    req_tables = PMDBS_TABLES.copy()
     if spatial:
         req_tables.append("SPATIAL")
 
@@ -681,6 +704,89 @@ def get_release_metadata_pmdbs(
         dfs["SPATIAL"] = update_spatial_table_with_gcp_uri(
             dfs["SPATIAL"], ds_path, visium=visium
         )
+
+    # TODO add proteoimics pmdbs stuff here
+
+    return dfs
+
+
+# TODO: add non PMDBS human wrinkles now
+def get_release_metadata_human(
+    ds_path: Path,
+    schema_version: str,
+    map_path: Path,
+    suffix: str,
+    spatial: bool = False,
+    proteomics: bool = False,
+) -> dict:
+
+    # source
+    # spatial
+
+    dataset_name = ds_path.name
+    print(f"release_util: Processing {ds_path.name}")
+    ds_parts = dataset_name.split("-")
+    team = ds_parts[0]
+    source = ds_parts[1]
+    short_dataset_name = "-".join(ds_parts[2:])
+    raw_bucket_name = f"asap-raw-team-{team}-{source}-{short_dataset_name}"
+
+    visium = "geomx" not in dataset_name
+
+    CDE = read_CDE(schema_version)
+    asap_ids_df = read_CDE_asap_ids()
+    asap_ids_schema = asap_ids_df[["Table", "Field"]]
+
+    # # %%
+    (
+        datasetid_mapper,
+        subjectid_mapper,
+        sampleid_mapper,
+        gp2id_mapper,
+        sourceid_mapper,
+    ) = load_pmdbs_id_mappers(map_path, suffix)
+
+    # ds_path.mkdir(parents=True, exist_ok=True)
+    if schema_version == "v2.1":
+        mdata_path = ds_path / "metadata" / "v2"
+    else:
+        mdata_path = ds_path / "metadata" / schema_version
+
+    tables = [
+        table
+        for table in mdata_path.iterdir()
+        if table.is_file() and table.suffix == ".csv"
+    ]
+
+    req_tables = PMDBS_TABLES.copy()
+    if spatial:
+        req_tables.append("SPATIAL")
+
+    table_names = [table.stem for table in tables if table.stem in req_tables]
+
+    dfs = load_tables(mdata_path, table_names)
+
+    dfs = update_pmdbs_meta_tables_with_asap_ids(
+        dfs,
+        dataset_name,
+        asap_ids_schema,
+        datasetid_mapper,
+        subjectid_mapper,
+        sampleid_mapper,
+        gp2id_mapper,
+        sourceid_mapper,
+        pmdbs_tables=table_names,
+    )
+
+    dfs["STUDY"] = update_study_table_with_doi(dfs["STUDY"], ds_path)
+
+    dfs["DATA"] = update_data_table_with_gcp_uri(dfs["DATA"], ds_path)
+    if spatial:
+        dfs["SPATIAL"] = update_spatial_table_with_gcp_uri(
+            dfs["SPATIAL"], ds_path, visium=visium
+        )
+
+    # TODO add proteoimics pmdbs stuff here
 
     return dfs
 
@@ -779,7 +885,7 @@ def process_schema(
 #     parser.add_argument("--vout", default="v3",
 
 
-#     tables = MOUSE_TABLES + ["SPATIAL"]
+#     tables = MOUSE_TABLES.copy() + ["SPATIAL"]
 #     cde_version = "v3.1"
 #     source_path = metadata_path / "og"
 #     export_path = metadata_path / "v3.1"
@@ -999,7 +1105,11 @@ def fix_study_table(metadata_path: Path, doi_path: Path | None = None):
 
 
 def get_stats_table(dfs: dict[pd.DataFrame], source: str = "pmdbs"):
-    """ """
+    """
+    generate the datasets stats for making the CRN release report
+    Note that proteomics for now is also "cell" based ("invitro")
+
+    """
     if source == "pmdbs":
         return get_stat_tabs_pmdbs(dfs)
     elif source == "mouse":
@@ -1088,9 +1198,8 @@ _region_titles = {
 }
 
 
-def get_stat_tabs_pmdbs(dfs: dict[pd.DataFrame]):
+def make_stats_df_pmdbs(dfs: dict[pd.DataFrame]) -> pd.DataFrame:
     """ """
-
     # do joins to get the stats we need.
     # first JOIN SAMPLE and CONDITION on "condition_id" how=left to get our "intervention_id" or PD / control
     sample_cols = [
@@ -1131,9 +1240,6 @@ def get_stat_tabs_pmdbs(dfs: dict[pd.DataFrame]):
     condition_cols = [
         "condition_id",
         "intervention_name",
-        "intervention_id",
-        "protocol_id",
-        "intervention_aux_table",
     ]
 
     if "age_at_collection" in dfs["SUBJECT"].columns:
@@ -1161,29 +1267,62 @@ def get_stat_tabs_pmdbs(dfs: dict[pd.DataFrame]):
     df = pd.merge(df, SUBJECT_, on="ASAP_subject_id", how="left")
 
     # then JOIN the result with PMDBS on "ASAP_subject_id" how=left to get "brain_region"
-    df = pd.merge(df, PMDBS_, on="ASAP_sample_id", how="left")
+    df = (
+        pd.merge(df, PMDBS_, on="ASAP_sample_id", how="left")
+        .drop_duplicates()
+        .reset_index(drop=True)
+    )
+    return df
+
+
+def get_stat_tabs_pmdbs(dfs: dict[pd.DataFrame]):
+    """ """
+    df = make_stats_df_pmdbs(dfs)
+    report = get_stats_pmdbs(df)
+    return report, df
+
+
+def get_stats_pmdbs(df: pd.DataFrame) -> dict:
+    # should be the same as df.shape[0]
+    n_samples = df[["ASAP_sample_id", "replicate"]].drop_duplicates().shape[0]
+    n_subjects = df["ASAP_subject_id"].nunique()
 
     # get stats for the dataset
     # 0. total number of samples
+    # SAMPLE wise
+    sw_df = df[
+        [
+            "ASAP_sample_id",
+            "ASAP_subject_id",
+            "replicate",
+            "gp2_phenotype",
+            "primary_diagnosis",
+            "age_at_collection",
+            "brain_region",
+            "condition_id",
+            "sex",
+        ]
+    ].drop_duplicates()
 
-    age_at_collection = df["age_at_collection"].replace({"NA": np_nan}).astype("float")
-    n_samples = df["ASAP_sample_id"].nunique()
+    print(f"shape df: {df.shape}, shape sw_df: {sw_df.shape}")
 
-    n_subjects = df["ASAP_subject_id"].nunique()
     brain_code = (
-        df["brain_region"].replace(_brain_region_coder).value_counts().to_dict()
+        sw_df["brain_region"].replace(_brain_region_coder).value_counts().to_dict()
     )
     brain_region = (
-        df["brain_region"]
+        sw_df["brain_region"]
         .replace(_brain_region_coder)
         .map(_region_titles)
         .value_counts()
         .to_dict()
     )
 
-    sex = (df["sex"].value_counts().to_dict(),)
-    PD_status = (df["gp2_phenotype"].value_counts().to_dict(),)
-    condition_id = (df["condition_id"].value_counts().to_dict(),)
+    age_at_collection = (
+        sw_df["age_at_collection"].replace({"NA": np_nan}).astype("float")
+    )
+    sex = (sw_df["sex"].value_counts().to_dict(),)
+    PD_status = (sw_df["gp2_phenotype"].value_counts().to_dict(),)
+    condition_id = (sw_df["condition_id"].value_counts().to_dict(),)
     age = dict(
         mean=f"{age_at_collection.mean():.1f}",
         median=f"{age_at_collection.median():.1f}",
@@ -1218,6 +1357,9 @@ def get_stat_tabs_pmdbs(dfs: dict[pd.DataFrame]):
     condition_id = (sw_df["condition_id"].value_counts().to_dict(),)
     diagnosis = (sw_df["primary_diagnosis"].value_counts().to_dict(),)
     sex = (sw_df["sex"].value_counts().to_dict(),)
+    age_at_collection = (
+        sw_df["age_at_collection"].replace({"NA": np_nan}).astype("float")
+    )
 
     age = dict(
         mean=f"{age_at_collection.mean():.1f}",
@@ -1239,13 +1381,11 @@ def get_stat_tabs_pmdbs(dfs: dict[pd.DataFrame]):
         subject=subject,
         samples=samples,
     )
-
     # SAMPLE wise
+    return report
 
-    return report, df
 
-
-def get_stat_tabs_cell(dfs: dict[pd.DataFrame]):
+def make_stats_df_cell(dfs: dict[pd.DataFrame]) -> pd.DataFrame:
     """ """
     sample_cols = [
         "ASAP_sample_id",
@@ -1283,24 +1423,51 @@ def get_stat_tabs_cell(dfs: dict[pd.DataFrame]):
     df = pd.merge(SAMPLE_, CONDITION_, on="condition_id", how="left")
 
     # then JOIN the result with SUBJECT on "ASAP_subject_id" how=left to get "age_at_collection", "sex", "primary_diagnosis"
-    df = pd.merge(df, SUBJECT_, on="ASAP_cell_id", how="left")
+    df = (
+        pd.merge(df, SUBJECT_, on="ASAP_cell_id", how="left")
+        .drop_duplicates()
+        .reset_index(drop=True)
+    )
+    return df
+
+
+def get_stat_tabs_cell(dfs: dict[pd.DataFrame]):
+    """ """
+    df = make_stats_df_cell(dfs)
+    report = get_stats_cell(df)
+    return report, df
+
+
+def get_stats_cell(df: pd.DataFrame) -> dict:
+    """
+    get stats for the dataset from the stats table (tab)
+    """
+
+    # collapse to remove replicates...
+    uq_df = df[
+        [
+            "ASAP_sample_id",
+            "condition_id",
+        ]
+    ].drop_duplicates()
+    print(f"shape df: {df.shape}, shape suq_dfw_df: {uq_df.shape}")
 
     # get stats for the dataset
-    N = df["ASAP_sample_id"].nunique()
+    N = uq_df["ASAP_sample_id"].nunique()
 
     # brain_region = (df["brain_region"].value_counts().to_dict(),)
     # PD_status = (df["gp2_phenotype"].value_counts().to_dict(),)
-    condition_id = (df["condition_id"].value_counts().to_dict(),)
+    condition_id = (uq_df["condition_id"].value_counts().to_dict(),)
     # diagnosis = (df["primary_diagnosis"].value_counts().to_dict(),)
 
     report = dict(
         N=N,
         condition_id=condition_id,
     )
-    return report, df
+    return report
 
 
-def get_stat_tabs_mouse(dfs: dict[pd.DataFrame]):
+def make_stats_df_mouse(dfs: dict[pd.DataFrame]) -> pd.DataFrame:
     """ """
     sample_cols = [
         "ASAP_sample_id",
@@ -1340,12 +1507,39 @@ def get_stat_tabs_mouse(dfs: dict[pd.DataFrame]):
     df = pd.merge(SAMPLE_, CONDITION_, on="condition_id", how="left")
 
     # then JOIN the result with SUBJECT on "ASAP_subject_id" how=left to get "age_at_collection", "sex", "primary_diagnosis"
-    df = pd.merge(df, SUBJECT_, on="ASAP_mouse_id", how="left")
+    df = (
+        pd.merge(df, SUBJECT_, on="ASAP_mouse_id", how="left")
+        .drop_duplicates()
+        .reset_index(drop=True)
+    )
+    return df
 
+
+def get_stat_tabs_mouse(dfs: dict[pd.DataFrame]):
+    """ """
+    df = make_stats_df_mouse(dfs)
     # get stats for the dataset
     # 0. total number of samples
+    report = get_stats_mouse(df)
+    return report, df
 
-    age_at_collection = df["age"].astype("float")
+
+def get_stats_mouse(df: pd.DataFrame) -> dict:
+    """
+    compile stats from stats table (tab)
+    """
+    uq_df = df[
+        [
+            "ASAP_sample_id",
+            "condition_id",
+            "sex",
+            "age",
+        ]
+    ].drop_duplicates()
+
+    print(f"shape df: {df.shape}, shape suq_dfw_df: {uq_df.shape}")
+
+    age_at_collection = uq_df["age"].astype("float")
     age = dict(
         mean=f"{age_at_collection.mean():.1f}",
         median=f"{age_at_collection.median():.1f}",
@@ -1353,13 +1547,13 @@ def get_stat_tabs_mouse(dfs: dict[pd.DataFrame]):
         min=f"{age_at_collection.min():.1f}",
     )
 
-    N = df["ASAP_sample_id"].nunique()
+    N = uq_df["ASAP_sample_id"].nunique()
 
     # brain_region = (df["brain_region"].value_counts().to_dict(),)
     # PD_status = (df["gp2_phenotype"].value_counts().to_dict(),)
-    condition_id = (df["condition_id"].value_counts().to_dict(),)
+    condition_id = (uq_df["condition_id"].value_counts().to_dict(),)
     # diagnosis = (df["primary_diagnosis"].value_counts().to_dict(),)
-    sex = (df["sex"].value_counts().to_dict(),)
+    sex = (uq_df["sex"].value_counts().to_dict(),)
 
     report = dict(
         N=N,
@@ -1367,24 +1561,34 @@ def get_stat_tabs_mouse(dfs: dict[pd.DataFrame]):
         age=age,
         sex=sex,
     )
-    return report, df
+    return report
 
 
 def get_cohort_stats_table(dfs: dict[pd.DataFrame], source: str = "pmdbs"):
     """ """
     if source == "pmdbs":
-        report, df = get_stat_tabs_pmdbs(dfs)
-        N_datasets = df["ASAP_dataset_id"].nunique()
-        N_teams = df["ASAP_team_id"].nunique()
+        # get stats_df by dataset, concatenate and then get stats
+        datasets = dfs["STUDY"]["ASAP_dataset_id"].unique()
+        stat_df = pd.DataFrame()
+        for dataset in datasets:
+            dfs_ = {k: v[v["ASAP_dataset_id"] == dataset] for k, v in dfs.items()}
+            df = make_stats_df_pmdbs(dfs_)
+            stat_df = pd.concat([stat_df, df])
+
+        report = get_stats_pmdbs(stat_df)
+
+        N_datasets = stat_df["ASAP_dataset_id"].nunique()
+        N_teams = stat_df["ASAP_team_id"].nunique()
         report["N_datasets"] = N_datasets
         report["N_teams"] = N_teams
 
     elif source == "mouse":
+        print("💔💔💔💔💔. no mouse cohorts yet.")
         report, df = get_stat_tabs_mouse(dfs)
         # TODO:
     else:
         raise ValueError(f"Unknown source {source}")
         report = {}
-        df = pd.DataFrame()
+        stat_df = pd.DataFrame()
 
-    return report, df
+    return report, stat_df

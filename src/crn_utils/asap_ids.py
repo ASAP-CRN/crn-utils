@@ -542,7 +542,7 @@ def update_pmdbs_meta_tables_with_asap_ids(
     """
 
     if pmdbs_tables is None:
-        pmdbs_tables = PMDBS_TABLES + ["SPATIAL"]
+        pmdbs_tables = PMDBS_TABLES.copy() + ["SPATIAL"]
         print(f"default {pmdbs_tables=}")
     # pmdbs_tables = ['STUDY', 'PROTOCOL','SUBJECT', 'ASSAY_RNAseq', 'SAMPLE', 'PMDBS', 'CONDITION', 'CLINPATH', 'DATA']
     # pmdbs_tables = asap_ids_schema['Table'].to_list()
@@ -620,7 +620,7 @@ def update_mouse_meta_tables_with_asap_ids(
     """
     # default to mouse scPMDBS / bulkPMDBS
     if mouse_tables is None:
-        mouse_tables = MOUSE_TABLES + ["SPATIAL"]
+        mouse_tables = MOUSE_TABLES.copy() + ["SPATIAL"]
 
     ASAP_sample_id_tables = asap_ids_schema[
         asap_ids_schema["Field"] == "ASAP_sample_id"
@@ -1260,9 +1260,12 @@ def update_cell_meta_tables_with_asap_ids(
         "DATA",
         ]
     """
-    # default to mouse scPMDBS / bulkPMDBS
-    if cell_tables is None:
-        cell_tables = CELL_TABLES
+    # # default to mouse scPMDBS / bulkPMDBS
+    # if cell_tables is None:
+    #     cell_tables = CELL_TABLES
+
+    cell_tables = list(set(dfs.keys()))
+    print(f"{cell_tables=}")
 
     ASAP_sample_id_tables = asap_ids_schema[
         asap_ids_schema["Field"] == "ASAP_sample_id"
@@ -1412,7 +1415,7 @@ def update_multiplex_id_mappers(
 def export_multiplex_id_mappers(
     map_path, suffix, datasetid_mapper, cellid_mapper, sampleid_mapper
 ):
-    source = "INVITRO"
+    source = "PMDBS"
     sample_mapper_path = map_path / f"ASAP_{source}_samp_{suffix}.json"
     cell_mapper_path = map_path / f"ASAP_{source}_{suffix}.json"
     dataset_mapper_path = map_path / f"ASAP_dataset_{suffix}.json"
