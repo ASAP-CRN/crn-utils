@@ -1,28 +1,10 @@
-# %%
-# #### create the key dataset manifest tables for each dataset
-# re datasets for a release
-#  dataset_name, bucket_name, collection_name
-#
-#
-
-
-# %%
 import pandas as pd
 from pathlib import Path
 import os, sys
 import json
-import shutil
 
-from .bucket_util import (
-    authenticate_with_service_account,
-    gsutil_ls,
-    gsutil_cp,
-    gsutil_ls2,
-    gsutil_cp2,
-)
-
-from .util import read_meta_table
-from .checksums import extract_md5_from_details2, get_md5_hashes
+from .bucket_util import gcloud_ls
+from .checksums import get_md5_hashes
 
 __all__ = [
     "make_file_metadata",
@@ -38,7 +20,6 @@ __all__ = [
 ]
 
 # define collections, collection names and datasets
-
 
 def make_file_metadata(
     ds_path: Path,
@@ -79,7 +60,7 @@ def make_file_metadata(
     artifacts_df = get_artifacts_df(dl_path, dataset_id, team_id)
 
     if artifacts_df.shape[0] > 0:
-        artifacts_df.to_csv(dl_path / "artifacts.csv", index=False)
+        artifacts_df.to_csv(os.path.join(dl_path, "artifacts.csv"), index=False)
     else:
         print(f"no artifact files found for {dataset_name}")
 
@@ -96,7 +77,7 @@ def make_file_metadata(
 
     if spatial:
         spatial_df = get_spatial_df(dl_path, dataset_id, team_id)
-        spatial_df.to_csv(dl_path / "spatial_files.csv", index=False)
+        spatial_df.to_csv(os.path.join(dl_path, "spatial_files.csv"), index=False)
         # print(f"spatial_df: {spatial_df.columns}")
         # print(f"fastq_df: {fastq_df.columns}")
         files_df = pd.concat([fastq_df, spatial_df])
@@ -126,15 +107,15 @@ def make_file_metadata(
         print(f"{df.loc[~check,"file_name"].to_list()}")
 
     # now export the combined_df to a csv file
-    df.to_csv(dl_path / "raw_files.csv", index=False)
+    df.to_csv(os.path.join(dl_path, "raw_files.csv"), index=False)
 
 
 def update_data_table_with_gcp_uri(data_df: pd.DataFrame, ds_path: str | Path):
     """ """
     ds_path = Path(ds_path)
-    file_metadata_path = ds_path / "file_metadata"
+    file_metadata_path = os.path.join(ds_path, "file_metadata")
 
-    raw_files = pd.read_csv(file_metadata_path / "raw_files.csv")
+    raw_files = pd.read_csv(os.path.join(file_metadata_path, "raw_files.csv"))
 
     raw_files = raw_files[["file_name", "gcp_uri"]]
     data_df = data_df.merge(raw_files, on="file_name", how="left")
@@ -149,11 +130,11 @@ def update_spatial_table_with_gcp_uri(
 ):
     """ """
     ds_path = Path(ds_path)
-    file_metadata_path = ds_path / "file_metadata"
+    file_metadata_path = os.path.join(ds_path, "file_metadata")
 
-    raw_files = pd.read_csv(file_metadata_path / "raw_files.csv")
+    raw_files = pd.read_csv(os.path.join(file_metadata_path, "raw_files.csv"))
     spatial_files = pd.read_csv(
-        file_metadata_path / f"{ds_path.name}-spatial_files.csv"
+        os.path.join(file_metadata_path, f"{ds_path.name}-spatial_files.csv")
     )
     # make mappers for spatial files
     spatial_file_gcp_mapper = dict(
@@ -206,7 +187,7 @@ def gen_raw_bucket_summary(
         bucket_path = (
             f"{raw_bucket_name.split('/')[-1]}"  # dev_bucket_name has gs:// prefix
         )
-        artifacts = gsutil_ls2(bucket_path, prefix, project="dnastack-asap-parkinsons")
+        artifacts = gcloud_ls(bucket_path, prefix, project="dnastack-asap-parkinsons")
         # drop empty strings, files that start with ".", and folders
         artifact_files = [
             f for f in artifacts if f != "" and Path(f).name[0] != "." and f[-1] != "/"
@@ -224,12 +205,12 @@ def gen_raw_bucket_summary(
             )
 
             artifact_files_df.to_csv(
-                dl_path / f"{dataset_name}-artifact_files.csv", index=False
+                os.path.join(dl_path, f"{dataset_name}-artifact_files.csv"), index=False
             )
 
             # merge in md5s.
             # dump md5s to file
-            with open(dl_path / f"{dataset_name}-raw_fastqs-md5s.json", "w") as f:
+            with open(os.path.join(dl_path, f"{dataset_name}-raw_fastqs-md5s.json"), "w") as f:
                 json.dump(bucket_files_md5, f)
 
         else:
@@ -244,7 +225,7 @@ def gen_raw_bucket_summary(
         bucket_path = (
             f"{raw_bucket_name.split('/')[-1]}"  # dev_bucket_name has gs:// prefix
         )
-        fastqs = gsutil_ls2(bucket_path, prefix, project="dnastack-asap-parkinsons")
+        fastqs = gcloud_ls(bucket_path, prefix, project="dnastack-asap-parkinsons")
         raw_files = [f for f in fastqs if f != ""]
 
         if len(raw_files) > 0:
@@ -258,11 +239,11 @@ def gen_raw_bucket_summary(
             raw_files_df["bucket_md5"] = raw_files_df["file_name"].map(bucket_files_md5)
 
             # TODO: fix this so the file manifest isn't always fastqs.  There are downstream implications (file name is assumed in release utils)
-            raw_files_df.to_csv(dl_path / f"{dataset_name}-raw_fastqs.csv", index=False)
+            raw_files_df.to_csv(os.path.join(dl_path, f"{dataset_name}-raw_fastqs.csv"), index=False)
 
             # TODO: merge in md5s.
             # dump md5s to file
-            with open(dl_path / f"{dataset_name}-raw_fastqs-md5s.json", "w") as f:
+            with open(os.path.join(dl_path, f"{dataset_name}-raw_fastqs-md5s.json"), "w") as f:
                 json.dump(bucket_files_md5, f)
 
         else:
@@ -280,7 +261,7 @@ def gen_dev_bucket_summary(
     bucket_path = (
         f"{raw_bucket_name.split('/')[-1]}"  # dev_bucket_name has gs:// prefix
     )
-    artifacts = gsutil_ls2(bucket_path, prefix, project="dnastack-asap-parkinsons")
+    artifacts = gcloud_ls(bucket_path, prefix, project="dnastack-asap-parkinsons")
     # drop empty strings, files that start with ".", and folders
     artifact_files = [
         f for f in artifacts if f != "" and Path(f).name[0] != "." and f[-1] != "/"
@@ -298,12 +279,12 @@ def gen_dev_bucket_summary(
         )
 
         artifact_files_df.to_csv(
-            dl_path / f"{dataset_name}-artifact_files.csv", index=False
+            os.path.join(dl_path, f"{dataset_name}-artifact_files.csv"), index=False
         )
 
         # merge in md5s.
         # dump md5s to file
-        with open(dl_path / f"{dataset_name}-raw_fastqs-md5s.json", "w") as f:
+        with open(os.path.join(dl_path, f"{dataset_name}-raw_fastqs-md5s.json"), "w") as f:
             json.dump(bucket_files_md5, f)
 
     else:
@@ -314,7 +295,7 @@ def gen_dev_bucket_summary(
     bucket_path = (
         f"{raw_bucket_name.split('/')[-1]}"  # dev_bucket_name has gs:// prefix
     )
-    fastqs = gsutil_ls2(bucket_path, prefix, project="dnastack-asap-parkinsons")
+    fastqs = gcloud_ls(bucket_path, prefix, project="dnastack-asap-parkinsons")
     raw_files = [f for f in fastqs if f != ""]
 
     if len(raw_files) > 0:
@@ -326,11 +307,11 @@ def gen_dev_bucket_summary(
             lambda x: x.split("/")[-1]
         )
         raw_files_df["bucket_md5"] = raw_files_df["file_name"].map(bucket_files_md5)
-        raw_files_df.to_csv(dl_path / f"{dataset_name}-raw_fastqs.csv", index=False)
+        raw_files_df.to_csv(os.path.join(dl_path, f"{dataset_name}-raw_fastqs.csv"), index=False)
 
         # merge in md5s.
         # dump md5s to file
-        with open(dl_path / f"{dataset_name}-raw_fastqs-md5s.json", "w") as f:
+        with open(os.path.join(dl_path, f"{dataset_name}-raw_fastqs-md5s.json"), "w") as f:
             json.dump(bucket_files_md5, f)
 
     else:
@@ -349,8 +330,8 @@ def gen_spatial_bucket_summary(raw_bucket_name: str, dl_path: Path, dataset_name
         bucket_path = (
             f"{raw_bucket_name.split('/')[-1]}"  # dev_bucket_name has gs:// prefix
         )
-        s_files = gsutil_ls2(bucket_path, prefix, project="dnastack-asap-parkinsons")
-        spatial_files = [f for f in s_files if f != ""]
+        spatial_files_ = gcloud_ls(bucket_path, prefix, project="dnastack-asap-parkinsons")
+        spatial_files = [f for f in spatial_files_ if f != ""]
 
         if len(spatial_files) > 0:
             bucket_files_md5 = get_md5_hashes(bucket_path, prefix)
@@ -363,11 +344,11 @@ def gen_spatial_bucket_summary(raw_bucket_name: str, dl_path: Path, dataset_name
                 bucket_files_md5
             )
             spatial_files_df.to_csv(
-                dl_path / f"{dataset_name}-spatial_files.csv", index=False
+                os.path.join(dl_path, f"{dataset_name}-spatial_files.csv"), index=False
             )
             # merge in md5s.
             # dump md5s to file
-            with open(dl_path / f"{dataset_name}-spatial_files-md5s.json", "w") as f:
+            with open(os.path.join(dl_path, f"{dataset_name}-spatial_files-md5s.json"), "w") as f:
                 json.dump(bucket_files_md5, f)
         else:
             print(f"No spatial files found for {dataset_name}")

@@ -53,7 +53,7 @@ def setup_DOI_info(
     publication_date: None | str = None,
 ):
 
-    study_df = read_meta_table(ds_path / "metadata/STUDY.csv")
+    study_df = read_meta_table(os.path.join(ds_path, "metadata/STUDY.csv"))
     ingest_DOI_doc(ds_path, doi_doc_path, study_df, publication_date=publication_date)
     make_readme_file(ds_path)
     update_study_table(ds_path)
@@ -66,7 +66,7 @@ def ingest_DOI_doc(
     publication_date: None | str = None,
 ):
     """
-    read docx, extract the information, and save in dataset/DOI subdirectory
+    read docx, extract the information, and save in os.path.join(dataset, DOI) subdirectory
     """
     ds_path = Path(ds_path)
     doi_doc_path = Path(doi_doc_path)
@@ -89,7 +89,7 @@ def ingest_DOI_doc(
 
     # should read this from ds_path/version
     # just read in as text
-    with open(ds_path / "version", "r") as f:
+    with open(os.path.join(ds_path, "version"), "r") as f:
         ds_ver = f.read().strip()
     # ds_ver = "v2.0"
     # Load the document
@@ -288,12 +288,12 @@ def ingest_DOI_doc(
     export_data = {"metadata": metadata}
 
     # dump json
-    doi_path = ds_path / "DOI"
+    doi_path = os.path.join(ds_path, "DOI")
 
-    if not doi_path.exists():
-        doi_path.mkdir()
+    if not os.path.exists(doi_path):
+        os.makedirs(doi_path, exist_ok=True)
 
-    with open(doi_path / f"{long_dataset_name}.json", "w") as f:
+    with open(os.path.join(doi_path, f"{long_dataset_name}.json"), "w") as f:
         json.dump(export_data, f, indent=4)
 
     # also dump the table to make the documents and
@@ -318,7 +318,7 @@ def ingest_DOI_doc(
         "team_name": team_name,
     }
 
-    with open(doi_path / f"project.json", "w") as f:
+    with open(os.path.join(doi_path, f"project.json"), "w") as f:
         json.dump(project_dict, f, indent=4)
 
     # df = pd.DataFrame(project_dict, index=[0])
@@ -341,8 +341,8 @@ def make_readme_file(ds_path: Path):
     team = long_dataset_name.split("-")[0]
 
     # load jsons
-    doi_path = ds_path / "DOI"
-    with open(doi_path / f"project.json", "r") as f:
+    doi_path = os.path.join(ds_path, "DOI")
+    with open(os.path.join(doi_path, f"project.json"), "r") as f:
         data = json.load(f)
     # data = clean_json_read(doi_path / f"project.json")
 
@@ -423,10 +423,10 @@ def make_readme_file(ds_path: Path):
 
     print(f"{long_dataset_name=}")
     print(f"{doi_path=}")
-    with open(doi_path / f"{long_dataset_name}_README.md", "w") as f:
+    with open(os.path.join(doi_path, f"{long_dataset_name}_README.md"), "w") as f:
         f.write(readme_content)
 
-    make_pdf_file(readme_content_HTML, doi_path / f"{long_dataset_name}_README.pdf")
+    make_pdf_file(readme_content_HTML, os.path.join(doi_path, f"{long_dataset_name}_README.pdf"))
 
 
 # def make_pdf_file(ds_path: Path):
@@ -460,12 +460,12 @@ def make_pdf_file(html_content: str, output_filepath: str | Path):
 def update_study_table(ds_path: str | Path):
     """ """
     ds_path = Path(ds_path)
-    metadata_path = ds_path / "metadata"
-    STUDY = read_meta_table(metadata_path / "STUDY.csv")
+    metadata_path = os.path.join(ds_path, "metadata")
+    STUDY = read_meta_table(os.path.join(metadata_path, "STUDY.csv"))
 
     # load jsons
-    doi_path = ds_path / "DOI"
-    with open(doi_path / f"project.json", "r") as f:
+    doi_path = os.path.join(ds_path, "DOI")
+    with open(os.path.join(doi_path, f"project.json"), "r") as f:
         data = json.load(f)
     # data = clean_json_read(doi_path / f"project.json")
 
@@ -474,7 +474,7 @@ def update_study_table(ds_path: str | Path):
     STUDY["dataset_title"] = data["dataset_title"]
     STUDY["dataset_description"] = data["dataset_description"]
     # export STUDY
-    STUDY.to_csv(metadata_path / "STUDY.csv", index=False)
+    STUDY.to_csv(os.path.join(metadata_path, "STUDY.csv"), index=False)
 
 
 def setup_zenodo(sandbox: bool = None):
@@ -516,15 +516,15 @@ def get_doi_from_dataset(ds_path: Path, version: bool = True):
     Returns:
         str: DOI
     """
-    doi_path = ds_path / "DOI"
+    doi_path = os.path.join(ds_path, "DOI")
     doi_file = "version.doi" if version else "dataset.doi"
 
     # fall back to doi if version does not exist
-    if not (doi_path / doi_file).exists():
+    if not os.path.exists(os.path.join(doi_path, doi_file)):
         doi_file = "doi"
         print(f"Warning: {doi_file} does not exist. Falling back to old format 'doi' ")
 
-    with open(doi_path / doi_file, "r") as f:
+    with open(os.path.join(doi_path, doi_file), "r") as f:
         doi_id = f.read().strip()
     doi_id = doi_id.split(".")[-1]
     return doi_id
@@ -540,7 +540,7 @@ def create_draft_metadata(ds_path: Path, version: str = "0.1") -> dict:
     Returns:
         dict: Zenodo deposition
     """
-    with open(ds_path / f"DOI/{ds_path.name}.json", "r") as f:
+    with open(os.path.join(ds_path, f"DOI/{ds_path.name}.json"), "r") as f:
         export_data = json.load(f)
     # export_data = clean_json_read(ds_path / f"DOI/{ds_path.name}.json")
     metadata = export_data["metadata"]
@@ -566,7 +566,7 @@ def create_draft_doi(zenodo: ZenodoClient, ds_path: Path, version: str = "0.1") 
         dict: Zenodo deposition
     """
 
-    with open(ds_path / f"DOI/{ds_path.name}.json", "r") as f:
+    with open(os.path.join(ds_path, f"DOI/{ds_path.name}.json"), "r") as f:
         export_data = json.load(f)
     metadata = export_data["metadata"]
 
@@ -609,7 +609,7 @@ def replace_anchor_file_in_doi(
     # add new file first
     if new_file is None:
         new_file = f"{ds_path.name}_README.pdf"
-    new_file_path = ds_path / "DOI" / new_file
+    new_file_path = os.path.join(ds_path, "DOI", new_file)
 
     # add anchor file
     deposition = add_anchor_file_to_doi(zenodo, new_file_path, doi_id=doi_id)
@@ -718,7 +718,7 @@ def publish_doi(zenodo: ZenodoClient, doi_id: str | int) -> dict:
 
 def finalize_DOI(ds_path: Path, deposition: dict, prerelease: bool = False):
     """
-    Write the DOI information to the dataset/DOI directory
+    Write the DOI information to the os.path.join(dataset, DOI) directory
     """
     doi = deposition.get("doi", "")
     doi_url = deposition.get("doi_url", "")
@@ -740,16 +740,16 @@ def finalize_DOI(ds_path: Path, deposition: dict, prerelease: bool = False):
         conceptdoi = f"10.5281/zenodo.{deposition["conceptrecid"]}"
     conceptdoi_url = doi_url.replace(doi, conceptdoi)
 
-    doi_path = ds_path / "DOI"
-    with open(doi_path / "version.doi", "w") as f:
+    doi_path = os.path.join(ds_path, "DOI")
+    with open(os.path.join(doi_path, "version.doi"), "w") as f:
         # write doi to file as text
         f.write(doi)
 
-    with open(doi_path / "dataset.doi", "w") as f:
+    with open(os.path.join(doi_path, "dataset.doi"), "w") as f:
         # write doi to file as text
         f.write(conceptdoi)
 
-    with open(doi_path / f"{conceptdoi.replace('/','_')}", "w") as f:
+    with open(os.path.join(doi_path, f"{conceptdoi.replace('/','_')}"), "w") as f:
         # write doi to file
         f.write(f"ALL_VERSIONS        : {conceptdoi_url}\n")
         if prerelease:
@@ -759,27 +759,27 @@ def finalize_DOI(ds_path: Path, deposition: dict, prerelease: bool = False):
 
 
 def archive_deposition_local(ds_path: Path, arch_name: str, deposition: dict):
-    doi_path = ds_path / "DOI"
-    with open(doi_path / f"{arch_name}.json", "w") as f:
+    doi_path = os.path.join(ds_path, "DOI")
+    with open(os.path.join(doi_path, f"{arch_name}.json"), "w") as f:
         json.dump(deposition, f, indent=2)
 
 
 def update_study_table_with_doi(study_df: pd.DataFrame, ds_path: str | Path):
     """ """
     ds_path = Path(ds_path)
-    metadata_path = ds_path / "metadata"
-    STUDY = read_meta_table(metadata_path / "STUDY.csv")
+    metadata_path = os.path.join(ds_path, "metadata")
+    STUDY = read_meta_table(os.path.join(metadata_path, "STUDY.csv"))
 
     # load jsons
-    doi_path = ds_path / "DOI"
+    doi_path = os.path.join(ds_path, "DOI")
 
-    with open(doi_path / "dataset.doi", "r") as f:
+    with open(os.path.join(doi_path, "dataset.doi"), "r") as f:
         ds_doi = f.read().strip()
     study_df["dataset_DOI"] = ds_doi
     study_df["dataset_DOI_url"] = f"https://doi.org/{ds_doi}"
 
     # get dataset version from version file
-    with open(ds_path / "version", "r") as f:
+    with open(os.path.join(ds_path, "version"), "r") as f:
         ds_ver = f.read().strip()
     study_df["dataset_version"] = ds_ver
 

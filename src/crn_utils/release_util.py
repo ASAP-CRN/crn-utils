@@ -5,11 +5,9 @@ import docx
 import json
 from numpy import nan as np_nan
 
-
 from .util import (
     read_CDE,
     NULL,
-    prep_table,
     read_meta_table,
     read_CDE_asap_ids,
     export_meta_tables,
@@ -19,8 +17,6 @@ from .util import (
 
 from .asap_ids import *
 from .validate import validate_table, ReportCollector, process_table
-
-from .checksums import extract_md5_from_details2, get_md5_hashes
 from .bucket_util import authenticate_with_service_account
 from .file_metadata import (
     gen_raw_bucket_summary,
@@ -32,9 +28,8 @@ from .file_metadata import (
 from .constants import *
 from .doi import update_study_table_with_doi
 
-
 __all__ = [
-    "prep_release_metadata",
+    "prep_release_metadata_all_sources",
     "load_and_process_table",
     "process_schema",
     "create_metadata_package",
@@ -45,22 +40,21 @@ __all__ = [
     "get_crn_release_metadata",
 ]
 
-
 def create_metadata_package(
     dfs: dict[str, pd.DataFrame], metadata_path: Path, schema_version: str
 ):
 
-    final_metadata_path = metadata_path / schema_version
-    if not final_metadata_path.exists():
-        final_metadata_path.mkdir()
+    final_metadata_path = os.path.join(metadata_path, schema_version)
+    if not os.path.exists(final_metadata_path):
+        os.makedirs(final_metadata_path, exist_ok=True)
 
     export_meta_tables(dfs, final_metadata_path)
     # export_meta_tables(dfs, metadata_path)
-    write_version(schema_version, metadata_path / "cde_version")
-    write_version(schema_version, final_metadata_path / "cde_version")
+    write_version(schema_version, os.path.join(metadata_path, "cde_version"))
+    write_version(schema_version, os.path.join(final_metadata_path, "cde_version"))
 
-
-def prep_release_metadata(
+### this is a wrapper to call source specific prep_release_metadata_ functions
+def prep_release_metadata_all_sources(
     ds_path: Path,
     schema_version: str,
     map_path: Path,
@@ -69,6 +63,8 @@ def prep_release_metadata(
     proteomics: bool = False,
     source: str = "pmdbs",
     flatten: bool = False,
+    map_only: bool = False,
+    dataset_name: str = None,
 ):
     """
     prepare the metadata for a release.  This includes:
@@ -79,36 +75,34 @@ def prep_release_metadata(
     """
 
     if source == "pmdbs":
-        prep_release_metadata_pmdbs(
-            ds_path, schema_version, map_path, suffix, spatial, proteomics, flatten
+        prep_release_metadata_human(
+            ds_path, schema_version, map_path, suffix, spatial, proteomics, source, flatten, map_only, dataset_name
         )
     elif source == "mouse":
         prep_release_metadata_mouse(
-            ds_path, schema_version, map_path, suffix, spatial, proteomics, flatten
+            ds_path, schema_version, map_path, suffix, spatial, proteomics, source, flatten, map_only, dataset_name
         )
-
     elif source in ["cell", "invitro", "ipsc"]:
         prep_release_metadata_cell(
-            ds_path, schema_version, map_path, suffix, proteomics, flatten
+            ds_path, schema_version, map_path, suffix, spatial, proteomics, source, flatten, map_only, dataset_name
         )
     else:
         raise ValueError(f"Unknown source {source}")
-
 
 def prep_release_metadata_cell(
     ds_path: Path,
     schema_version: str,
     map_path: Path,
     suffix: str,
+    spatial: bool = False,
     proteomics: bool = False,
+    source: str = "cell",
     flatten: bool = False,
     map_only: bool = False,
+    dataset_name: str = None,
 ):
-    # source
-    # spatial
-
     dataset_name = ds_path.name
-    print(f"release_util: Processing {ds_path.name}")
+    print(f"release_util: Processing {dataset_name}")
     ds_parts = dataset_name.split("-")
     team = ds_parts[0]
     source = ds_parts[1]
@@ -128,11 +122,11 @@ def prep_release_metadata_cell(
         map_path, suffix
     )
 
-    # ds_path.mkdir(parents=True, exist_ok=True)
-    mdata_path = ds_path / "metadata" / schema_version
+    # os.makedirs(ds_path, exist_ok=True)
+    mdata_path = os.path.join(ds_path, "metadata", schema_version)
     tables = [
         table
-        for table in mdata_path.iterdir()
+        for table in Path(mdata_path).iterdir()
         if table.is_file() and table.suffix == ".csv"
     ]
 
@@ -164,12 +158,12 @@ def prep_release_metadata_cell(
 
     # TODO: need to make this read an env variable or something safe.
     #### CREATE file metadata summaries
-    key_file_path = Path.home() / f"Projects/ASAP/{team}-credentials.json"
+    key_file_path = os.path.join(Path.home(), f"Projects/ASAP/{team}-credentials.json")
     res = authenticate_with_service_account(key_file_path)
 
-    file_metadata_path = ds_path / "file_metadata"
-    if not file_metadata_path.exists():
-        file_metadata_path.mkdir(parents=True, exist_ok=True)
+    file_metadata_path = os.path.join(ds_path, "file_metadata")
+    if not os.path.exists(file_metadata_path):
+        os.makedirs(file_metadata_path, exist_ok=True)
 
     gen_raw_bucket_summary(
         raw_bucket_name, file_metadata_path, dataset_name, flatten=flatten
@@ -184,14 +178,14 @@ def prep_release_metadata_cell(
     # need to change file_metadata so artifacts.csv and (eventually curated_files.csv) point to curated bucket
 
     # export the tables to the metadata directory in a release subdirectory
-    out_dir = ds_path / "metadata/release"
-    out_dir.mkdir(parents=True, exist_ok=True)
+    out_dir = os.path.join(ds_path, "metadata/release")
+    os.makedirs(out_dir, exist_ok=True)
 
     export_meta_tables(dfs, out_dir)
-    write_version(schema_version, out_dir / "cde_version")
+    write_version(schema_version, os.path.join(out_dir, "cde_version"))
 
     if not map_only:
-        export_map_path = map_path  # root_path / "asap-ids/temp"
+        export_map_path = map_path  # os.path.join(root_path, "asap-ids/temp")
         export_cell_id_mappers(
             export_map_path,
             suffix,
@@ -200,7 +194,6 @@ def prep_release_metadata_cell(
             sampleid_mapper,
         )
 
-
 def prep_release_metadata_mouse(
     ds_path: Path,
     schema_version: str,
@@ -208,14 +201,13 @@ def prep_release_metadata_mouse(
     suffix: str,
     spatial: bool = False,
     proteomics: bool = False,
+    source: str = "mouse",
     flatten: bool = False,
     map_only: bool = False,
+    dataset_name: str = None,
 ):
-    # source
-    # spatial
 
-    dataset_name = ds_path.name
-    print(f"release_util: Processing {ds_path.name}")
+    print(f"release_util: Processing {dataset_name}")
     ds_parts = dataset_name.split("-")
     team = ds_parts[0]
     source = ds_parts[1]
@@ -233,12 +225,12 @@ def prep_release_metadata_mouse(
         map_path, suffix
     )
 
-    # ds_path.mkdir(parents=True, exist_ok=True)
-    mdata_path = ds_path / "metadata" / schema_version
+    # os.makedirs(ds_path, exist_ok=True)
+    mdata_path = os.path.join(ds_path, "metadata", schema_version)
     tables = [
         table
         for table in mdata_path.iterdir()
-        if table.is_file() and table.suffix == ".csv"
+        if os.path.isfile(table) and table.suffix == ".csv"
     ]
 
     # TODO: make this accomodate proteomics
@@ -272,12 +264,12 @@ def prep_release_metadata_mouse(
 
     # TODO: need to make this read an env variable or something safe.
     #### CREATE file metadata summaries
-    key_file_path = Path.home() / f"Projects/ASAP/{team}-credentials.json"
+    key_file_path = os.path.join(str(Path.home()), f"Projects/ASAP/{team}-credentials.json")
     res = authenticate_with_service_account(key_file_path)
 
-    file_metadata_path = ds_path / "file_metadata"
-    if not file_metadata_path.exists():
-        file_metadata_path.mkdir(parents=True, exist_ok=True)
+    file_metadata_path = os.path.join(ds_path, "file_metadata")
+    if not os.path.exists(file_metadata_path):
+        os.makedirs(file_metadata_path, exist_ok=True)
 
     gen_raw_bucket_summary(
         raw_bucket_name, file_metadata_path, dataset_name, flatten=flatten
@@ -300,14 +292,14 @@ def prep_release_metadata_mouse(
     # need to change file_metadata so artifacts.csv and (eventually curated_files.csv) point to curated bucket
 
     # export the tables to the metadata directory in a release subdirectory
-    out_dir = ds_path / "metadata/release"
-    out_dir.mkdir(parents=True, exist_ok=True)
+    out_dir = os.path.join(ds_path, "metadata/release")
+    os.makedirs(out_dir, exist_ok=True)
 
     export_meta_tables(dfs, out_dir)
-    write_version(schema_version, out_dir / "cde_version")
+    write_version(schema_version, os.path.join(out_dir, "cde_version"))
 
     if not map_only:
-        export_map_path = map_path  # root_path / "asap-ids/temp"
+        export_map_path = map_path  # os.path.join(root_path, "asap-ids/temp")
         export_mouse_id_mappers(
             export_map_path,
             suffix,
@@ -316,8 +308,7 @@ def prep_release_metadata_mouse(
             sampleid_mapper,
         )
 
-
-def prep_release_metadata_pmdbs(
+def prep_release_metadata_human(
     ds_path: Path,
     schema_version: str,
     map_path: Path,
@@ -326,12 +317,9 @@ def prep_release_metadata_pmdbs(
     proteomics: bool = False,
     flatten: bool = False,
     map_only: bool = False,
+    dataset_name: str = None,
 ):
-    # source
-    # spatial
-
-    dataset_name = ds_path.name
-    print(f"release_util: Processing {ds_path.name}")
+    print(f"release_util: Processing {dataset_name}")
     ds_parts = dataset_name.split("-")
     team = ds_parts[0]
     source = ds_parts[1]
@@ -353,12 +341,12 @@ def prep_release_metadata_pmdbs(
         sourceid_mapper,
     ) = load_pmdbs_id_mappers(map_path, suffix)
 
-    # ds_path.mkdir(parents=True, exist_ok=True)
-    mdata_path = ds_path / "metadata" / schema_version
+    # os.makedirs(ds_path, exist_ok=True)
+    mdata_path = os.path.join(ds_path, "metadata", schema_version)
     tables = [
         table
         for table in mdata_path.iterdir()
-        if table.is_file() and table.suffix == ".csv"
+        if os.path.isfile(table) and table.suffix == ".csv"
     ]
 
     # TODO: make this accomodate proteomics
@@ -404,12 +392,11 @@ def prep_release_metadata_pmdbs(
 
     # TODO: need to make this read an env variable or something safe.
     #### CREATE file metadata summaries
-    key_file_path = Path.home() / f"Projects/ASAP/{team}-credentials.json"
+    key_file_path = os.path.join(Path.home(), f"Projects/ASAP/{team}-credentials.json")
     res = authenticate_with_service_account(key_file_path)
 
-    file_metadata_path = ds_path / "file_metadata"
-    if not file_metadata_path.exists():
-        file_metadata_path.mkdir(parents=True, exist_ok=True)
+    file_metadata_path = os.path.join(ds_path, "file_metadata")
+    os.makedirs(file_metadata_path, exist_ok=True)
 
     gen_raw_bucket_summary(
         raw_bucket_name, file_metadata_path, dataset_name, flatten=flatten
@@ -428,11 +415,11 @@ def prep_release_metadata_pmdbs(
         )
 
     # export the tables to the metadata directory in a release subdirectory
-    out_dir = ds_path / "metadata/release"
-    out_dir.mkdir(parents=True, exist_ok=True)
+    out_dir = os.path.join(ds_path, "metadata", "release")
+    os.makedirs(out_dir, exist_ok=True)
 
     export_meta_tables(dfs, out_dir)
-    write_version(schema_version, out_dir / "cde_version")
+    write_version(schema_version, os.path.join(out_dir, "cde_version"))
 
     if not map_only:
         export_map_path = map_path  # / "asap-ids/master"
@@ -446,12 +433,9 @@ def prep_release_metadata_pmdbs(
             sourceid_mapper,
         )
 
-
-############################
+#########################
 ## get release metadata
 #########################
-
-
 def get_crn_release_metadata(
     ds_path: Path,
     schema_version: str,
@@ -460,6 +444,7 @@ def get_crn_release_metadata(
     spatial: bool = False,
     proteomics: bool = False,
     source: str = "pmdbs",
+    dataset_name: str = None,
 ):
     """
     only maps by default
@@ -473,6 +458,8 @@ def get_crn_release_metadata(
             suffix,
             spatial=spatial,
             proteomics=proteomics,
+            source=source,
+            dataset_name=dataset_name
         )
     elif source == "human ":
         dfs = get_release_metadata_human(
@@ -482,6 +469,8 @@ def get_crn_release_metadata(
             suffix,
             spatial=spatial,
             proteomics=proteomics,
+            source=source,
+            dataset_name=dataset_name
         )
     elif source == "mouse":
         dfs = get_release_metadata_mouse(
@@ -491,34 +480,48 @@ def get_crn_release_metadata(
             suffix,
             spatial=spatial,
             proteomics=proteomics,
+            source=source,
+            dataset_name=dataset_name
         )
 
     elif source in ["cell", "invitro", "ipsc"]:
         dfs = get_release_metadata_cell(
-            ds_path, schema_version, map_path, suffix, proteomics=proteomics
+            ds_path, 
+            schema_version,
+            map_path,
+            suffix,
+            spatial=spatial,
+            proteomics=proteomics,
+            source=source,
+            dataset_name=dataset_name
         )
     elif source == "proteomics":
         dfs = get_release_metadata_cell(
-            ds_path, schema_version, map_path, suffix, proteomics=True
+            ds_path,
+            schema_version,
+            map_path,
+            suffix,
+            spatial=spatial,
+            proteomics=True,
+            source=source,
+            dataset_name=dataset_name
         )
     else:
         raise ValueError(f"Unknown source {source}")
 
     return dfs
 
-
 def get_release_metadata_cell(
     ds_path: Path,
     schema_version: str,
     map_path: Path,
     suffix: str,
+    spatial: bool = False,
     proteomics: bool = False,
+    source: str = "cell",
+    dataset_name: str = None
 ) -> dict:
-    # source
-    # spatial
-
-    dataset_name = ds_path.name
-    print(f"release_util: Processing {ds_path.name}")
+    print(f"release_util: Processing {dataset_name}")
     ds_parts = dataset_name.split("-")
     team = ds_parts[0]
     source = ds_parts[1]
@@ -534,12 +537,12 @@ def get_release_metadata_cell(
         map_path, suffix
     )
 
-    # ds_path.mkdir(parents=True, exist_ok=True)
-    mdata_path = ds_path / "metadata" / schema_version
+    # os.makedirs(ds_path, exist_ok=True)
+    mdata_path = os.path.join(ds_path, "metadata", schema_version)
     tables = [
         table
-        for table in mdata_path.iterdir()
-        if table.is_file() and table.suffix == ".csv"
+        for table in os.listdir(mdata_path)
+        if table.endswith(".csv")
     ]
 
     req_tables = CELL_TABLES if not proteomics else PROTEOMICS_TABLES
@@ -562,7 +565,6 @@ def get_release_metadata_cell(
 
     return dfs
 
-
 def get_release_metadata_mouse(
     ds_path: Path,
     schema_version: str,
@@ -570,12 +572,10 @@ def get_release_metadata_mouse(
     suffix: str,
     spatial: bool = False,
     proteomics: bool = False,
+    source: str = "mouse",
+    dataset_name: str = None
 ) -> dict:
-    # source
-    # spatial
-
-    dataset_name = ds_path.name
-    print(f"release_util: Processing {ds_path.name}")
+    print(f"release_util: Processing {dataset_name}")
     ds_parts = dataset_name.split("-")
     team = ds_parts[0]
     source = ds_parts[1]
@@ -593,11 +593,11 @@ def get_release_metadata_mouse(
         map_path, suffix
     )
 
-    # ds_path.mkdir(parents=True, exist_ok=True)
-    mdata_path = ds_path / "metadata" / schema_version
+    # os.makedirs(ds_path, exist_ok=True)
+    mdata_path = os.path.join(ds_path, "metadata", schema_version)
     tables = [
         table
-        for table in mdata_path.iterdir()
+        for table in Path(mdata_path).iterdir()
         if table.is_file() and table.suffix == ".csv"
     ]
 
@@ -625,10 +625,7 @@ def get_release_metadata_mouse(
             dfs["SPATIAL"], ds_path, visium=visium
         )
 
-    # TODO add proteoimics mouse stuff here
-
     return dfs
-
 
 def get_release_metadata_pmdbs(
     ds_path: Path,
@@ -637,13 +634,11 @@ def get_release_metadata_pmdbs(
     suffix: str,
     spatial: bool = False,
     proteomics: bool = False,
+    source: str = None,
+    dataset_name: str = None,
+
 ) -> dict:
-
-    # source
-    # spatial
-
-    dataset_name = ds_path.name
-    print(f"release_util: Processing {ds_path.name}")
+    print(f"release_util: Processing {dataset_name}")
     ds_parts = dataset_name.split("-")
     team = ds_parts[0]
     source = ds_parts[1]
@@ -656,7 +651,6 @@ def get_release_metadata_pmdbs(
     asap_ids_df = read_CDE_asap_ids()
     asap_ids_schema = asap_ids_df[["Table", "Field"]]
 
-    # # %%
     (
         datasetid_mapper,
         subjectid_mapper,
@@ -665,15 +659,14 @@ def get_release_metadata_pmdbs(
         sourceid_mapper,
     ) = load_pmdbs_id_mappers(map_path, suffix)
 
-    # ds_path.mkdir(parents=True, exist_ok=True)
+    # os.makedirs(ds_path, exist_ok=True)
     if schema_version == "v2.1":
-        mdata_path = ds_path / "metadata" / "v2"
+        mdata_path = os.path.join(ds_path, "metadata", "v2")
     else:
-        mdata_path = ds_path / "metadata" / schema_version
-
+        mdata_path = os.path.join(ds_path, "metadata", schema_version)
     tables = [
         table
-        for table in mdata_path.iterdir()
+        for table in Path(mdata_path).iterdir()
         if table.is_file() and table.suffix == ".csv"
     ]
 
@@ -705,12 +698,8 @@ def get_release_metadata_pmdbs(
             dfs["SPATIAL"], ds_path, visium=visium
         )
 
-    # TODO add proteoimics pmdbs stuff here
-
     return dfs
 
-
-# TODO: add non PMDBS human wrinkles now
 def get_release_metadata_human(
     ds_path: Path,
     schema_version: str,
@@ -718,13 +707,10 @@ def get_release_metadata_human(
     suffix: str,
     spatial: bool = False,
     proteomics: bool = False,
+    source: str = None,
+    dataset_name: str = None,
 ) -> dict:
-
-    # source
-    # spatial
-
-    dataset_name = ds_path.name
-    print(f"release_util: Processing {ds_path.name}")
+    print(f"release_util: Processing {dataset_name}")
     ds_parts = dataset_name.split("-")
     team = ds_parts[0]
     source = ds_parts[1]
@@ -737,7 +723,6 @@ def get_release_metadata_human(
     asap_ids_df = read_CDE_asap_ids()
     asap_ids_schema = asap_ids_df[["Table", "Field"]]
 
-    # # %%
     (
         datasetid_mapper,
         subjectid_mapper,
@@ -746,15 +731,15 @@ def get_release_metadata_human(
         sourceid_mapper,
     ) = load_pmdbs_id_mappers(map_path, suffix)
 
-    # ds_path.mkdir(parents=True, exist_ok=True)
+    # os.makedirs(ds_path, exist_ok=True)
     if schema_version == "v2.1":
-        mdata_path = ds_path / "metadata" / "v2"
+        mdata_path = os.path.join(ds_path, "metadata", "v2")
     else:
-        mdata_path = ds_path / "metadata" / schema_version
+        mdata_path = os.path.join(ds_path, "metadata", schema_version)
 
     tables = [
         table
-        for table in mdata_path.iterdir()
+        for table in Path(mdata_path).iterdir()
         if table.is_file() and table.suffix == ".csv"
     ]
 
@@ -786,16 +771,13 @@ def get_release_metadata_human(
             dfs["SPATIAL"], ds_path, visium=visium
         )
 
-    # TODO add proteoimics pmdbs stuff here
-
     return dfs
 
-
-####################
-
-
 def load_and_process_table(
-    table_name: str, tables_path: Path, cde_df: pd.DataFrame, print_log: bool = False
+    table_name: str, 
+    tables_path: Path, 
+    cde_df: pd.DataFrame, 
+    print_log: bool = False
 ):
     """
     Load and process a table from a given path according to a schema.
@@ -811,11 +793,11 @@ def load_and_process_table(
 
     """
 
-    table_path = tables_path / f"{table_name}.csv"
+    table_path = os.path.join(tables_path, f"{table_name}.csv")
     schema = cde_df[cde_df["Table"] == table_name]
     report = ReportCollector(destination="NA")
     full_table, report = validate_table(df.copy(), table_name, schema, report)
-    if table_path.exists():
+    if os.path.exists(table_path):
         df = read_meta_table(table_path)
     else:
         print(f"{table_name} table not found.  need to construct")
@@ -847,13 +829,6 @@ def process_schema(
         dict: Dictionary containing the processed tables.
         dict: Dictionary containing the auxiliary tables.
     """
-    # load CDE
-    # if isinstance(cde_version, str):
-    #     if cde_version in ["v3.1", "v3.2", "v3.1"]:
-    #         cde_df = CDEv3
-    #     else:
-    #         cde_df = read_CDE(cde_version)
-    # else:
     cde_df = read_CDE(cde_version)
 
     # load and process tables
@@ -865,41 +840,24 @@ def process_schema(
         aux_tables_dict[table] = df_aux
 
         if export_path is not None:
-            df.to_csv(export_path / f"{table}.csv", index=False)
+            df.to_csv(os.path.join(export_path, f"{table}.csv"), index=False)
             if not df_aux.empty:
-                df_aux.to_csv(export_path / f"{table}_auxiliary.csv", index=False)
+                df_aux.to_csv(os.path.join(export_path, f"{table}_auxiliary.csv"), index=False)
 
     return tables_dict, aux_tables_dict
 
-
-# if __name__ == "__main__":
-#     # Set up the argument parser
-
-#     parser = argparse.ArgumentParser(description="A command-line tool  to update tables to a new schema version ")
-
-#     # Add arguments
-#     parser.add_argument("--tables", default=Path.cwd(),
-#                         help="Path to the directory containing meta TABLES. Defaults to the current working directory.")
-#     parser.add_argument("--vin", default="v1",
-#                         help="Input version.  Defaults to v1.")
-#     parser.add_argument("--vout", default="v3",
-
-
-#     tables = MOUSE_TABLES.copy() + ["SPATIAL"]
-#     cde_version = "v3.1"
-#     source_path = metadata_path / "og"
-#     export_path = metadata_path / "v3.1"
-#     tables_dict, aux_tables_dict = process_schema(tables, cde_version, source_path, export_path, print_log=True)
-
-
-def ingest_ds_info_doc(intake_doc: Path | str, ds_path: Path, doc_path: Path):
+def ingest_ds_info_doc(
+        intake_doc: Path | str,
+        ds_path: Path,
+        doc_path: Path
+        ):
     """
     Ingest the dataset information from the docx file and export to json for zenodo upload.
     """
 
     # should read this from ds_path/version
     # just read in as text
-    with open(ds_path / "version", "r") as f:
+    with open(os.path.join(ds_path, "version"), "r") as f:
         ds_ver = f.read().strip()
     # ds_ver = "v2.0"
 
@@ -915,10 +873,6 @@ def ingest_ds_info_doc(intake_doc: Path | str, ds_path: Path, doc_path: Path):
         if name == "affiliations":
             fields = table_data[0]
             data = table_data[1:]
-            # affiliations = pd.DataFrame(table_data[1:], columns=table_data[0])
-            # if affiliations.shape[0] == 1:
-            #     affiliations = affiliations.iloc[0, 0]
-
             print("made affiliation table")
         elif name == "datasets":
             dataset_title = table_data[0][1].strip().replace("\n", " ")
@@ -928,55 +882,11 @@ def ingest_ds_info_doc(intake_doc: Path | str, ds_path: Path, doc_path: Path):
             project_title = table_data[0][1].strip().replace("\n", " ")
             project_description = table_data[1][1].strip().replace("\n", " ")
             print("got project title/description")
-
         else:
             print("what is this extra thing?")
             print(table_data)
 
-    # created
-    # timestamp	Creation time of deposition (in ISO8601 format).
-    # doi
-    # string	Digital Object Identifier (DOI). When you publish your deposition, we register a DOI in DataCite for your upload, unless you manually provided us with one. This field is only present for published depositions.
-    # doi_url
-    # url	Persistent link to your published deposition. This field is only present for published depositions.
-    # files
-    # array	A list of deposition files resources.
-    # id
-    # integer	Deposition identifier
-    # metadata
-    # object	A deposition metadata resource
-    # modified
-    # timestamp	Last modification time of deposition (in ISO8601 format).
-    # owner
-    # integer	User identifier of the owner of the deposition.
-    # record_id
-    # integer	Record identifier. This field is only present for published depositions.
-    # record_url
-    # url	URL to public version of record for this deposition. This field is only present for published depositions.
-    # state
-    # string	One of the values:
-    # * inprogress: Deposition metadata can be updated. If deposition is also unsubmitted (see submitted) files can be updated as well.
-    # * done: Deposition has been published.
-    # * error: Deposition is in an error state - contact our support.
-
-    # submitted
-    # bool	True if the deposition has been published, False otherwise.
-
-    # title
-    # string	Title of deposition (automatically set from metadata). Defaults to empty string.
     title = dataset_title
-
-    # upload_type  string	Yes	Controlled vocabulary:
-    # * publication: Publication
-    # * poster: Poster
-    # * presentation: Presentation
-    # * dataset: Dataset
-    # * image: Image
-    # * video: Video/Audio
-    # * software: Software
-    # * lesson: Lesson
-    # * physicalobject: Physical object
-    # * other: Other
     upload_type = "dataset"
 
     # creators
@@ -1029,9 +939,9 @@ def ingest_ds_info_doc(intake_doc: Path | str, ds_path: Path, doc_path: Path):
     }
 
     # dump json
-    doi_path = ds_path / "DOI"
+    doi_path = os.path.join(ds_path, "DOI")
 
-    with open(doi_path / f"{long_dataset_name}.json", "w") as f:
+    with open(os.path.join(doi_path, f"{long_dataset_name}.json"), "w") as f:
         json.dump(export_data, f, indent=4)
 
     ##  we've got everything now lets .md file to upload
@@ -1055,12 +965,11 @@ def ingest_ds_info_doc(intake_doc: Path | str, ds_path: Path, doc_path: Path):
     # neeed to add metadata informaiton...
     ## dump md_content
     # write to a text file
-    doi_path = ds_path / "DOI"
-    if not doi_path.exists():
-        doi_path.mkdir()
+    doi_path = os.path.join(ds_path, "DOI")
+    os.makedirs(doi_path, exist_ok=True)
 
     long_dataset_name = ds_path.name
-    with open(doi_path / f"{long_dataset_name}.md", "w") as f:
+    with open(os.path.join(doi_path, f"{long_dataset_name}.md"), "w") as f:
         f.write(md_content)
 
     # ## save a simple table to update STUDY table
@@ -1071,29 +980,28 @@ def ingest_ds_info_doc(intake_doc: Path | str, ds_path: Path, doc_path: Path):
         "dataset_description": f"{dataset_description.strip()}",
     }
 
-    with open(doi_path / f"STUDY_fix.json", "w") as f:
+    with open(os.path.join(doi_path, f"STUDY_fix.json"), "w") as f:
         json.dump(export_dict, f, indent=4)
-
     df = pd.DataFrame(export_dict, index=[0])
-
-    df.to_csv(doi_path / f"{long_dataset_name}.csv", index=False)
-
+    df.to_csv(os.path.join(doi_path, f"{long_dataset_name}.csv"), index=False)
 
 # fix STUDY
-def fix_study_table(metadata_path: Path, doi_path: Path | None = None):
+def fix_study_table(metadata_path: Path, 
+                    doi_path: Path | None = None
+                    ):
     """
     Update the STUDY table with the information from the DOI folder.
     """
 
     table = "STUDY"
-    STUDY = read_meta_table(metadata_path / f"{table}.csv")
+    STUDY = read_meta_table(os.path.join(metadata_path, f"{table}.csv"))
 
     if doi_path is None:
-        doi_path = metadata_path.parent / "DOI"
+        doi_path = os.path.join(metadata_path.parent, "DOI")
     else:
         doi_path = Path(doi_path)
 
-    STUDY_fix = pd.read_csv(doi_path / f"{metadata_path.parent.name}.csv")
+    STUDY_fix = pd.read_csv(os.path.join(doi_path, f"{metadata_path.parent.name}.csv"))
 
     STUDY["project_name"] = STUDY_fix["project_name"]
     STUDY["project_description"] = STUDY_fix["project_description"]
@@ -1101,8 +1009,7 @@ def fix_study_table(metadata_path: Path, doi_path: Path | None = None):
     STUDY["dataset_description"] = STUDY_fix["dataset_description"]
 
     # export STUDY
-    STUDY.to_csv(metadata_path / "STUDY.csv", index=False)
-
+    STUDY.to_csv(os.path.join(metadata_path, "STUDY.csv"), index=False)
 
 def get_stats_table(dfs: dict[pd.DataFrame], source: str = "pmdbs"):
     """
@@ -1197,7 +1104,6 @@ _region_titles = {
     "PARA": "Para-Hippocampal Gyrus",
 }
 
-
 def make_stats_df_pmdbs(dfs: dict[pd.DataFrame]) -> pd.DataFrame:
     """ """
     # do joins to get the stats we need.
@@ -1274,13 +1180,11 @@ def make_stats_df_pmdbs(dfs: dict[pd.DataFrame]) -> pd.DataFrame:
     )
     return df
 
-
 def get_stat_tabs_pmdbs(dfs: dict[pd.DataFrame]):
     """ """
     df = make_stats_df_pmdbs(dfs)
     report = get_stats_pmdbs(df)
     return report, df
-
 
 def get_stats_pmdbs(df: pd.DataFrame) -> dict:
     # should be the same as df.shape[0]
@@ -1384,7 +1288,6 @@ def get_stats_pmdbs(df: pd.DataFrame) -> dict:
     # SAMPLE wise
     return report
 
-
 def make_stats_df_cell(dfs: dict[pd.DataFrame]) -> pd.DataFrame:
     """ """
     sample_cols = [
@@ -1430,13 +1333,11 @@ def make_stats_df_cell(dfs: dict[pd.DataFrame]) -> pd.DataFrame:
     )
     return df
 
-
 def get_stat_tabs_cell(dfs: dict[pd.DataFrame]):
     """ """
     df = make_stats_df_cell(dfs)
     report = get_stats_cell(df)
     return report, df
-
 
 def get_stats_cell(df: pd.DataFrame) -> dict:
     """
@@ -1465,7 +1366,6 @@ def get_stats_cell(df: pd.DataFrame) -> dict:
         condition_id=condition_id,
     )
     return report
-
 
 def make_stats_df_mouse(dfs: dict[pd.DataFrame]) -> pd.DataFrame:
     """ """
@@ -1514,7 +1414,6 @@ def make_stats_df_mouse(dfs: dict[pd.DataFrame]) -> pd.DataFrame:
     )
     return df
 
-
 def get_stat_tabs_mouse(dfs: dict[pd.DataFrame]):
     """ """
     df = make_stats_df_mouse(dfs)
@@ -1522,7 +1421,6 @@ def get_stat_tabs_mouse(dfs: dict[pd.DataFrame]):
     # 0. total number of samples
     report = get_stats_mouse(df)
     return report, df
-
 
 def get_stats_mouse(df: pd.DataFrame) -> dict:
     """
@@ -1563,7 +1461,6 @@ def get_stats_mouse(df: pd.DataFrame) -> dict:
     )
     return report
 
-
 def get_cohort_stats_table(dfs: dict[pd.DataFrame], source: str = "pmdbs"):
     """ """
     if source == "pmdbs":
@@ -1583,7 +1480,7 @@ def get_cohort_stats_table(dfs: dict[pd.DataFrame], source: str = "pmdbs"):
         report["N_teams"] = N_teams
 
     elif source == "mouse":
-        print("💔💔💔💔💔. no mouse cohorts yet.")
+        print("No mouse cohorts yet.")
         report, df = get_stat_tabs_mouse(dfs)
         # TODO:
     else:

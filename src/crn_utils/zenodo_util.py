@@ -36,57 +36,6 @@ for line in http_status_codes:
     code, name, desc = line.split("\t")
     http_stat_codes[code] = {"name": name, "desc": desc}
 
-
-# [
-#     "created",
-#     "modified",
-#     "id",
-#     "conceptrecid",
-#     "metadata",
-#     "title",
-#     "links",
-#     "record_id",
-#     "owner",
-#     "files",
-#     "state",
-#     "submitted",
-# ]
-
-
-# @dataclass
-# class draftZenodoDeposition:
-#     created: str
-#     modified: str
-#     id: int
-#     conceptrecid: int
-#     metadata: dict
-#     title: str
-#     links: dict
-#     record_id: int
-#     owner: int
-#     files: list
-#     state: str
-#     submitted: bool
-
-#     @classmethod
-#     def from_dict(cls, deposition_dict: dict) -> "ZenodoDeposition":
-#         return cls(**deposition_dict)
-
-#     @property
-#     def is_published(self):
-#         return self.submitted
-
-#     def to_zenodo_metadata(self):
-#         return ZenodoMetadata(**self.metadata)
-
-#     @property
-#     def is_draft(self):
-#         return not self.submitted
-
-#     @property
-#     def doi(self):
-#         return self.conceptrecid
-
 [
     "created",
     "modified",
@@ -104,7 +53,6 @@ for line in http_status_codes:
     "state",
     "submitted",
 ]
-
 
 @dataclass
 class publishedZenodoDeposition:
@@ -161,41 +109,6 @@ class publishedZenodoDeposition:
             submitted,
         )
 
-
-#  {'title': 'Spatial Transcriptomics data (GeoMx) of midbrain tissue in control and PD subjects',
-#   'publication_date': '2025-05-08',
-#   'description': 'This Zenodo deposit contains a publicly available description of the dataset: \n\n    "Spatial Transcriptomics data (GeoMx) of midbrain tissue in control and PD subjects". (vila-pmdbs-spatial-geomx-unmasked, v1.0) submitted by ASAP Team: Vila.\n\nThis dataset will be made available to researchers via the ASAP CRN Cloud in approximately one month. Once available, the dataset will be accessible by going to https://cloud.parkinsonsroadmap.org.\nThis research was funded by the Aligning Science Across Parkinson\'s Collaborative Research Network (ASAP CRN), through the Michael J. Fox Foundation for Parkinson\'s Research (MJFF).\n\nThis Zenodo deposit was created by the ASAP CRN Cloud staff on behalf of the dataset Authors. It provides a citable reference for a CRN Cloud Dataset\n\n- Aligning Science Across Parkinson\'s',
-#   'access_right': 'open',
-#   'creators': [{'name': 'Chatterton, Zac',
-#     'affiliation': '1.The University of Sydney Brain and Mind Centre, Camperdown, NSW, Australia\n2.Neuroscience, School of Medical Sciences, Faculty of Medicine and Health, The University of Sydney, Camperdown, NSW, Australia.',
-#     'orcid': '0000-0002-6683-1400'},
-#    {'name': 'Pineda, Sandy',
-#     'affiliation': '1.The University of Sydney Brain and Mind Centre, Camperdown, NSW, Australia\n2.Neuroscience, School of Medical Sciences, Faculty of Medicine and Health, The University of Sydney, Camperdown, NSW, Australia.',
-#     'orcid': '0000-0002-9003-0101'},
-#    {'name': 'Wu, Ping',
-#     'affiliation': '1.The University of Sydney Brain and Mind Centre, Camperdown, NSW, Australia\n2.Neuroscience, School of Medical Sciences, Faculty of Medicine and Health, The University of Sydney, Camperdown, NSW, Australia.'},
-#    {'name': 'Li, Hongyun',
-#     'affiliation': '1.The University of Sydney Brain and Mind Centre, Camperdown, NSW, Australia\n2.Neuroscience, School of Medical Sciences, Faculty of Medicine and Health, The University of Sydney, Camperdown, NSW, Australia.'},
-#    {'name': 'Fu, Yuhong',
-#     'affiliation': '1.The University of Sydney Brain and Mind Centre, Camperdown, NSW, Australia\n2.Neuroscience, School of Medical Sciences, Faculty of Medicine and Health, The University of Sydney, Camperdown, NSW, Australia.',
-#     'orcid': '0000-0003-4539-2039'},
-#    {'name': 'Halliday, Glenda',
-#     'affiliation': '1.The University of Sydney Brain and Mind Centre, Camperdown, NSW, Australia\n2.Neuroscience, School of Medical Sciences, Faculty of Medicine and Health, The University of Sydney, Camperdown, NSW, Australia.',
-#     'orcid': '0000-0003-0422-8398'}],
-#   'version': '0.1',
-#   'grants': [{'id': '10.13039/100018231::ASAP-020505'}],
-#   'license': 'cc-zero',
-#   'imprint_publisher': 'Zenodo',
-#   'communities': [{'identifier': 'asaphub'}],
-#   'upload_type': 'dataset',
-#   'prereserve_doi': {'doi': '10.5281/zenodo.15557896', 'recid': 15557896}},
-# https://zenodo.org/records/15543368
-
-#   reference:
-# Aligning Science Across Parkinson’s Collaborative Research Network Cloud,
-# https://cloud.parkinsonsroadmap.org/collections, RRID:SCR_023923
-
-
 @dataclass
 class ZenodoMetadata:
     title: str
@@ -229,7 +142,7 @@ class ZenodoMetadata:
     def parse_metadata_from_json(cls, json_file_path: Path) -> "ZenodoMetadata":
         """Parse metadata from a JSON file into a ZenodoMetadata object."""
         json_file_path = Path(json_file_path).expanduser()
-        if not json_file_path.exists():
+        if not os.path.exists(json_file_path):
             raise ValueError(
                 f"{json_file_path} does not exist. Please check you entered the correct path."
             )
@@ -346,7 +259,7 @@ class ZenodoClient(object):
         else:
             target_key = "ACCESS_TOKEN"
 
-        dotrc = os.environ.get(target_key, Path.home() / ".zenodo_token")
+        dotrc = os.environ.get(target_key, os.path.join(str(Path.home()), ".zenodo_token"))
 
         if isinstance(dotrc, Path):  # found the path..
             #  read from the file
@@ -567,7 +480,6 @@ class ZenodoClient(object):
 
         # could check to see if deposition["state"] == "done" and warn user that this is a published record...
         #  but it fails either way.
-
         r = requests.delete(
             f"{self._endpoint}/deposit/depositions/{dep_id}",
             params={"access_token": self.token},
@@ -579,25 +491,6 @@ class ZenodoClient(object):
         self.title = None
         self.bucket = None
         self.deposition_id = None
-        # else:
-        #    print(f'Project title {self.title} is still available.')
-
-    # def _depricate_project(self, doi_id: str):
-    #     """delete a project from repository by ID
-
-    #     Args:
-    #         dep_id (str): The project deposition ID
-    #     """
-    #     print(
-    #         "this will depricate the project by setting to version to 0.0.0.1, change 'title' to 'deprecated', and blank out other metadata fields."
-    #     )
-
-    #     # could check to see if deposition["state"] == "done" and warn user that this is a published record...
-    #     #  but it fails either way.
-
-    #     zenodo.set_deposition_id(doi_id)
-
-    #     deposition = zenodo.deposition
 
     def _check_parent_doi(self, dep_id: str, project_obj: dict):
         if project_obj["id"] == int(dep_id):
@@ -646,25 +539,6 @@ class ZenodoClient(object):
 
     def update_depositions(self):
         self._all_depositions = self._get_all_depositions()
-
-    # def list_depositions(self):
-    #     """list depositions connected to the supplied ACCESS_KEY
-
-    #     prints to the screen the "Project Name" and "ID"
-    #     """
-    #     tmp = self._get_depositions()
-
-    #     if isinstance(tmp, list):
-    #         print("Dataset Name ---- ID ---- Status ---- Latest Published ID")
-    #         print("---------------------------------------------------------")
-    #         for file in tmp:
-    #             status = "published" if file["submitted"] else "unpublished"
-    #             latest = self._get_latest_deposition()
-    #             print(f"{file['title']} ---- {file['id']} ---- {status} ---- {latest}")
-    #     else:
-    #         print(" ** need to setup ~/.zenodo_token file ** ")
-
-    #     return tmp
 
     def list_files(self, dep_id: str | None = None):
         """list files in current deposition
@@ -878,24 +752,6 @@ class ZenodoClient(object):
         else:
             return r.raise_for_status()
 
-    # def delete_file(self, filename: Path | str | None = None):
-    #     """delete a file from a project
-
-    #     Args:
-    #         filename (str): the name of file to delete
-    #     """
-    #     bucket_link = self.bucket
-    #     if filename is None:
-    #         print("You need to supply a filename")
-    #         return
-    #     elif isinstance(filename, str):
-    #         filename = Path(filename)
-
-    #     # with open(file_path, "rb") as fp:
-    #     _ = requests.delete(
-    #         f"{bucket_link}/{filename}", params={"access_token": self.token}
-    #     )
-
     def upload_file(self, file_path: Path | str | None = None, publish=False):
         """upload a file to a project
 
@@ -909,7 +765,7 @@ class ZenodoClient(object):
         elif isinstance(file_path, str):
             file_path = Path(file_path)
 
-        if not file_path.exists():
+        if not os.path.exists(file_path):
             print(
                 f"{file_path} does not exist. Please check you entered the correct path"
             )
@@ -944,13 +800,6 @@ class ZenodoClient(object):
         url_action = self._get_deposition_by_id()["links"]["newversion"]
         print(url_action)
         r = requests.post(url_action, params={"access_token": self.token})
-        # r = requests.post(
-        #     f"{self._endpoint}/deposit/depositions/{self.deposition_id}/newversion",
-        #     params={"access_token": self.token},
-        #     # data=json.dumps(data_payload),
-        #     # headers={"Content-Type": "application/json"},
-        # )
-
         r.raise_for_status()
 
         # parse current project to the draft deposition
@@ -960,7 +809,6 @@ class ZenodoClient(object):
         time.sleep(2)
 
         # self.set_deposition_id(new_dep_id)
-
         time.sleep(5)
         if r.ok:
             return r.json()

@@ -1,3 +1,4 @@
+import os
 import pandas as pd
 import json
 
@@ -52,7 +53,7 @@ __all__ = [
 def load_id_mapper(id_mapper_path: Path) -> dict:
     """load the id mapper from the json file"""
     id_mapper_path = Path(id_mapper_path)
-    if Path.exists(id_mapper_path):
+    if os.path.exists(id_mapper_path):
         with open(id_mapper_path, "r") as f:
             id_mapper = json.load(f)
         print(f"id_mapper loaded from {id_mapper_path}")
@@ -67,7 +68,7 @@ def load_id_mapper(id_mapper_path: Path) -> dict:
 #     """ load the id mapper from the json file"""
 #     id_mapper = {}
 
-#     if Path.exists(id_mapper_path):
+#     if os.path.exists(id_mapper_path):
 #         with open(id_mapper_path, 'r') as f:
 #             for k, v in ijson.kvitems(f, ''):
 #                 if k in ids:
@@ -82,7 +83,7 @@ def load_id_mapper(id_mapper_path: Path) -> dict:
 # TODO: test this function save the old one before overwriting
 def write_id_mapper(id_mapper: dict, id_mapper_path: Path):
     """write the id mapper to the json file"""
-    if id_mapper_path.exists():
+    if os.path.exists(id_mapper_path):
         # copy the old file to a backup using datetime to make it unique
         # Get the current date and time
 
@@ -90,13 +91,13 @@ def write_id_mapper(id_mapper: dict, id_mapper_path: Path):
             f"{id_mapper_path.parent}/backup/{pd.Timestamp.now().strftime('%Y%m%d')}_{id_mapper_path.name}"
         )
 
-        if not backup_path.parent.exists():
-            backup_path.parent.mkdir(parents=True, exist_ok=True)
+        if not os.path.exists(backup_path.parent):
+            backup_path.os.makedirs(parent, exist_ok=True)
         shutil.copy2(id_mapper_path, backup_path)
         print(f"backed up old id_mapper to {backup_path}")
 
-    if not id_mapper_path.parent.exists():
-        id_mapper_path.parent.mkdir(parents=True, exist_ok=True)
+    if not os.path.exists(id_mapper_path.parent):
+        id_mapper_path.os.makedirs(parent, exist_ok=True)
         print(f"created directory for id_mapper export at {id_mapper_path.parent}")
 
     mode = "w"
@@ -447,10 +448,10 @@ def load_pmdbs_id_mappers(map_path, suffix):
             fname = f"ASAP_{source}_{prot}_{suffix}.json"
 
         try:
-            id_mapper = load_id_mapper(map_path / fname)
+            id_mapper = load_id_mapper(os.path.join(map_path, fname))
         except FileNotFoundError:
             id_mapper = {}
-            print(f"{map_path / fname} not found... starting from scratch")
+            print(f"{os.path.join(map_path, fname)} not found... starting from scratch")
         outputs += (id_mapper,)
 
     return outputs
@@ -467,11 +468,11 @@ def export_pmdbs_id_mappers(
 ):
     source = "PMDBS"
 
-    subject_mapper_path = map_path / f"ASAP_{source}_subj_{suffix}.json"
-    sample_mapper_path = map_path / f"ASAP_{source}_samp_{suffix}.json"
-    gp2_mapper_path = map_path / f"ASAP_{source}_gp2_{suffix}.json"
-    source_mapper_path = map_path / f"ASAP_{source}_sourcesubj_{suffix}.json"
-    dataset_mapper_path = map_path / f"ASAP_dataset_{suffix}.json"
+    subject_mapper_path = os.path.join(map_path, f"ASAP_{source}_subj_{suffix}.json")
+    sample_mapper_path = os.path.join(map_path, f"ASAP_{source}_samp_{suffix}.json")
+    gp2_mapper_path = os.path.join(map_path, f"ASAP_{source}_gp2_{suffix}.json")
+    source_mapper_path = os.path.join(map_path, f"ASAP_{source}_sourcesubj_{suffix}.json")
+    dataset_mapper_path = os.path.join(map_path, f"ASAP_dataset_{suffix}.json")
     # update the dataset_id_mapper
     write_id_mapper(datasetid_mapper, dataset_mapper_path)
     write_id_mapper(subjectid_mapper, subject_mapper_path)
@@ -868,10 +869,10 @@ def load_mouse_id_mappers(map_path, suffix):
             fname = f"ASAP_{source}_{prot}_{suffix}.json"
 
         try:
-            id_mapper = load_id_mapper(map_path / fname)
+            id_mapper = load_id_mapper(os.path.join(map_path, fname))
         except FileNotFoundError:
             id_mapper = {}
-            print(f"{map_path / fname} not found... starting from scratch")
+            print(f"{os.path.join(map_path, fname)} not found... starting from scratch")
 
         print(f"loaded {fname}")
         outputs += (id_mapper,)
@@ -883,9 +884,9 @@ def export_mouse_id_mappers(
     map_path, suffix, datasetid_mapper, mouseid_mapper, sampleid_mapper
 ):
     source = "MOUSE"
-    sample_mapper_path = map_path / f"ASAP_{source}_samp_{suffix}.json"
-    mouse_mapper_path = map_path / f"ASAP_{source}_{suffix}.json"
-    dataset_mapper_path = map_path / f"ASAP_dataset_{suffix}.json"
+    sample_mapper_path = os.path.join(map_path, f"ASAP_{source}_samp_{suffix}.json")
+    mouse_mapper_path = os.path.join(map_path, f"ASAP_{source}_{suffix}.json")
+    dataset_mapper_path = os.path.join(map_path, f"ASAP_dataset_{suffix}.json")
     # update the dataset_id_mapper
     write_id_mapper(datasetid_mapper, dataset_mapper_path)
     write_id_mapper(mouseid_mapper, mouse_mapper_path)
@@ -977,10 +978,10 @@ def load_cell_id_mappers(map_path, suffix):
             fname = f"ASAP_{source}_{prot}_{suffix}.json"
 
         try:
-            id_mapper = load_id_mapper(map_path / fname)
+            id_mapper = load_id_mapper(os.path.join(map_path, fname))
         except FileNotFoundError:
             id_mapper = {}
-            print(f"{map_path / fname} not found... starting from scratch")
+            print(f"{os.path.join(map_path, fname)} not found... starting from scratch")
         outputs += (id_mapper,)
 
     return outputs
@@ -1062,9 +1063,9 @@ def export_cell_id_mappers(
     map_path, suffix, datasetid_mapper, cellid_mapper, sampleid_mapper
 ):
     source = "INVITRO"
-    sample_mapper_path = map_path / f"ASAP_{source}_samp_{suffix}.json"
-    cell_mapper_path = map_path / f"ASAP_{source}_{suffix}.json"
-    dataset_mapper_path = map_path / f"ASAP_dataset_{suffix}.json"
+    sample_mapper_path = os.path.join(map_path, f"ASAP_{source}_samp_{suffix}.json")
+    cell_mapper_path = os.path.join(map_path, f"ASAP_{source}_{suffix}.json")
+    dataset_mapper_path = os.path.join(map_path, f"ASAP_dataset_{suffix}.json")
     # update the dataset_id_mapper
     write_id_mapper(datasetid_mapper, dataset_mapper_path)
     write_id_mapper(cellid_mapper, cell_mapper_path)
@@ -1335,10 +1336,10 @@ def load_multiplex_id_mappers(map_path, suffix):
             fname = f"ASAP_{source}_{prot}_{suffix}.json"
 
         try:
-            id_mapper = load_id_mapper(map_path / fname)
+            id_mapper = load_id_mapper(os.path.join(map_path, fname))
         except FileNotFoundError:
             id_mapper = {}
-            print(f"{map_path / fname} not found... starting from scratch")
+            print(f"{os.path.join(map_path, fname)} not found... starting from scratch")
         outputs += (id_mapper,)
 
     return outputs
@@ -1353,14 +1354,14 @@ def export_multiplex_id_mappers(
     gp2id_mapper,
     sourceid_mapper,
 ):
-    multiplex_mapper_path = map_path / f"ASAP_MULTIPLEX_samp_{suffix}.json"
+    multiplex_mapper_path = os.path.join(map_path, f"ASAP_MULTIPLEX_samp_{suffix}.json")
     write_id_mapper(multiplexid_mapper, multiplex_mapper_path)
 
     source = "PMDBS"
-    subject_mapper_path = map_path / f"ASAP_{source}_subj_{suffix}.json"
-    gp2_mapper_path = map_path / f"ASAP_{source}_gp2_{suffix}.json"
-    source_mapper_path = map_path / f"ASAP_{source}_sourcesubj_{suffix}.json"
-    dataset_mapper_path = map_path / f"ASAP_dataset_{suffix}.json"
+    subject_mapper_path = os.path.join(map_path, f"ASAP_{source}_subj_{suffix}.json")
+    gp2_mapper_path = os.path.join(map_path, f"ASAP_{source}_gp2_{suffix}.json")
+    source_mapper_path = os.path.join(map_path, f"ASAP_{source}_sourcesubj_{suffix}.json")
+    dataset_mapper_path = os.path.join(map_path, f"ASAP_dataset_{suffix}.json")
     # update the dataset_id_mapper
     write_id_mapper(datasetid_mapper, dataset_mapper_path)
     write_id_mapper(subjectid_mapper, subject_mapper_path)
@@ -1416,9 +1417,9 @@ def export_multiplex_id_mappers(
     map_path, suffix, datasetid_mapper, cellid_mapper, sampleid_mapper
 ):
     source = "PMDBS"
-    sample_mapper_path = map_path / f"ASAP_{source}_samp_{suffix}.json"
-    cell_mapper_path = map_path / f"ASAP_{source}_{suffix}.json"
-    dataset_mapper_path = map_path / f"ASAP_dataset_{suffix}.json"
+    sample_mapper_path = os.path.join(map_path, f"ASAP_{source}_samp_{suffix}.json")
+    cell_mapper_path = os.path.join(map_path, f"ASAP_{source}_{suffix}.json")
+    dataset_mapper_path = os.path.join(map_path, f"ASAP_dataset_{suffix}.json")
     # update the dataset_id_mapper
     write_id_mapper(datasetid_mapper, dataset_mapper_path)
     write_id_mapper(cellid_mapper, cell_mapper_path)

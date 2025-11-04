@@ -1,4 +1,5 @@
 # imports
+import os
 import pandas as pd
 
 # wrape this in try/except to make suing the ReportCollector portable
@@ -62,7 +63,7 @@ def read_meta_table(table_path):
 
 class ReportCollector:
     """
-    Class to collect and log messages, errors, and markdown to a log file and/or streamlit
+    Class to collect and log messages, errors, and markdown to a log file os.path.join(and, or) streamlit
     """
 
     def __init__(self, destination="both"):
