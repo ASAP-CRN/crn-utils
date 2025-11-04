@@ -29,7 +29,7 @@ from .constants import *
 from .doi import update_study_table_with_doi
 
 __all__ = [
-    "prep_release_metadata_all_sources",
+    "prep_release_metadata",
     "load_and_process_table",
     "process_schema",
     "create_metadata_package",
@@ -54,7 +54,7 @@ def create_metadata_package(
     write_version(schema_version, os.path.join(final_metadata_path, "cde_version"))
 
 ### this is a wrapper to call source specific prep_release_metadata_ functions
-def prep_release_metadata_all_sources(
+def prep_release_metadata(
     ds_path: Path,
     schema_version: str,
     map_path: Path,
@@ -75,7 +75,7 @@ def prep_release_metadata_all_sources(
     """
 
     if source == "pmdbs":
-        prep_release_metadata_human(
+        prep_release_metadata_pmdbs(
             ds_path, schema_version, map_path, suffix, spatial, proteomics, source, flatten, map_only, dataset_name
         )
     elif source == "mouse":
@@ -308,7 +308,7 @@ def prep_release_metadata_mouse(
             sampleid_mapper,
         )
 
-def prep_release_metadata_human(
+def prep_release_metadata_pmdbs(
     ds_path: Path,
     schema_version: str,
     map_path: Path,
