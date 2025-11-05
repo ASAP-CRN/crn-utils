@@ -117,7 +117,7 @@ def read_CDE(
     print(cde_url)
 
     if local_path:
-        cde_url = Path(local_path) / f"{resource_fname}.csv"
+        cde_url = os.path.join(local_path, f"{resource_fname}.csv")
         print(f"reading from local file: {cde_url}")
     else:
         print(f"reading from googledoc {cde_url}")
@@ -284,7 +284,7 @@ def _read_CDE_asap_ids(
     print(cde_url)
     if local_path:
         # ASAP_assigned_keys only in >v3.0
-        cde_url = Path(local_path) / f"ASAP_CDE_{schema_version}_{resource_fname}.csv"
+        cde_url = os.path.join(local_path, f"ASAP_CDE_{schema_version}_{resource_fname}.csv")
         print(f"local_path: {cde_url}")
 
     try:
@@ -295,9 +295,7 @@ def _read_CDE_asap_ids(
         read_source = "url" if not local_path else "local file"
         print(f"read {read_source}")
     except:
-
-        root = Path(__file__).parent.parent.parent
-        df = pd.read_csv(os.path.join(f"{root}/resource/CDE/ASAP_CDE_{schema_version}_{resource_fname}.csv"))
+        df = pd.read_csv(os.path.join(f"{crn_utils_root}/resource/CDE/ASAP_CDE_{schema_version}_{resource_fname}.csv"))
         print("read local file")
 
     # drop rows with no table name (i.e. ASAP_ids)
@@ -337,23 +335,20 @@ def compare_CDEs(df1: pd.DataFrame, df2: pd.DataFrame) -> str | list[str]:
 
     return differences if differences else "No differences found in data."
 
-
 def export_tables_versioned(tables_path: str, out_dir: str, tables: dict):
     """ """
-    # # Prepare output directory
+    # Prepare output directory
     current_date = datetime.now()
 
     date_str = current_date.strftime("%Y%m%d")
-    export_root = Path(tables_path) / f"{out_dir}_{date_str}"
+    export_root = os.path.join(tables_path, f"{out_dir}_{date_str}")
 
     for name, table in tables.items():
         export_table(name, table, export_root)
-        # table.to_csv(export_root / f"{name}.csv", index=False)
-
 
 def export_table(table_name: str, df: pd.DataFrame, out_dir: str):
     """
-    Export a table to a csv file, with os.path.join(nulls, empty) entries replaced by "NA"
+    Export a table to a csv file, with nulls/empty entries replaced by "NA"
     """
     # make sure the output directory exists
     export_root = Path(out_dir).parent
@@ -368,7 +363,6 @@ def export_table(table_name: str, df: pd.DataFrame, out_dir: str):
         "Nan": NULL
     })
     df.to_csv(os.path.join(out_dir, f"{table_name}.csv"), index=False)
-
 
 def read_meta_table(table_path: str | Path) -> pd.DataFrame:
     # read the whole table
@@ -459,7 +453,6 @@ def export_meta_tables(dfs: dict[str, pd.DataFrame], export_path: Path):
         print(f"Exported {len(dfs)} tables to {export_path}")
         return 1
     return 0
-
 
 # depricate (there is a create_metadata_package in release_util.py) and this is no longer used
 # TODO: remove
