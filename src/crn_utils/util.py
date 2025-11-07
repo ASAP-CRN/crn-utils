@@ -1,10 +1,13 @@
-# imports
+import os, sys
 import pandas as pd
 from pathlib import Path
 import datetime
 import shutil
+import numpy as np
 
 NULL = "NA"
+
+crn_utils_root = str(os.path.join(Path(__file__).resolve().parents[2], "crn-utils"))
 
 __all__ = [
     "read_CDE",
@@ -17,7 +20,6 @@ __all__ = [
     "prep_table",
     "load_tables",
     "export_meta_tables",
-    # "create_metadata_package",
     "get_dataset_version",
     "get_release_version",
     "get_cde_version",
@@ -25,7 +27,7 @@ __all__ = [
     "archive_CDE",
 ]
 
-SUPPORTED_METADATA_VERSIONS = [
+SUPPORTED_CDE_VERSIONS = [
     "v1",
     "v2",
     "v2.1",
@@ -38,7 +40,6 @@ SUPPORTED_METADATA_VERSIONS = [
     "v3.3",
 ]
 
-
 def sanitize_validation_string(validation_str):
     """Sanitize validation strings by replacing smart quotes with straight quotes."""
     if not isinstance(validation_str, str):
@@ -50,9 +51,8 @@ def sanitize_validation_string(validation_str):
         .replace("…", "...")
     )
 
-
 def read_CDE(
-    metadata_version: str = "v3.2",
+    cde_version: str = "v3.2",
     local_path: str | bool | Path = False,
     include_asap_ids: bool = False,
     include_aliases: bool = False,
@@ -73,27 +73,27 @@ def read_CDE(
     ]
 
     # set up fallback
-    if metadata_version == "v1":
+    if cde_version == "v1":
         resource_fname = "ASAP_CDE_v1"
-    elif metadata_version == "v2":
+    elif cde_version == "v2":
         resource_fname = "ASAP_CDE_v2"
-    elif metadata_version == "v2.1":
+    elif cde_version == "v2.1":
         resource_fname = "ASAP_CDE_v2.1"
-    elif metadata_version == "v3.0-beta":
+    elif cde_version == "v3.0-beta":
         resource_fname = "ASAP_CDE_v3.0-beta"
-    elif metadata_version in ["v3", "v3.0", "v3.0.0"]:
+    elif cde_version in ["v3", "v3.0", "v3.0.0"]:
         resource_fname = "ASAP_CDE_v3.0"
-    elif metadata_version in ["v3.1"]:
+    elif cde_version in ["v3.1"]:
         resource_fname = "ASAP_CDE_v3.1"
-    elif metadata_version in ["v3.2", "v3.2-beta"]:
+    elif cde_version in ["v3.2", "v3.2-beta"]:
         resource_fname = "ASAP_CDE_v3.2"
-    elif metadata_version == "v3.3":
+    elif cde_version == "v3.3":
         resource_fname = "ASAP_CDE_v3.3"
     else:
-        resource_fname = "ASAP_CDE_v3.2"
+        sys.exit(f"Unsupported cde_version: {cde_version}")
 
     # add the Shared_key column for v3
-    if metadata_version in [
+    if cde_version in [
         "v3.3",
         "v3.2",
         "v3.2-beta",
@@ -103,30 +103,29 @@ def read_CDE(
         "v3.0-beta",
     ]:
         column_list.append("Shared_key")
-        # column_list += ["Shared_key"]
 
     # insert "DisplayName" after "Field"
-    if metadata_version in ["v3.2", "v3.2-beta", "v3.3"]:
+    if cde_version in ["v3.2", "v3.2-beta", "v3.3"]:
         column_list.insert(2, "DisplayName")
 
-    if metadata_version in SUPPORTED_METADATA_VERSIONS:
-        print(f"metadata_version: {resource_fname}")
+    if cde_version in SUPPORTED_CDE_VERSIONS:
+        print(f"cde_version: {resource_fname}")
     else:
-        print(f"Unsupported metadata_version: {resource_fname}")
+        print(f"Unsupported cde_version: {resource_fname}")
 
-    cde_url = f"https://docs.google.com/spreadsheets/d/{GOOGLE_SHEET_ID}/gviz/tq?tqx=out:csv&sheet={metadata_version}"
+    cde_url = f"https://docs.google.com/spreadsheets/d/{GOOGLE_SHEET_ID}/gviz/tq?tqx=out:csv&sheet={cde_version}"
     print(cde_url)
 
     if local_path:
-        cde_url = Path(local_path) / f"{resource_fname}.csv"
+        cde_url = os.path.join(local_path, f"{resource_fname}.csv")
         print(f"reading from local file: {cde_url}")
     else:
         print(f"reading from googledoc {cde_url}")
 
     try:
-        # if metadata_version == "v3.2":
-        #     metadata_version = "CDE_final"
-        # cde_url = f"https://docs.google.com/spreadsheets/d/{GOOGLE_SHEET_ID}/gviz/tq?tqx=out:csv&sheet={metadata_version}"
+        # if cde_version == "v3.2":
+        #     cde_version = "CDE_final"
+        # cde_url = f"https://docs.google.com/spreadsheets/d/{GOOGLE_SHEET_ID}/gviz/tq?tqx=out:csv&sheet={cde_version}"
 
         CDE_df = pd.read_csv(cde_url)
         print(f"read CDE")
@@ -146,8 +145,7 @@ def read_CDE(
 
         # CDE_df = pd.read_csv(new_resource_fname)
         # print(f"exception:read local file: {new_resource_fname}")
-        root = Path(__file__).parent.parent.parent
-        CDE_df = pd.read_csv(f"{root}/resource/CDE/{resource_fname}.csv")
+        CDE_df = pd.read_csv(os.path.join(crn_utils_root, "/resource/CDE/", f"{resource_fname}.csv"))
         print(f"exception:read fallback file: ../../resource/CDE/{resource_fname}.csv")
 
     # drop ASAP_ids if not requested
@@ -169,7 +167,7 @@ def read_CDE(
     CDE_df = CDE_df.drop_duplicates()
 
     # force Shared_key to be int
-    if metadata_version in [
+    if cde_version in [
         "v3.3",
         "v3.2",
         "v3.2-beta",
@@ -184,30 +182,28 @@ def read_CDE(
 
     return clean_cde_schema(CDE_df)
 
-
 def archive_CDE(
-    metadata_version, resource_path: str | Path, CDE_df: pd.DataFrame | None = None
+    cde_version, resource_path: str | Path, CDE_df: pd.DataFrame | None = None
 ):
     """
     Archive CDE data to a CSV file
     """
     if CDE_df is None:
         CDE_df = read_CDE(
-            metadata_version=metadata_version,
+            cde_version=cde_version,
             include_asap_ids=True,
             include_aliases=True,
         )
 
     resource_path = Path(resource_path)
     if not resource_path.exists():
-        resource_path = Path(__file__).parent.parent.parent / "resource/CDE"
-        print(f"exporting to default: ../../resource/CDE/ path")
+        resource_path = os.path.join(crn_utils_root, "resource/CDE")
+        print(f"exporting to default: {resource_path}")
 
-    export_path = resource_path / f"ASAP_CDE_{metadata_version}.csv"
+    export_path = os.path.join(resource_path, f"ASAP_CDE_{cde_version}.csv")
 
     CDE_df.to_csv(export_path, index=False)
     print(f"wrote CDE to: {export_path}")
-
 
 def sanitize_string(s):
     """Replace smart quotes with straight quotes and other problematic characters."""
@@ -223,7 +219,6 @@ def sanitize_string(s):
         )
         .replace("…", "...")
     )
-
 
 def clean_cde_schema(cde_schema):
     """
@@ -270,7 +265,6 @@ def read_CDE_asap_ids(
 
     return df
 
-
 # original function
 def _read_CDE_asap_ids(
     schema_version: str = "v3.3", local_path: str | bool | Path = False
@@ -290,7 +284,7 @@ def _read_CDE_asap_ids(
     print(cde_url)
     if local_path:
         # ASAP_assigned_keys only in >v3.0
-        cde_url = Path(local_path) / f"ASAP_CDE_{schema_version}_{resource_fname}.csv"
+        cde_url = os.path.join(local_path, f"ASAP_CDE_{schema_version}_{resource_fname}.csv")
         print(f"local_path: {cde_url}")
 
     try:
@@ -301,13 +295,7 @@ def _read_CDE_asap_ids(
         read_source = "url" if not local_path else "local file"
         print(f"read {read_source}")
     except:
-
-        root = Path(__file__).parent.parent.parent
-        df = pd.read_csv(
-            f"{root}/resource/CDE/ASAP_CDE_{schema_version}_{resource_fname}.csv"
-        )
-
-        # df = pd.read_csv(f"ASAP_CDE_{schema_version}_{resource_fname}.csv")
+        df = pd.read_csv(os.path.join(f"{crn_utils_root}/resource/CDE/ASAP_CDE_{schema_version}_{resource_fname}.csv"))
         print("read local file")
 
     # drop rows with no table name (i.e. ASAP_ids)
@@ -347,19 +335,16 @@ def compare_CDEs(df1: pd.DataFrame, df2: pd.DataFrame) -> str | list[str]:
 
     return differences if differences else "No differences found in data."
 
-
 def export_tables_versioned(tables_path: str, out_dir: str, tables: dict):
     """ """
-    # # Prepare output directory
+    # Prepare output directory
     current_date = datetime.now()
 
     date_str = current_date.strftime("%Y%m%d")
-    export_root = Path(tables_path) / f"{out_dir}_{date_str}"
+    export_root = os.path.join(tables_path, f"{out_dir}_{date_str}")
 
     for name, table in tables.items():
         export_table(name, table, export_root)
-        # table.to_csv(export_root / f"{name}.csv", index=False)
-
 
 def export_table(table_name: str, df: pd.DataFrame, out_dir: str):
     """
@@ -367,11 +352,17 @@ def export_table(table_name: str, df: pd.DataFrame, out_dir: str):
     """
     # make sure the output directory exists
     export_root = Path(out_dir).parent
-    export_root.mkdir(parents=True, exist_ok=True)
+    os.makedirs(export_root, exist_ok=True)
 
-    df = df.replace({"": NULL, pd.NA: NULL, "none": NULL, "nan": NULL, "Nan": NULL})
-    df.to_csv(out_dir / f"{table_name}.csv", index=False)
-
+    df = df.astype(str).replace({
+        "": NULL,
+        "<NA>": NULL,
+        pd.NA: NULL,
+        "none": NULL,
+        "nan": NULL,
+        "Nan": NULL
+    })
+    df.to_csv(os.path.join(out_dir, f"{table_name}.csv"), index=False)
 
 def read_meta_table(table_path: str | Path) -> pd.DataFrame:
     # read the whole table
@@ -397,13 +388,17 @@ def read_meta_table(table_path: str | Path) -> pd.DataFrame:
 
     # drop rows with all null values
     table_df.dropna(how="all", inplace=True)
-    table_df.fillna(NULL, inplace=True)
-    table_df.replace(
-        {"": NULL, pd.NA: NULL, "none": NULL, "nan": NULL, "Nan": NULL}, inplace=True
-    )
-
+    table_df.fillna(np.nan, inplace=True)
+    table_df = table_df.astype(str)
+    table_df.replace({
+        "": NULL,
+        "<NA>": NULL,
+        pd.NA: NULL,
+        "none": NULL,
+        "nan": NULL,
+        "Nan": NULL
+    }, inplace=True)
     return table_df.reset_index(drop=True)
-
 
 ######## HELPERS ########
 # Define a function to only capitalize the first letter of a string
@@ -444,7 +439,7 @@ def load_tables(table_path: Path, tables: list[str]) -> dict[str, pd.DataFrame]:
     dfs = {}
     for tab in tables:
         # print(f"loading {tab}")
-        dfs[tab] = read_meta_table(table_path / f"{tab}.csv")
+        dfs[tab] = read_meta_table(os.path.join(table_path, f"{tab}.csv"))
     return dfs
 
 
@@ -453,12 +448,11 @@ def export_meta_tables(dfs: dict[str, pd.DataFrame], export_path: Path):
         if tab not in dfs:  # BUG:?  can this ever be true
             print(f"Table {tab} not found in dataset tables")
             continue
-        dfs[tab].to_csv(export_path / f"{tab}.csv")
+        dfs[tab].to_csv(os.path.join(export_path, f"{tab}.csv"))
     else:
         print(f"Exported {len(dfs)} tables to {export_path}")
         return 1
     return 0
-
 
 # depricate (there is a create_metadata_package in release_util.py) and this is no longer used
 # TODO: remove
@@ -472,22 +466,22 @@ def _create_metadata_package(metadata_source: Path, package_destination: Path):
     return list of folders copied
     """
 
-    package_destination.mkdir(exist_ok=True)
+    os.makedirs(package_destination, exist_ok=True)
     # make metadata subdir
-    package_destination = package_destination / "metadata"
-    package_destination.mkdir(exist_ok=True)
+    package_destination = os.path.join(package_destination, "metadata")
+    os.makedirs(package_destination, exist_ok=True)
 
     copied = []
     for folder in metadata_source.iterdir():
         # check that the folder is not empty
-        if folder.is_dir():
+        if os.path.isdir(folder):
             # check that the folder is not empty
             if not list(folder.iterdir()):
                 print(f"Skipping empty folder {folder}")
                 continue
             else:
-                dest = package_destination / folder.name
-                # dest.mkdir(exist_ok=True)
+                dest = os.path.join(package_destination, folder.name)
+                # os.makedirs(dest, exist_ok=True)
                 shutil.copy2tree(folder, dest, dirs_exist_ok=True)
 
                 print(f"Copied {folder} to {dest}")
@@ -499,8 +493,8 @@ def get_dataset_version(dataset_name: str, datasets_path: Path) -> str:
     """
     Get the version of the dataset from the dataset name
     """
-    dataset_path = datasets_path / dataset_name
-    with open(dataset_path / "version", "r") as f:
+    dataset_path = os.path.join(datasets_path, dataset_name)
+    with open(os.path.join(dataset_path, "version"), "r") as f:
         ds_ver = f.read().strip()
     # ds_ver = "v2.0"
 
@@ -512,7 +506,7 @@ def get_release_version(release_path: Path) -> str:
     Get the version of the release from the release_path
     """
 
-    with open(release_path / "version", "r") as f:
+    with open(os.path.join(release_path, "version"), "r") as f:
         release_ver = f.read().strip()
 
     return release_ver
@@ -522,7 +516,7 @@ def get_cde_version(cde_path: Path):
     """
     Get the version of the CDE from the cde_path
     """
-    with open(cde_path / "cde_version", "r") as f:
+    with open(os.path.join(cde_path, "cde_version"), "r") as f:
         cde_ver = f.read().strip()
     return cde_ver
 

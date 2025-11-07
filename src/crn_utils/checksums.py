@@ -1,8 +1,4 @@
-# from google.oauth2.service_account import Credentials
-# from google.cloud import storage
-
 import subprocess
-
 
 # # create functions to login to GCP and get hashes....
 def get_md5_hashes(bucket_name, prefix):
@@ -24,14 +20,6 @@ def get_md5_hashes(bucket_name, prefix):
     # md5_dict = get_md5_hashes(project_id, bucket_name, prefix)
 
     """
-    # storage_client = storage.Client(credentials=credentials, project="dnastack-asap-parkinsons")
-    # bucket = storage_client.bucket(bucket_name)
-
-    # md5_hashes = {}
-
-    # for blob in bucket.list_blobs(prefix=prefix):
-    #     md5_hashes[blob.name] = blob.md5_hash
-
     project = "dnastack-asap-parkinsons"
     cmd = f'gsutil -u {project} hash -h "gs://{bucket_name}/{prefix}"'
     print(cmd)
@@ -61,31 +49,6 @@ def get_md5_hashes_full(bucket_name, prefix):
         print(f"gsutil command failed: {result.stderr}")
         return result
 
-
-# def download_blob(bucket_name, source_blob_name, destination_file_name):
-#     """
-#     Downloads a blob from the bucket.
-
-#     Args:
-#     bucket_name (str): The name of the bucket.
-#     source_blob_name (str): The name of the blob in the bucket.
-#     destination_file_name (str): The local file path to which the blob should be downloaded.
-#     """
-#     # Initialize a client
-#     storage_client = storage.Client()
-
-#     # Get the bucket
-#     bucket = storage_client.bucket(bucket_name)
-
-#     # Get the blob
-#     blob = bucket.blob(source_blob_name)
-
-#     # Download the blob to a local file
-#     blob.download_to_filename(destination_file_name)
-
-#     print(f"Blob {source_blob_name} downloaded to {destination_file_name}.")
-
-
 # Function to parse the file to extract MD5 and filenames
 def extract_md5_from_details(md5_file):
     md5s = {}
@@ -99,7 +62,6 @@ def extract_md5_from_details(md5_file):
             if "Hash (md5)" in line:
                 md5s[current_file] = line.split(":")[1].strip()
     return md5s
-
 
 # Function to parse the file to extract MD5 and filenames
 def extract_md5_from_details2(md5_file):
@@ -115,7 +77,7 @@ def extract_md5_from_details2(md5_file):
                 md5s[current_file] = line.split(":")[1].strip()
     return md5s
 
-
+# Function to parse the file to extract MD5 and filenames
 def extract_md5_from_details2ful(md5_file):
     md5s = {}
     with open(md5_file, "r") as f:

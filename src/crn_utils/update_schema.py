@@ -1,3 +1,4 @@
+import os
 import pandas as pd
 from pathlib import Path
 import argparse
@@ -84,8 +85,7 @@ __all__ = [
 #     tables_path = Path(tables_path)
 
 #     export_root = tables_path / f"{out_dir}_{date_str}"
-#     if not export_root.exists():
-#         export_root.mkdir(parents=True, exist_ok=True)
+#     os.makedirs(export_root, exist_ok=True)
 
 
 #     STUDYv2.to_csv( export_root / "STUDY.csv")
@@ -186,8 +186,7 @@ def v1_to_v2(
     if out_dir is not None:
         # Prepare output directory
         # date_str = current_date.strftime('%Y%m%d')
-        export_root = Path(out_dir)
-        export_root.mkdir(parents=True, exist_ok=True)
+        os.makedirs(out_dir, exist_ok=True)
 
         # Export the tables
         for table_name, table in v2_tables.items():
@@ -195,7 +194,7 @@ def v1_to_v2(
             export_table(table_name, table, export_root)
 
         for table_name, aux_df in aux_tables.items():
-            aux_df.to_csv(export_root / f"{table_name}_aux.csv", index=False)
+            aux_df.to_csv(os.path.join(export_root, f"{table_name}_aux.csv"), index=False)
             export_table(f"{table_name}_aux", aux_df, export_root)
 
     return v2_tables, aux_tables
@@ -591,7 +590,7 @@ def move_table_columns(
 ):
     """
     move columns from one table to another based on the schema (CDE).  assumes same row structure...
-    should actually "join" on subject/sample_id to be careful, but in most cases they are
+    should actually "join" on os.path.join(subject, sample_id) to be careful, but in most cases they are
     """
     schema_cols = CDE[CDE["Table"] == table_name]["Field"].tolist()
 
