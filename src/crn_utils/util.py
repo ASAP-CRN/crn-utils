@@ -25,6 +25,7 @@ __all__ = [
     "get_cde_version",
     "write_version",
     "archive_CDE",
+    "list_expected_metadata_tables",
 ]
 
 SUPPORTED_CDE_VERSIONS = [
@@ -39,6 +40,43 @@ SUPPORTED_CDE_VERSIONS = [
     "v3.2-beta",
     "v3.3",
 ]
+
+
+
+def list_expected_metadata_tables(source: str, 
+                                  modality: str = "rna") -> list[str]:
+    """
+    Return the expected metadata table names associated with source and modality
+    """
+    valid_sources = {"pmdbs", "mouse", "human", "invitro"}
+    valid_modals = {"rna", "spatial", "proteomics", "atac", "metagenomics"}
+    
+    if source not in valid_sources:
+        raise ValueError(f"source must be one of {valid_sources}")
+    
+    if modality not in valid_modals:
+        raise ValueError(f"modality must be one of {valid_modals}")
+    
+    common = ["STUDY", "PROTOCOL", "SAMPLE", "DATA", "CONDITION"]
+
+    lookup_source = {
+        "mouse": common + ["MOUSE"],
+        "pmdbs": common + ["PMDBS", "SUBJECT", "CLINPATH"],
+        "invitro": common + ["CELL"],
+    }
+    
+    lookup_modality = {
+        "rna": ["ASSAY_RNAseq"],
+        "spatial": ["ASSAY_RNAseq", "SPATIAL"],
+        "proteomics": ["PROTEOMICS"],
+    }
+    
+    tables = lookup_source[source].copy()
+    tables.extend(lookup_modality[modality])
+    
+    return tables
+
+
 
 def sanitize_validation_string(validation_str):
     """Sanitize validation strings by replacing smart quotes with straight quotes."""
