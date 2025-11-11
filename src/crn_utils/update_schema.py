@@ -5,7 +5,14 @@ import argparse
 import datetime
 
 # local helpers
-from .util import read_CDE, read_meta_table, NULL, export_table
+from .util import (
+    read_CDE, 
+    read_meta_table,
+    export_table,
+    list_expected_metadata_tables,
+    NULL,  # constant for missing values
+)
+    
 from .validate import validate_table, create_valid_table
 
 __all__ = [
@@ -18,7 +25,110 @@ __all__ = [
     "move_table_columns",
     "v1_to_v2",
     "v2_to_v3_PMDBS",
+    "update_metadata_to_version",
 ]
+
+
+def update_table_columns(
+    table: pd.DataFrame,
+    table_name: str,
+    old_cde: pd.DataFrame,
+    new_cde: pd.DataFrame,
+) -> pd.DataFrame:
+    """
+    For a given metadata table and its associated old CDE, update its columns 
+    to match the new CDE.
+    Notes on behavior:
+    - Columns that are in the old CDE but not the new CDE will be removed
+    - Columns that are in the new CDE but not the old CDE will be added as empty
+    - Columns that are in neither CDE but are present in the current table will be kept as-is
+    """
+    old_cols = old_cde[old_cde["Table"] == table_name]["Field"].tolist()
+    new_cols = new_cde[new_cde["Table"] == table_name]["Field"].tolist()
+    
+    old_cols_set = set(old_cols)
+    new_cols_set = set(new_cols)
+    current_cols_set = set(table.columns)
+    
+    # Log columns that are only in the old CDE - these will be removed
+    deprecated_cols = old_cols_set - new_cols_set
+    deprecated_cols = deprecated_cols.intersection(current_cols_set)
+    if deprecated_cols:
+        print(f"Deprecated columns for {table_name} will be removed: {', '.join(sorted(deprecated_cols))}")
+    
+    # Log columns that are in the new CDE and initialize as empty
+    added_cols = new_cols_set - old_cols_set
+    updated_table = table.copy()
+    if added_cols:
+        print(f"New columns for {table_name} will be added: {', '.join(sorted(added_cols))}")
+        for col in added_cols:
+            updated_table[col] = NULL
+    else:
+        updated_table = table.copy()
+        
+    # Log columns that are in current table but neither CDE - these will be kept
+    extra_cols = current_cols_set - old_cols_set - new_cols_set
+    if extra_cols:
+        print(f"Extra columns for {table_name} will be kept as-is: {', '.join(sorted(extra_cols))}")
+          
+    # Ensure correct column order
+    updated_table = updated_table[new_cols]
+    
+    return updated_table
+    
+
+def update_metadata_to_version(
+    tables: dict[str, pd.DataFrame],
+    old_cde_version: str,
+    new_cde_version: str,
+    source: str,
+    modality: str,
+) -> dict[str, pd.DataFrame]:
+    """
+    For a given set of metadata tables and their associated old CDE version,
+    update the tables to match the new CDE version.
+    Notes on behavior:
+    - Tables that are in the old CDE but not the new CDE will be removed
+    - Tables that are in the new CDE but not the old CDE will be created as an empty table
+    - Tables that are in neither CDE but are present in the current set will be removed
+    """
+    expected_tables = list_expected_metadata_tables(source, modality)
+    current_tables = list(tables.keys())
+    updated_tables = {}
+    
+    old_cde = read_CDE(old_cde_version)
+    new_cde = read_CDE(new_cde_version)
+    
+    for table_name in expected_tables:
+        # If the table is missing, create a blank one
+        if table_name not in current_tables:
+            print(f"WARNING: {table_name} not found in old version, creating empty table")
+            new_cols = new_cde[new_cde["Table"] == table_name]["Field"].tolist()
+            updated_tables[table_name] = pd.DataFrame(columns=new_cols)
+        # Otherwise, update the columns of the existing table    
+        else:
+            updated_tables[table_name] = update_table_columns(
+                table=tables[table_name],
+                table_name=table_name,
+                old_cde=old_cde,
+                new_cde=new_cde,
+            )
+            
+    # Log which tables are removed (old CDE or are not expected for source)
+    extra_tables = set(current_tables) - set(expected_tables)
+    if extra_tables:
+        print(f"WARNING: Removing tables that are not expected for '{source}': {', '.join(sorted(extra_tables))}")
+    
+    return updated_tables
+
+
+
+# The following code was used to update incremental CDE versions, and is kept
+# here for reference and to allow backwards compatibility if needed. Newer
+# updates should use update_metadata_to_version() in update_schema.py.
+# ------------------------------------------------------------------------------
+
+
 
 # def v1_to_v2(tables_path: str|Path, out_dir: str, CDEv1: pd.DataFrame, CDEv2: pd.DataFrame):
 #     """
