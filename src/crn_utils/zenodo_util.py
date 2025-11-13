@@ -54,6 +54,7 @@ for line in http_status_codes:
     "submitted",
 ]
 
+
 @dataclass
 class publishedZenodoDeposition:
     created: str
@@ -108,6 +109,7 @@ class publishedZenodoDeposition:
             state,
             submitted,
         )
+
 
 @dataclass
 class ZenodoMetadata:
@@ -233,6 +235,7 @@ class ZenodoClient(object):
         self.sandbox = sandbox
         self._token = self._load_from_env() if token is None else token
         # 'metadata/prereservation_doi/doi'
+
         self._all_depositions = self._get_all_depositions()  # list[dict] =
 
     def __repr__(self):
@@ -259,11 +262,15 @@ class ZenodoClient(object):
         else:
             target_key = "ACCESS_TOKEN"
 
-        dotrc = os.environ.get(target_key, os.path.join(str(Path.home()), ".zenodo_token"))
+        dotrc = os.environ.get(
+            target_key, os.path.join(str(Path.home()), ".zenodo_token")
+        )
 
-        if isinstance(dotrc, Path):  # found the path..
+        # NOTE: the if/else logic might not be accurate with the change from pathlib to os.path
+        # check if the file exists.
+        if os.path.exists(dotrc):
             #  read from the file
-            with open(dotrc.as_posix()) as file:
+            with open(dotrc) as file:
                 for line in file.readlines():
                     if ":" in line:
                         key, value = line.strip().split(":", 1)
