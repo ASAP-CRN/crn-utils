@@ -29,6 +29,58 @@ __all__ = [
 ]
 
 
+def get_field_transfer_map() -> pd.DataFrame:
+    """
+    If certain fields have been moved between tables in the new CDE,
+    transfer the data from the old table to the new table. This is done with
+    an explicit mapping defined below, and is unidirectional (old -> new only)
+    """
+    
+    transfers = [
+        # Format: [Old_Table, New_Table, Field]
+        ["SUBJECT", "SAMPLE", "age_at_collection"],
+        # Add more here as required
+    ]
+    
+    return pd.DataFrame(transfers, columns=["Old_Table", "New_Table", "Field"])
+
+
+def transfer_fields_between_tables(
+    tables: dict[str, pd.DataFrame],
+    transfer_map: pd.DataFrame
+) -> dict[str, pd.DataFrame]:
+    """
+    For a given set of metadata tables, transfer fields between tables
+    according to the provided transfer map.
+    """
+    # Make a copy to avoid mutating the input
+    updated_tables = {k: v.copy() for k, v in tables.items()}
+    
+    for _, row in transfer_map.iterrows():
+        old_table = row["Old_Table"]
+        new_table = row["New_Table"]
+        field = row["Field"]
+        
+        # Check if both tables exist
+        if old_table not in updated_tables or new_table not in updated_tables:
+            print(f"WARNING: Cannot transfer '{field}' - missing table (Old: {old_table in updated_tables}, New: {new_table in updated_tables})")
+            continue
+        
+        # Check if field exists in old table
+        if field not in updated_tables[old_table].columns:
+            print(f"WARNING: Field '{field}' not found in '{old_table}', skipping transfer")
+            continue
+        
+        # Add the field to new table if it doesn't exist yet
+        if field not in updated_tables[new_table].columns:
+            updated_tables[new_table][field] = NULL
+        
+        # Transfer the data
+        updated_tables[new_table][field] = updated_tables[old_table][field].copy()
+        print(f"Transferred '{field}' data from {old_table} to {new_table}")
+    
+    return updated_tables
+
 def update_table_columns(
     table: pd.DataFrame,
     table_name: str,
@@ -50,22 +102,21 @@ def update_table_columns(
     new_cols_set = set(new_cols)
     current_cols_set = set(table.columns)
     
+    updated_table = table.copy()
+    
     # Log columns that are only in the old CDE - these will be removed
     deprecated_cols = old_cols_set - new_cols_set
     deprecated_cols = deprecated_cols.intersection(current_cols_set)
     if deprecated_cols:
         print(f"Deprecated columns for {table_name} will be removed: {', '.join(sorted(deprecated_cols))}")
     
-    # Log columns that are in the new CDE and initialize as empty
-    added_cols = new_cols_set - old_cols_set
-    updated_table = table.copy()
-    if added_cols:
-        print(f"New columns for {table_name} will be added: {', '.join(sorted(added_cols))}")
-        for col in added_cols:
+    # Add columns that are in the new CDE but not already present after transfer 
+    cols_to_add = new_cols_set - current_cols_set
+    if cols_to_add:
+        print(f"New columns for {table_name} will be added: {', '.join(sorted(cols_to_add))}")
+        for col in cols_to_add:
             updated_table[col] = NULL
-    else:
-        updated_table = table.copy()
-        
+    
     # Log columns that are in current table but neither CDE - these will be kept
     extra_cols = current_cols_set - old_cols_set - new_cols_set
     if extra_cols:
@@ -91,14 +142,20 @@ def update_metadata_to_version(
     - Tables that are in the old CDE but not the new CDE will be removed
     - Tables that are in the new CDE but not the old CDE will be created as an empty table
     - Tables that are in neither CDE but are present in the current set will be removed
+    - Fields explicitly mapped in get_field_transfer_map will have their data transferred
     """
     expected_tables = list_expected_metadata_tables(source, modality)
     current_tables = list(tables.keys())
-    updated_tables = {}
-    
+ 
     old_cde = read_CDE(old_cde_version)
     new_cde = read_CDE(new_cde_version)
     
+    # Transfer any fields that have moved between tables
+    transfer_map = get_field_transfer_map()
+    tables = transfer_fields_between_tables(tables, transfer_map)
+    
+    # Then update all table schemas post-transfer
+    updated_tables = {}
     for table_name in expected_tables:
         # If the table is missing, create a blank one
         if table_name not in current_tables:
@@ -113,7 +170,7 @@ def update_metadata_to_version(
                 old_cde=old_cde,
                 new_cde=new_cde,
             )
-            
+   
     # Log which tables are removed (old CDE or are not expected for source)
     extra_tables = set(current_tables) - set(expected_tables)
     if extra_tables:
