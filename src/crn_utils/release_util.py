@@ -17,7 +17,7 @@ from .util import (
 
 from .asap_ids import *
 from .validate import validate_table, ReportCollector, process_table
-from .bucket_util import authenticate_with_service_account
+
 from .file_metadata import (
     gen_raw_bucket_summary,
     update_data_table_with_gcp_uri,
@@ -157,11 +157,6 @@ def prep_release_metadata_cell(
         table_names,
     )
 
-    # TODO: need to make this read an env variable or something safe.
-    #### CREATE file metadata summaries
-    key_file_path = os.path.join(Path.home(), f"Projects/ASAP/{team}-credentials.json")
-    res = authenticate_with_service_account(key_file_path)
-
     file_metadata_path = os.path.join(ds_path, "file_metadata")
     os.makedirs(file_metadata_path, exist_ok=True)
 
@@ -267,13 +262,6 @@ def prep_release_metadata_mouse(
         sampleid_mapper,
         table_names,
     )
-
-    # TODO: need to make this read an env variable or something safe.
-    #### CREATE file metadata summaries
-    key_file_path = os.path.join(
-        str(Path.home()), f"Projects/ASAP/{team}-credentials.json"
-    )
-    res = authenticate_with_service_account(key_file_path)
 
     file_metadata_path = os.path.join(ds_path, "file_metadata")
     os.makedirs(file_metadata_path, exist_ok=True)
@@ -404,11 +392,6 @@ def prep_release_metadata_pmdbs(
         sourceid_mapper,
         pmdbs_tables=table_names,
     )
-
-    # TODO: need to make this read an env variable or something safe.
-    #### CREATE file metadata summaries
-    key_file_path = os.path.join(Path.home(), f"Projects/ASAP/{team}-credentials.json")
-    res = authenticate_with_service_account(key_file_path)
 
     file_metadata_path = os.path.join(ds_path, "file_metadata")
     os.makedirs(file_metadata_path, exist_ok=True)
