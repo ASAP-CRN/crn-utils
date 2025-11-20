@@ -128,7 +128,12 @@ def prep_release_metadata_cell(
 
     req_tables = PROTEOMICS_TABLES if proteomics else CELL_TABLES
 
-    table_names = [table.stem for table in tables if table.stem in req_tables]
+    # table_names = [table.stem for table in tables if table.stem in req_tables]
+    table_names = [
+        os.path.splitext(os.path.basename(table))[0]
+        for table in tables
+        if os.path.splitext(os.path.basename(table))[0] in req_tables
+    ]
 
     dfs = load_tables(mdata_path, table_names)
 
@@ -234,7 +239,12 @@ def prep_release_metadata_mouse(
 
     if spatial:
         req_tables.append("SPATIAL")
-    table_names = [table.stem for table in tables if table.stem in req_tables]
+
+    table_names = [
+        os.path.splitext(os.path.basename(table))[0]
+        for table in tables
+        if os.path.splitext(os.path.basename(table))[0] in req_tables
+    ]
 
     dfs = load_tables(mdata_path, table_names)
 
@@ -268,6 +278,9 @@ def prep_release_metadata_mouse(
     file_metadata_path = os.path.join(ds_path, "file_metadata")
     os.makedirs(file_metadata_path, exist_ok=True)
 
+    print(
+        f"release_util: Generating raw bucket summary for {raw_bucket_name}, flatten={flatten}    "
+    )
     gen_raw_bucket_summary(
         raw_bucket_name, file_metadata_path, dataset_name, flatten=flatten
     )
@@ -353,7 +366,12 @@ def prep_release_metadata_pmdbs(
     if spatial:
         req_tables.append("SPATIAL")
 
-    table_names = [table.stem for table in tables if table.stem in req_tables]
+    # table_names = [table.stem for table in tables if table.stem in req_tables]
+    table_names = [
+        os.path.splitext(os.path.basename(table))[0]
+        for table in tables
+        if os.path.splitext(os.path.basename(table))[0] in req_tables
+    ]
 
     dfs = load_tables(mdata_path, table_names)
 
@@ -514,7 +532,12 @@ def get_release_metadata_cell(
     tables = [table for table in os.listdir(mdata_path) if table.endswith(".csv")]
 
     req_tables = CELL_TABLES if not proteomics else PROTEOMICS_TABLES
-    table_names = [table.stem for table in tables if table.stem in req_tables]
+    # table_names = [table.stem for table in tables if table.stem in req_tables]
+    table_names = [
+        os.path.splitext(os.path.basename(table))[0]
+        for table in tables
+        if os.path.splitext(os.path.basename(table))[0] in req_tables
+    ]
 
     dfs = load_tables(mdata_path, table_names)
 
@@ -571,7 +594,12 @@ def get_release_metadata_mouse(
     req_tables = MOUSE_TABLES.copy()
     if spatial:
         req_tables.append("SPATIAL")
-    table_names = [table.stem for table in tables if table.stem in req_tables]
+    # table_names = [table.stem for table in tables if table.stem in req_tables]
+    table_names = [
+        os.path.splitext(os.path.basename(table))[0]
+        for table in tables
+        if os.path.splitext(os.path.basename(table))[0] in req_tables
+    ]
 
     dfs = load_tables(mdata_path, table_names)
 
@@ -641,7 +669,12 @@ def get_release_metadata_pmdbs(
     if spatial:
         req_tables.append("SPATIAL")
 
-    table_names = [table.stem for table in tables if table.stem in req_tables]
+    # table_names = [table.stem for table in tables if table.stem in req_tables]
+    table_names = [
+        os.path.splitext(os.path.basename(table))[0]
+        for table in tables
+        if os.path.splitext(os.path.basename(table))[0] in req_tables
+    ]
 
     dfs = load_tables(mdata_path, table_names)
 
@@ -718,7 +751,12 @@ def get_release_metadata_human(
     if spatial:
         req_tables.append("SPATIAL")
 
-    table_names = [table.stem for table in tables if table.stem in req_tables]
+    # table_names = [table.stem for table in tables if table.stem in req_tables]
+    table_names = [
+        os.path.splitext(os.path.basename(table))[0]
+        for table in tables
+        if os.path.splitext(os.path.basename(table))[0] in req_tables
+    ]
 
     dfs = load_tables(mdata_path, table_names)
 
