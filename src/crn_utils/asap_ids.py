@@ -81,8 +81,9 @@ def load_id_mapper(id_mapper_path: Path) -> dict:
 
 
 # TODO: test this function save the old one before overwriting
-def write_id_mapper(id_mapper: dict, id_mapper_path: Path):
+def write_id_mapper(id_mapper: dict, id_mapper_path: str | Path):
     """write the id mapper to the json file"""
+    id_mapper_path = Path(id_mapper_path)
     if os.path.exists(id_mapper_path):
         # copy the old file to a backup using datetime to make it unique
         # Get the current date and time
@@ -458,20 +459,27 @@ def load_pmdbs_id_mappers(map_path, suffix):
 
 
 def export_pmdbs_id_mappers(
-    map_path,
-    suffix,
-    datasetid_mapper,
-    subjectid_mapper,
-    sampleid_mapper,
-    gp2id_mapper,
-    sourceid_mapper,
+    map_path: str | Path,
+    suffix: str,
+    datasetid_mapper: dict,
+    subjectid_mapper: dict,
+    sampleid_mapper: dict,
+    gp2id_mapper: dict,
+    sourceid_mapper: dict,
 ):
+    """
+    export the id mappers to json files
+    """
+    map_path = Path(map_path)
+
     source = "PMDBS"
 
     subject_mapper_path = os.path.join(map_path, f"ASAP_{source}_subj_{suffix}.json")
     sample_mapper_path = os.path.join(map_path, f"ASAP_{source}_samp_{suffix}.json")
     gp2_mapper_path = os.path.join(map_path, f"ASAP_{source}_gp2_{suffix}.json")
-    source_mapper_path = os.path.join(map_path, f"ASAP_{source}_sourcesubj_{suffix}.json")
+    source_mapper_path = os.path.join(
+        map_path, f"ASAP_{source}_sourcesubj_{suffix}.json"
+    )
     dataset_mapper_path = os.path.join(map_path, f"ASAP_dataset_{suffix}.json")
     # update the dataset_id_mapper
     write_id_mapper(datasetid_mapper, dataset_mapper_path)
@@ -881,8 +889,13 @@ def load_mouse_id_mappers(map_path, suffix):
 
 
 def export_mouse_id_mappers(
-    map_path, suffix, datasetid_mapper, mouseid_mapper, sampleid_mapper
+    map_path: Path | str,
+    suffix: str,
+    datasetid_mapper: dict,
+    mouseid_mapper: dict,
+    sampleid_mapper: dict,
 ):
+    map_path = Path(map_path)
     source = "MOUSE"
     sample_mapper_path = os.path.join(map_path, f"ASAP_{source}_samp_{suffix}.json")
     mouse_mapper_path = os.path.join(map_path, f"ASAP_{source}_{suffix}.json")
@@ -965,7 +978,12 @@ def generate_sample_ids(
 ### CELL specific functions
 ###############################################
 ### CELLs
-def load_cell_id_mappers(map_path, suffix):
+def load_cell_id_mappers(
+    map_path: Path | str,
+    suffix: str,
+) -> tuple[dict, dict, dict]:
+
+    map_path = Path(map_path)
     source = "INVITRO"
     prototypes = ["dataset", "cell", "samp"]
     outputs = ()
@@ -1060,8 +1078,13 @@ def update_cell_id_mappers(
 # TODO: refactor.  the abstraction is set up so a single function toggled on source should work for
 # .  cell or mouse.
 def export_cell_id_mappers(
-    map_path, suffix, datasetid_mapper, cellid_mapper, sampleid_mapper
+    map_path: Path | str,
+    suffix: str,
+    datasetid_mapper: dict,
+    cellid_mapper: dict,
+    sampleid_mapper: dict,
 ):
+    map_path = Path(map_path)
     source = "INVITRO"
     sample_mapper_path = os.path.join(map_path, f"ASAP_{source}_samp_{suffix}.json")
     cell_mapper_path = os.path.join(map_path, f"ASAP_{source}_{suffix}.json")
@@ -1346,21 +1369,29 @@ def load_multiplex_id_mappers(map_path, suffix):
 
 
 def export_multiplex_id_mappers(
-    map_path,
-    suffix,
-    datasetid_mapper,
-    subjectid_mapper,
-    multiplexid_mapper,
-    gp2id_mapper,
-    sourceid_mapper,
+    map_path: str | Path,
+    suffix: str,
+    datasetid_mapper: dict,
+    subjectid_mapper: dict,
+    multiplexid_mapper: dict,
+    gp2id_mapper: dict,
+    sourceid_mapper: dict,
 ):
+    """
+    export the id mappers to json files
+    """
+
+    map_path = Path(map_path)
+
     multiplex_mapper_path = os.path.join(map_path, f"ASAP_MULTIPLEX_samp_{suffix}.json")
     write_id_mapper(multiplexid_mapper, multiplex_mapper_path)
 
     source = "PMDBS"
     subject_mapper_path = os.path.join(map_path, f"ASAP_{source}_subj_{suffix}.json")
     gp2_mapper_path = os.path.join(map_path, f"ASAP_{source}_gp2_{suffix}.json")
-    source_mapper_path = os.path.join(map_path, f"ASAP_{source}_sourcesubj_{suffix}.json")
+    source_mapper_path = os.path.join(
+        map_path, f"ASAP_{source}_sourcesubj_{suffix}.json"
+    )
     dataset_mapper_path = os.path.join(map_path, f"ASAP_dataset_{suffix}.json")
     # update the dataset_id_mapper
     write_id_mapper(datasetid_mapper, dataset_mapper_path)
@@ -1414,8 +1445,16 @@ def update_multiplex_id_mappers(
 # TODO: refactor.  the abstraction is set up so a single function toggled on source should work for
 # .  cell or mouse.
 def export_multiplex_id_mappers(
-    map_path, suffix, datasetid_mapper, cellid_mapper, sampleid_mapper
+    map_path: str | Path,
+    suffix: str,
+    datasetid_mapper: dict,
+    cellid_mapper: dict,
+    sampleid_mapper: dict,
 ):
+    """
+    export the id mappers to json files
+    """
+    map_path = Path(map_path)
     source = "PMDBS"
     sample_mapper_path = os.path.join(map_path, f"ASAP_{source}_samp_{suffix}.json")
     cell_mapper_path = os.path.join(map_path, f"ASAP_{source}_{suffix}.json")

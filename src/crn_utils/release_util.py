@@ -40,6 +40,7 @@ __all__ = [
     "get_crn_release_metadata",
 ]
 
+
 def create_metadata_package(
     dfs: dict[str, pd.DataFrame], metadata_path: Path, schema_version: str
 ):
@@ -51,6 +52,7 @@ def create_metadata_package(
     # export_meta_tables(dfs, metadata_path)
     write_version(schema_version, os.path.join(metadata_path, "cde_version"))
     write_version(schema_version, os.path.join(final_metadata_path, "cde_version"))
+
 
 ### this is a wrapper to call source specific prep_release_metadata_* functions
 def prep_release_metadata(
@@ -86,6 +88,7 @@ def prep_release_metadata(
     else:
         raise ValueError(f"Unknown source {source}")
 
+
 def prep_release_metadata_cell(
     ds_path: Path,
     schema_version: str,
@@ -118,14 +121,19 @@ def prep_release_metadata_cell(
 
     mdata_path = os.path.join(ds_path, "metadata", schema_version)
     tables = [
-        table
-        for table in Path(mdata_path).iterdir()
-        if table.is_file() and table.suffix == ".csv"
+        os.path.join(mdata_path, table)
+        for table in os.listdir(mdata_path)
+        if os.path.isfile(os.path.join(mdata_path, table)) and table.endswith(".csv")
     ]
 
     req_tables = PROTEOMICS_TABLES if proteomics else CELL_TABLES
 
-    table_names = [table.stem for table in tables if table.stem in req_tables]
+    # table_names = [table.stem for table in tables if table.stem in req_tables]
+    table_names = [
+        os.path.splitext(os.path.basename(table))[0]
+        for table in tables
+        if os.path.splitext(os.path.basename(table))[0] in req_tables
+    ]
 
     dfs = load_tables(mdata_path, table_names)
 
@@ -186,6 +194,7 @@ def prep_release_metadata_cell(
             sampleid_mapper,
         )
 
+
 def prep_release_metadata_mouse(
     ds_path: Path,
     schema_version: str,
@@ -217,10 +226,12 @@ def prep_release_metadata_mouse(
 
     # os.makedirs(ds_path, exist_ok=True)
     mdata_path = os.path.join(ds_path, "metadata", schema_version)
+
+    # this is broken due to deprication of the pathlib...
     tables = [
-        table
-        for table in mdata_path.iterdir()
-        if os.path.isfile(table) and table.suffix == ".csv"
+        os.path.join(mdata_path, table)
+        for table in os.listdir(mdata_path)
+        if os.path.isfile(os.path.join(mdata_path, table)) and table.endswith(".csv")
     ]
 
     # TODO: make this accomodate proteomics
@@ -228,7 +239,12 @@ def prep_release_metadata_mouse(
 
     if spatial:
         req_tables.append("SPATIAL")
-    table_names = [table.stem for table in tables if table.stem in req_tables]
+
+    table_names = [
+        os.path.splitext(os.path.basename(table))[0]
+        for table in tables
+        if os.path.splitext(os.path.basename(table))[0] in req_tables
+    ]
 
     dfs = load_tables(mdata_path, table_names)
 
@@ -254,12 +270,17 @@ def prep_release_metadata_mouse(
 
     # TODO: need to make this read an env variable or something safe.
     #### CREATE file metadata summaries
-    key_file_path = os.path.join(str(Path.home()), f"Projects/ASAP/{team}-credentials.json")
+    key_file_path = os.path.join(
+        str(Path.home()), f"Projects/ASAP/{team}-credentials.json"
+    )
     res = authenticate_with_service_account(key_file_path)
 
     file_metadata_path = os.path.join(ds_path, "file_metadata")
     os.makedirs(file_metadata_path, exist_ok=True)
 
+    print(
+        f"release_util: Generating raw bucket summary for {raw_bucket_name}, flatten={flatten}    "
+    )
     gen_raw_bucket_summary(
         raw_bucket_name, file_metadata_path, dataset_name, flatten=flatten
     )
@@ -297,6 +318,7 @@ def prep_release_metadata_mouse(
             sampleid_mapper,
         )
 
+
 def prep_release_metadata_pmdbs(
     ds_path: Path,
     schema_version: str,
@@ -332,9 +354,9 @@ def prep_release_metadata_pmdbs(
 
     mdata_path = os.path.join(ds_path, "metadata", schema_version)
     tables = [
-        table
-        for table in mdata_path.iterdir()
-        if os.path.isfile(table) and table.suffix == ".csv"
+        os.path.join(mdata_path, table)
+        for table in os.listdir(mdata_path)
+        if os.path.isfile(os.path.join(mdata_path, table)) and table.endswith(".csv")
     ]
 
     # TODO: make this accomodate proteomics
@@ -344,7 +366,12 @@ def prep_release_metadata_pmdbs(
     if spatial:
         req_tables.append("SPATIAL")
 
-    table_names = [table.stem for table in tables if table.stem in req_tables]
+    # table_names = [table.stem for table in tables if table.stem in req_tables]
+    table_names = [
+        os.path.splitext(os.path.basename(table))[0]
+        for table in tables
+        if os.path.splitext(os.path.basename(table))[0] in req_tables
+    ]
 
     dfs = load_tables(mdata_path, table_names)
 
@@ -421,6 +448,7 @@ def prep_release_metadata_pmdbs(
             sourceid_mapper,
         )
 
+
 def get_crn_release_metadata(
     ds_path: Path,
     schema_version: str,
@@ -464,22 +492,17 @@ def get_crn_release_metadata(
 
     elif source in ["cell", "invitro", "ipsc"]:
         dfs = get_release_metadata_cell(
-            ds_path,
-            schema_version,
-            map_path, suffix,
-            proteomics=proteomics
+            ds_path, schema_version, map_path, suffix, proteomics=proteomics
         )
     elif source == "proteomics":
         dfs = get_release_metadata_cell(
-            ds_path,
-            schema_version,
-            map_path,
-            suffix, proteomics=True
+            ds_path, schema_version, map_path, suffix, proteomics=True
         )
     else:
         raise ValueError(f"Unknown source {source}")
 
     return dfs
+
 
 def get_release_metadata_cell(
     ds_path: Path,
@@ -506,14 +529,15 @@ def get_release_metadata_cell(
     )
 
     mdata_path = os.path.join(ds_path, "metadata", schema_version)
-    tables = [
-        table
-        for table in os.listdir(mdata_path)
-        if table.endswith(".csv")
-    ]
+    tables = [table for table in os.listdir(mdata_path) if table.endswith(".csv")]
 
     req_tables = CELL_TABLES if not proteomics else PROTEOMICS_TABLES
-    table_names = [table.stem for table in tables if table.stem in req_tables]
+    # table_names = [table.stem for table in tables if table.stem in req_tables]
+    table_names = [
+        os.path.splitext(os.path.basename(table))[0]
+        for table in tables
+        if os.path.splitext(os.path.basename(table))[0] in req_tables
+    ]
 
     dfs = load_tables(mdata_path, table_names)
 
@@ -531,6 +555,7 @@ def get_release_metadata_cell(
     dfs["DATA"] = update_data_table_with_gcp_uri(dfs["DATA"], ds_path)
 
     return dfs
+
 
 def get_release_metadata_mouse(
     ds_path: Path,
@@ -561,15 +586,20 @@ def get_release_metadata_mouse(
 
     mdata_path = os.path.join(ds_path, "metadata", schema_version)
     tables = [
-        table
-        for table in Path(mdata_path).iterdir()
-        if table.is_file() and table.suffix == ".csv"
+        os.path.join(mdata_path, table)
+        for table in os.listdir(mdata_path)
+        if os.path.isfile(os.path.join(mdata_path, table)) and table.endswith(".csv")
     ]
 
     req_tables = MOUSE_TABLES.copy()
     if spatial:
         req_tables.append("SPATIAL")
-    table_names = [table.stem for table in tables if table.stem in req_tables]
+    # table_names = [table.stem for table in tables if table.stem in req_tables]
+    table_names = [
+        os.path.splitext(os.path.basename(table))[0]
+        for table in tables
+        if os.path.splitext(os.path.basename(table))[0] in req_tables
+    ]
 
     dfs = load_tables(mdata_path, table_names)
 
@@ -593,6 +623,7 @@ def get_release_metadata_mouse(
     # TODO add proteoimics mouse stuff here
 
     return dfs
+
 
 def get_release_metadata_pmdbs(
     ds_path: Path,
@@ -629,16 +660,21 @@ def get_release_metadata_pmdbs(
     else:
         mdata_path = os.path.join(ds_path, "metadata", schema_version)
     tables = [
-        table
-        for table in Path(mdata_path).iterdir()
-        if table.is_file() and table.suffix == ".csv"
+        os.path.join(mdata_path, table)
+        for table in os.listdir(mdata_path)
+        if os.path.isfile(os.path.join(mdata_path, table)) and table.endswith(".csv")
     ]
 
     req_tables = PMDBS_TABLES.copy()
     if spatial:
         req_tables.append("SPATIAL")
 
-    table_names = [table.stem for table in tables if table.stem in req_tables]
+    # table_names = [table.stem for table in tables if table.stem in req_tables]
+    table_names = [
+        os.path.splitext(os.path.basename(table))[0]
+        for table in tables
+        if os.path.splitext(os.path.basename(table))[0] in req_tables
+    ]
 
     dfs = load_tables(mdata_path, table_names)
 
@@ -706,16 +742,21 @@ def get_release_metadata_human(
         mdata_path = os.path.join(ds_path, "metadata", schema_version)
 
     tables = [
-        table
-        for table in Path(mdata_path).iterdir()
-        if table.is_file() and table.suffix == ".csv"
+        os.path.join(mdata_path, table)
+        for table in os.listdir(mdata_path)
+        if os.path.isfile(os.path.join(mdata_path, table)) and table.endswith(".csv")
     ]
 
     req_tables = PMDBS_TABLES.copy()
     if spatial:
         req_tables.append("SPATIAL")
 
-    table_names = [table.stem for table in tables if table.stem in req_tables]
+    # table_names = [table.stem for table in tables if table.stem in req_tables]
+    table_names = [
+        os.path.splitext(os.path.basename(table))[0]
+        for table in tables
+        if os.path.splitext(os.path.basename(table))[0] in req_tables
+    ]
 
     dfs = load_tables(mdata_path, table_names)
 
@@ -743,11 +784,9 @@ def get_release_metadata_human(
 
     return dfs
 
+
 def load_and_process_table(
-    table_name: str,
-    tables_path: Path, 
-    cde_df: pd.DataFrame, 
-    print_log: bool = False
+    table_name: str, tables_path: Path, cde_df: pd.DataFrame, print_log: bool = False
 ):
     """
     Load and process a table from a given path according to a schema.
@@ -813,14 +852,14 @@ def process_schema(
         if export_path is not None:
             df.to_csv(os.path.join(export_path, f"{table}.csv"), index=False)
             if not df_aux.empty:
-                df_aux.to_csv(os.path.join(export_path, f"{table}_auxiliary.csv"), index=False)
+                df_aux.to_csv(
+                    os.path.join(export_path, f"{table}_auxiliary.csv"), index=False
+                )
 
     return tables_dict, aux_tables_dict
 
-def ingest_ds_info_doc(
-    intake_doc: Path | str,
-    ds_path: Path,
-    doc_path: Path):
+
+def ingest_ds_info_doc(intake_doc: Path | str, ds_path: Path, doc_path: Path):
     """
     Ingest the dataset information from the docx file and export to json for zenodo upload.
     """
@@ -887,7 +926,6 @@ def ingest_ds_info_doc(
     # title
     # string	Title of deposition (automatically set from metadata). Defaults to empty string.
 
-
     # upload_type  string	Yes	Controlled vocabulary:
     # * publication: Publication
     # * poster: Poster
@@ -899,7 +937,6 @@ def ingest_ds_info_doc(
     # * lesson: Lesson
     # * physicalobject: Physical object
     # * other: Other
-
 
     title = dataset_title
     upload_type = "dataset"
@@ -1000,10 +1037,9 @@ def ingest_ds_info_doc(
     df = pd.DataFrame(export_dict, index=[0])
     df.to_csv(os.path.join(doi_path, f"{long_dataset_name}.csv"), index=False)
 
+
 # fix STUDY
-def fix_study_table(
-    metadata_path: Path,
-    doi_path: Path | None = None):
+def fix_study_table(metadata_path: Path, doi_path: Path | None = None):
     """
     Update the STUDY table with the information from the DOI folder.
     """
@@ -1025,6 +1061,7 @@ def fix_study_table(
 
     # export STUDY
     STUDY.to_csv(os.path.join(metadata_path, "STUDY.csv"), index=False)
+
 
 def get_stats_table(dfs: dict[pd.DataFrame], source: str = "pmdbs"):
     """
@@ -1119,6 +1156,7 @@ _region_titles = {
     "PARA": "Para-Hippocampal Gyrus",
 }
 
+
 def make_stats_df_pmdbs(dfs: dict[pd.DataFrame]) -> pd.DataFrame:
     """ """
     # do joins to get the stats we need.
@@ -1195,11 +1233,13 @@ def make_stats_df_pmdbs(dfs: dict[pd.DataFrame]) -> pd.DataFrame:
     )
     return df
 
+
 def get_stat_tabs_pmdbs(dfs: dict[pd.DataFrame]):
     """ """
     df = make_stats_df_pmdbs(dfs)
     report = get_stats_pmdbs(df)
     return report, df
+
 
 def get_stats_pmdbs(df: pd.DataFrame) -> dict:
     # should be the same as df.shape[0]
@@ -1303,6 +1343,7 @@ def get_stats_pmdbs(df: pd.DataFrame) -> dict:
     # SAMPLE wise
     return report
 
+
 def make_stats_df_cell(dfs: dict[pd.DataFrame]) -> pd.DataFrame:
     """ """
     sample_cols = [
@@ -1348,11 +1389,13 @@ def make_stats_df_cell(dfs: dict[pd.DataFrame]) -> pd.DataFrame:
     )
     return df
 
+
 def get_stat_tabs_cell(dfs: dict[pd.DataFrame]):
     """ """
     df = make_stats_df_cell(dfs)
     report = get_stats_cell(df)
     return report, df
+
 
 def get_stats_cell(df: pd.DataFrame) -> dict:
     """
@@ -1381,6 +1424,7 @@ def get_stats_cell(df: pd.DataFrame) -> dict:
         condition_id=condition_id,
     )
     return report
+
 
 def make_stats_df_mouse(dfs: dict[pd.DataFrame]) -> pd.DataFrame:
     """ """
@@ -1429,6 +1473,7 @@ def make_stats_df_mouse(dfs: dict[pd.DataFrame]) -> pd.DataFrame:
     )
     return df
 
+
 def get_stat_tabs_mouse(dfs: dict[pd.DataFrame]):
     """ """
     df = make_stats_df_mouse(dfs)
@@ -1436,6 +1481,7 @@ def get_stat_tabs_mouse(dfs: dict[pd.DataFrame]):
     # 0. total number of samples
     report = get_stats_mouse(df)
     return report, df
+
 
 def get_stats_mouse(df: pd.DataFrame) -> dict:
     """
@@ -1475,6 +1521,7 @@ def get_stats_mouse(df: pd.DataFrame) -> dict:
         sex=sex,
     )
     return report
+
 
 def get_cohort_stats_table(dfs: dict[pd.DataFrame], source: str = "pmdbs"):
     """ """
