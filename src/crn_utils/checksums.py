@@ -1,5 +1,6 @@
 import subprocess
 
+
 # # create functions to login to GCP and get hashes....
 def get_md5_hashes(bucket_name, prefix):
     """
@@ -49,6 +50,7 @@ def get_md5_hashes_full(bucket_name, prefix):
         print(f"gsutil command failed: {result.stderr}")
         return result
 
+
 # Function to parse the file to extract MD5 and filenames
 def extract_md5_from_details(md5_file):
     md5s = {}
@@ -63,6 +65,7 @@ def extract_md5_from_details(md5_file):
                 md5s[current_file] = line.split(":")[1].strip()
     return md5s
 
+
 # Function to parse the file to extract MD5 and filenames
 def extract_md5_from_details2(md5_file):
     md5s = {}
@@ -76,6 +79,7 @@ def extract_md5_from_details2(md5_file):
             if "Hash (md5)" in line:
                 md5s[current_file] = line.split(":")[1].strip()
     return md5s
+
 
 # Function to parse the file to extract MD5 and filenames
 def extract_md5_from_details2ful(md5_file):
@@ -153,7 +157,7 @@ def extract_md5_from_details2_lines_full(lines):
             current_file = line.split(" for ")[-1].rstrip(":")
         if "Hash (md5)" in line:
             md5s[current_file] = line.split(":")[1].strip()
-            md5_list.append((current_file, md5s[current_file]))
+            # md5_list.append((current_file, md5s[current_file]))
     return md5s
 
 
