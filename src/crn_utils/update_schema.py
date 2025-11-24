@@ -31,27 +31,28 @@ __all__ = [
 
 def get_field_transfer_map() -> pd.DataFrame:
     """
-    If certain fields have been moved between tables in the new CDE,
-    transfer the data from the old table to the new table. This is done with
-    an explicit mapping defined below, and is unidirectional (old -> new only)
+    Dataframe that defines old -> new mappings (moves and same-table renames).
+    - Pure move: Old_Field == New_Field
+    - Same-table rename: Old_Table == New_Table and Old_Field != New_Field
     """
     
     transfers = [
-        # Format: [Old_Table, New_Table, Field]
-        ["SUBJECT", "SAMPLE", "age_at_collection"],
+        # Format: [Old_Table, New_Table, Old_Field, New_Field]
+        ["SUBJECT", "SAMPLE", "age_at_collection", "age_at_collection"],
+        ["STUDY", "STUDY", "project_dataset", "dataset_name"],
+        ["CLINPATH", "CLINPATH", "path_infarcs", "path_infarcts"]
         # Add more here as required
     ]
     
-    return pd.DataFrame(transfers, columns=["Old_Table", "New_Table", "Field"])
+    return pd.DataFrame(transfers, columns=["Old_Table", "New_Table", "Old_Field", "New_Field"])
 
 
-def transfer_fields_between_tables(
+def apply_field_moves(
     tables: dict[str, pd.DataFrame],
     transfer_map: pd.DataFrame
 ) -> dict[str, pd.DataFrame]:
     """
-    For a given set of metadata tables, transfer fields between tables
-    according to the provided transfer map.
+    Apply moves and same-table renames according to transfer_map.
     """
     # Make a copy to avoid mutating the input
     updated_tables = {k: v.copy() for k, v in tables.items()}
@@ -59,27 +60,32 @@ def transfer_fields_between_tables(
     for _, row in transfer_map.iterrows():
         old_table = row["Old_Table"]
         new_table = row["New_Table"]
-        field = row["Field"]
+        old_field = row["Old_Field"]
+        new_field = row["New_Field"]
         
-        # Check if both tables exist
+        # Check if both tables in the map exist in the provided tables
         if old_table not in updated_tables or new_table not in updated_tables:
-            print(f"WARNING: Cannot transfer '{field}' - missing table (Old: {old_table in updated_tables}, New: {new_table in updated_tables})")
+            print(
+                f"WARNING: Cannot transfer '{old_field}' -> {new_field} - missing table "
+                f"(Old: {old_table in updated_tables}, New: {new_table in updated_tables})")
             continue
         
-        # Check if field exists in old table
-        if field not in updated_tables[old_table].columns:
-            print(f"WARNING: Field '{field}' not found in '{old_table}', skipping transfer")
+        src = updated_tables[old_table]
+        dst = updated_tables[new_table]
+        
+        if old_field not in src.columns:
+            print(f"WARNING: Field '{old_field}' not found in '{old_table}', skipping transfer")
             continue
         
-        # Add the field to new table if it doesn't exist yet
-        if field not in updated_tables[new_table].columns:
-            updated_tables[new_table][field] = NULL
-        
-        # Transfer the data
-        updated_tables[new_table][field] = updated_tables[old_table][field].copy()
-        print(f"Transferred '{field}' data from {old_table} to {new_table}")
+        # Align the two tables and overwrite destination field
+        src_aligned = src[old_field].reindex(dst.index, fill_value=NULL)
+        dst[new_field] = src_aligned.values
+        print(f"Copied '{old_table}.{old_field}' -> '{new_table}.{new_field}'")
+    
+        updated_tables[new_table] = dst
     
     return updated_tables
+
 
 def update_table_columns(
     table: pd.DataFrame,
@@ -152,7 +158,7 @@ def update_metadata_to_version(
     
     # Transfer any fields that have moved between tables
     transfer_map = get_field_transfer_map()
-    tables = transfer_fields_between_tables(tables, transfer_map)
+    tables = apply_field_moves(tables, transfer_map)
     
     # Then update all table schemas post-transfer
     updated_tables = {}
