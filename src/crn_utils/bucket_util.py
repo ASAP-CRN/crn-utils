@@ -1,6 +1,14 @@
 import os
 import subprocess
 
+__all__ = [
+    "gcloud_ls",
+    "gcloud_rsync",
+    "gcloud_mv",
+    "gcloud_rm",
+    "authenticate_with_service_account",
+]
+
 
 # create functions to list, rsync and delete files into GCP
 # Updated to use gcloud instead of gsutil
