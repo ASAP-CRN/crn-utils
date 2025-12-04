@@ -23,11 +23,14 @@ __all__ = [
 
 
 def make_file_metadata(
-    ds_path: Path,
-    dl_path: Path,
+    ds_path: str | Path,
+    dl_path: str | Path,
     data_df: pd.DataFrame,
     spatial: bool = False,
 ):
+
+    dl_path = Path(dl_path)
+    ds_path = Path(ds_path)
 
     dataset_name = ds_path.name
     team_name = dataset_name.split("-")[0]
@@ -170,7 +173,7 @@ def update_spatial_table_with_gcp_uri(
 
 def gen_raw_bucket_summary(
     raw_bucket_name: str,
-    dl_path: Path,
+    dl_path: str | Path,
     dataset_name: str,
     flatten: bool = False,
     raw_type: str = "fastq",
@@ -183,6 +186,7 @@ def gen_raw_bucket_summary(
 
         ## OTHER and everything else...
         # create a list of the curated files in /artifacts
+        dl_path = Path(dl_path)
 
         prefix = f"artifacts/**"
         bucket_path = (
@@ -260,9 +264,10 @@ def gen_raw_bucket_summary(
 
 
 def gen_dev_bucket_summary(
-    raw_bucket_name: str, dl_path: Path, dataset_name: str, flatten: bool = False
+    raw_bucket_name: str, dl_path: str | Path, dataset_name: str, flatten: bool = False
 ):
 
+    dl_path = Path(dl_path)
     ## OTHER and everything else...
     # create a list of the curated files in /artifacts
 
@@ -333,13 +338,15 @@ def gen_dev_bucket_summary(
         print(f"No spatial files found for {dataset_name}")
 
 
-def gen_spatial_bucket_summary(raw_bucket_name: str, dl_path: Path, dataset_name: str):
+def gen_spatial_bucket_summary(
+    raw_bucket_name: str, dl_path: str | Path, dataset_name: str
+):
     if "cohort" in dataset_name:
         print(f"No raw bucket for cohort datasets: {dataset_name}")
         # need to join with the cohort-pmdbs-sn-rnaseq raw files
 
     else:
-
+        dl_path = Path(dl_path)
         # create a list of the files in the raw_bucket/fastqs
         prefix = f"spatial/**/*"
         bucket_path = (
@@ -374,8 +381,9 @@ def gen_spatial_bucket_summary(raw_bucket_name: str, dl_path: Path, dataset_name
 
 
 ####################
-def get_artifacts_df(dl_path: Path, dataset_id: str, team_id: str):
+def get_artifacts_df(dl_path: str | Path, dataset_id: str, team_id: str):
     """ """
+    dl_path = Path(dl_path)
 
     keep_cols = [
         "ASAP_dataset_id",
@@ -418,8 +426,9 @@ def get_artifacts_df(dl_path: Path, dataset_id: str, team_id: str):
         return df
 
 
-def get_fastqs_df(dl_path: Path, dataset_id: str, team_id: str) -> pd.DataFrame:
+def get_fastqs_df(dl_path: str | Path, dataset_id: str, team_id: str) -> pd.DataFrame:
     """ """
+    dl_path = Path(dl_path)
 
     keep_cols = [
         "ASAP_dataset_id",
@@ -455,8 +464,9 @@ def get_fastqs_df(dl_path: Path, dataset_id: str, team_id: str) -> pd.DataFrame:
         return pd.DataFrame(columns=keep_cols)
 
 
-def get_spatial_df(dl_path: Path, dataset_id: str, team_id: str) -> pd.DataFrame:
+def get_spatial_df(dl_path: str | Path, dataset_id: str, team_id: str) -> pd.DataFrame:
     """ """
+    dl_path = Path(dl_path)
 
     keep_cols = [
         "ASAP_dataset_id",
@@ -494,8 +504,11 @@ def get_spatial_df(dl_path: Path, dataset_id: str, team_id: str) -> pd.DataFrame
         return pd.DataFrame(columns=keep_cols)
 
 
-def add_bucket_md5(df: pd.DataFrame, dl_path: Path):
+def add_bucket_md5(df: pd.DataFrame, dl_path: str | Path):
     """ """
+
+    dl_path = Path(dl_path)
+
     md5_files = list(dl_path.glob(f"*-md5s.json"))
     if len(md5_files) == 0:
         print(f"no md5 files found for {dl_path.parent.name}")
