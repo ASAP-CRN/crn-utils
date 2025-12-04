@@ -1,5 +1,6 @@
 import os
 import subprocess
+from pathlib import Path
 
 __all__ = [
     "gcloud_ls",
@@ -12,7 +13,7 @@ __all__ = [
 
 # create functions to list, rsync and delete files into GCP
 # Updated to use gcloud instead of gsutil
-def gcloud_ls(bucket_name, prefix, project: str | None = None):
+def gcloud_ls(bucket_name: str, prefix: str, project: str | None = None):
     """
     prints the files in a GCS bucket matching a given prefix.
 
@@ -44,7 +45,10 @@ def gcloud_ls(bucket_name, prefix, project: str | None = None):
 
 
 def gcloud_rsync(
-    source, destination, directory: bool = False, project: str | None = None
+    source: str | Path,
+    destination: str | Path,
+    directory: bool = False,
+    project: str | None = None,
 ):
     """
     rsync files to/from local paths or GCS buckets
@@ -63,6 +67,9 @@ def gcloud_rsync(
     if project is None:
         project = default_project
 
+    if not isinstance(source, str):
+        source = str(source)
+
     if os.path.isdir(source) or source.endswith("/"):
         cmd = f"gcloud storage rsync --recursive '{source}' '{destination}' --billing-project={project}"
     else:
@@ -78,7 +85,12 @@ def gcloud_rsync(
     return result.stdout
 
 
-def gcloud_mv(source, destination, directory=False, project: str | None = None):
+def gcloud_mv(
+    source: str | Path,
+    destination: str | Path,
+    directory=False,
+    project: str | None = None,
+):
     """
     moves the files between os.path.join(paths, GCS) bucket path
 
@@ -92,6 +104,11 @@ def gcloud_mv(source, destination, directory=False, project: str | None = None):
     Returns:
        None.
     """
+    # probably not nescessary but defensive
+    if not isinstance(source, str):
+        source = str(source)
+    if not isinstance(destination, str):
+        destination = str(destination)
 
     default_project = "dnastack-asap-parkinsons"
     if project is None:
@@ -128,7 +145,7 @@ def authenticate_with_service_account(key_file_path):
     return result
 
 
-def gcloud_rm(destination, directory=False, project: str | None = None):
+def gcloud_rm(destination: str | Path, directory=False, project: str | None = None):
     """
     copies the files to a GCS bucket path
 
@@ -140,6 +157,8 @@ def gcloud_rm(destination, directory=False, project: str | None = None):
     Returns:
        None.
     """
+    if not isinstance(destination, str):
+        destination = str(destination)
 
     default_project = "dnastack-asap-parkinsons"
     if project is None:
