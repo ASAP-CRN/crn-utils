@@ -42,9 +42,10 @@ __all__ = [
 
 
 def create_metadata_package(
-    dfs: dict[str, pd.DataFrame], metadata_path: Path, schema_version: str
+    dfs: dict[str, pd.DataFrame], metadata_path: str | Path, schema_version: str
 ):
 
+    metadata_path = Path(metadata_path)
     final_metadata_path = os.path.join(metadata_path, schema_version)
     os.makedirs(final_metadata_path, exist_ok=True)
 
@@ -56,7 +57,7 @@ def create_metadata_package(
 
 ### this is a wrapper to call source specific prep_release_metadata_* functions
 def prep_release_metadata(
-    ds_path: Path,
+    ds_path: str | Path,
     schema_version: str,
     map_path: Path,
     suffix: str,
@@ -72,6 +73,7 @@ def prep_release_metadata(
     - updating the mappers
 
     """
+    ds_path = Path(ds_path)
 
     if source == "pmdbs":
         prep_release_metadata_pmdbs(
@@ -90,7 +92,7 @@ def prep_release_metadata(
 
 
 def prep_release_metadata_cell(
-    ds_path: Path,
+    ds_path: str | Path,
     schema_version: str,
     map_path: Path,
     suffix: str,
@@ -98,6 +100,8 @@ def prep_release_metadata_cell(
     flatten: bool = False,
     map_only: bool = False,
 ):
+    ds_path = Path(ds_path)
+
     dataset_name = ds_path.name
     print(f"release_util: Processing {ds_path.name}")
     ds_parts = dataset_name.split("-")
@@ -191,7 +195,7 @@ def prep_release_metadata_cell(
 
 
 def prep_release_metadata_mouse(
-    ds_path: Path,
+    ds_path: str | Path,
     schema_version: str,
     map_path: Path,
     suffix: str,
@@ -200,6 +204,8 @@ def prep_release_metadata_mouse(
     flatten: bool = False,
     map_only: bool = False,
 ):
+    ds_path = Path(ds_path)
+
     dataset_name = ds_path.name
     print(f"release_util: Processing {ds_path.name}")
     ds_parts = dataset_name.split("-")
@@ -308,15 +314,18 @@ def prep_release_metadata_mouse(
 
 
 def prep_release_metadata_pmdbs(
-    ds_path: Path,
+    ds_path: str | Path,
     schema_version: str,
-    map_path: Path,
+    map_path: str | Path,
     suffix: str,
     spatial: bool = False,
     proteomics: bool = False,
     flatten: bool = False,
     map_only: bool = False,
 ):
+    ds_path = Path(ds_path)
+    map_path = Path(map_path)
+
     dataset_name = ds_path.name
     print(f"release_util: Processing {ds_path.name}")
     ds_parts = dataset_name.split("-")
@@ -433,9 +442,9 @@ def prep_release_metadata_pmdbs(
 
 
 def get_crn_release_metadata(
-    ds_path: Path,
+    ds_path: str | Path,
     schema_version: str,
-    map_path: Path,
+    map_path: str | Path,
     suffix: str,
     spatial: bool = False,
     proteomics: bool = False,
@@ -444,6 +453,8 @@ def get_crn_release_metadata(
     """
     only maps by default
     """
+    ds_path = Path(ds_path)
+    map_path = Path(map_path)
 
     if source == "pmdbs":
         dfs = get_release_metadata_pmdbs(
@@ -488,12 +499,15 @@ def get_crn_release_metadata(
 
 
 def get_release_metadata_cell(
-    ds_path: Path,
+    ds_path: str | Path,
     schema_version: str,
-    map_path: Path,
+    map_path: str | Path,
     suffix: str,
     proteomics: bool = False,
 ) -> dict:
+    ds_path = Path(ds_path)
+    map_path = Path(map_path)
+
     dataset_name = ds_path.name
     print(f"release_util: Processing {ds_path.name}")
     ds_parts = dataset_name.split("-")
@@ -541,13 +555,16 @@ def get_release_metadata_cell(
 
 
 def get_release_metadata_mouse(
-    ds_path: Path,
+    ds_path: str | Path,
     schema_version: str,
-    map_path: Path,
+    map_path: str | Path,
     suffix: str,
     spatial: bool = False,
     proteomics: bool = False,
 ) -> dict:
+    ds_path = Path(ds_path)
+    map_path = Path(map_path)
+
     dataset_name = ds_path.name
     print(f"release_util: Processing {ds_path.name}")
     ds_parts = dataset_name.split("-")
@@ -609,13 +626,16 @@ def get_release_metadata_mouse(
 
 
 def get_release_metadata_pmdbs(
-    ds_path: Path,
+    ds_path: str | Path,
     schema_version: str,
-    map_path: Path,
+    map_path: str | Path,
     suffix: str,
     spatial: bool = False,
     proteomics: bool = False,
 ) -> dict:
+    ds_path = Path(ds_path)
+    map_path = Path(map_path)
+
     dataset_name = ds_path.name
     print(f"release_util: Processing {ds_path.name}")
     ds_parts = dataset_name.split("-")
@@ -688,13 +708,17 @@ def get_release_metadata_pmdbs(
 
 # TODO: add non PMDBS human wrinkles now
 def get_release_metadata_human(
-    ds_path: Path,
+    ds_path: str | Path,
     schema_version: str,
-    map_path: Path,
+    map_path: str | Path,
     suffix: str,
     spatial: bool = False,
     proteomics: bool = False,
 ) -> dict:
+
+    ds_path = Path(ds_path)
+    map_path = Path(map_path)
+
     dataset_name = ds_path.name
     print(f"release_util: Processing {ds_path.name}")
     ds_parts = dataset_name.split("-")
@@ -769,7 +793,10 @@ def get_release_metadata_human(
 
 
 def load_and_process_table(
-    table_name: str, tables_path: Path, cde_df: pd.DataFrame, print_log: bool = False
+    table_name: str,
+    tables_path: str | Path,
+    cde_df: pd.DataFrame,
+    print_log: bool = False,
 ):
     """
     Load and process a table from a given path according to a schema.
@@ -784,11 +811,12 @@ def load_and_process_table(
         pd.DataFrame: Processed table.
 
     """
+    table_path = Path(tables_path)
 
     table_path = os.path.join(tables_path, f"{table_name}.csv")
     schema = cde_df[cde_df["Table"] == table_name]
     report = ReportCollector(destination="NA")
-    full_table, report = validate_table(df.copy(), table_name, schema, report)
+    # full_table, report = validate_table(df.copy(), table_name, schema, report)
     if os.path.exists(table_path):
         df = read_meta_table(table_path)
     else:
@@ -804,8 +832,8 @@ def load_and_process_table(
 def process_schema(
     tables: list[str],
     cde_version: str | Path,
-    source_path: Path,
-    export_path: Path | None = None,
+    source_path: str | Path,
+    export_path: str | Path | None = None,
     print_log: bool = False,
 ):
     """
@@ -821,6 +849,11 @@ def process_schema(
         dict: Dictionary containing the processed tables.
         dict: Dictionary containing the auxiliary tables.
     """
+
+    source_path = Path(source_path)
+    if export_path is not None:
+        export_path = Path(export_path)
+
     # load CDE
     cde_df = read_CDE(cde_version)
 
@@ -842,10 +875,15 @@ def process_schema(
     return tables_dict, aux_tables_dict
 
 
-def ingest_ds_info_doc(intake_doc: Path | str, ds_path: Path, doc_path: Path):
+def ingest_ds_info_doc(
+    intake_doc: Path | str, ds_path: Path | str, doc_path: Path | str
+):
     """
     Ingest the dataset information from the docx file and export to json for zenodo upload.
     """
+    intake_doc = Path(intake_doc)
+    ds_path = Path(ds_path)
+    doc_path = Path(doc_path)
 
     # should read this from ds_path/version
     # just read in as text
@@ -1022,10 +1060,13 @@ def ingest_ds_info_doc(intake_doc: Path | str, ds_path: Path, doc_path: Path):
 
 
 # fix STUDY
-def fix_study_table(metadata_path: Path, doi_path: Path | None = None):
+def fix_study_table(metadata_path: str | Path, doi_path: str | Path | None = None):
     """
     Update the STUDY table with the information from the DOI folder.
     """
+    metadata_path = Path(metadata_path)
+    if doi_path is not None:
+        doi_path = Path(doi_path)
 
     table = "STUDY"
     STUDY = read_meta_table(os.path.join(metadata_path, f"{table}.csv"))
