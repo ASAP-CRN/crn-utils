@@ -426,7 +426,9 @@ def make_readme_file(ds_path: Path):
     with open(os.path.join(doi_path, f"{long_dataset_name}_README.md"), "w") as f:
         f.write(readme_content)
 
-    make_pdf_file(readme_content_HTML, os.path.join(doi_path, f"{long_dataset_name}_README.pdf"))
+    make_pdf_file(
+        readme_content_HTML, os.path.join(doi_path, f"{long_dataset_name}_README.pdf")
+    )
 
 
 # def make_pdf_file(ds_path: Path):
@@ -554,7 +556,12 @@ def create_draft_metadata(ds_path: Path, version: str = "0.1") -> dict:
     return metadata
 
 
-def create_draft_doi(zenodo: ZenodoClient, ds_path: Path, version: str = "0.1") -> dict:
+def create_draft_doi(
+    zenodo: ZenodoClient,
+    ds_path: Path | None = None,
+    version: str = "0.1",
+    metadata: dict | None = None,
+) -> dict:
     """Create a draft DOI on zenodo.
 
     Args:
@@ -566,11 +573,17 @@ def create_draft_doi(zenodo: ZenodoClient, ds_path: Path, version: str = "0.1") 
         dict: Zenodo deposition
     """
 
-    with open(os.path.join(ds_path, f"DOI/{ds_path.name}.json"), "r") as f:
-        export_data = json.load(f)
-    metadata = export_data["metadata"]
+    if metadata is None:
+        if ds_path is None:
+            raise ValueError("Either ds_path or export_data must be provided")
+        else:
+            with open(os.path.join(ds_path, f"DOI/{ds_path.name}.json"), "r") as f:
+                export_data = json.load(f)
 
-    if version == "0.1":
+            metadata = export_data["metadata"]
+
+    if version is None:
+        version = "0.1"
         print(f"Warning Draft DOI is defaulting to v0.1")
 
     metadata["version"] = version

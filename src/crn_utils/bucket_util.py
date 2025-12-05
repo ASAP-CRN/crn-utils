@@ -1,9 +1,19 @@
 import os
 import subprocess
+from pathlib import Path
+
+__all__ = [
+    "gcloud_ls",
+    "gcloud_rsync",
+    "gcloud_mv",
+    "gcloud_rm",
+    "authenticate_with_service_account",
+]
+
 
 # create functions to list, rsync and delete files into GCP
 # Updated to use gcloud instead of gsutil
-def gcloud_ls(bucket_name, prefix, project: str | None = None):
+def gcloud_ls(bucket_name: str, prefix: str, project: str | None = None):
     """
     prints the files in a GCS bucket matching a given prefix.
 
@@ -20,10 +30,12 @@ def gcloud_ls(bucket_name, prefix, project: str | None = None):
     if project is None:
         project = default_project
 
-    cmd = f"gcloud storage ls gs://{bucket_name}/{prefix} --project={project}"
+    cmd = f"gcloud storage ls gs://{bucket_name}/{prefix} --billing-project={project}"
 
+    print(f"IN: {cmd}")
     prefix = prefix + "/" if not prefix.endswith("/") else prefix
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    print(f"OUT: {result.stdout}")
     if result.returncode == 0:
         pass
     else:
@@ -31,7 +43,13 @@ def gcloud_ls(bucket_name, prefix, project: str | None = None):
 
     return result.stdout.split("\n")
 
-def gcloud_rsync(source, destination, directory: bool = False, project: str | None = None):
+
+def gcloud_rsync(
+    source: str | Path,
+    destination: str | Path,
+    directory: bool = False,
+    project: str | None = None,
+):
     """
     rsync files to/from local paths or GCS buckets
 
@@ -49,10 +67,15 @@ def gcloud_rsync(source, destination, directory: bool = False, project: str | No
     if project is None:
         project = default_project
 
+    if not isinstance(source, str):
+        source = str(source)
+
     if os.path.isdir(source) or source.endswith("/"):
-        cmd = f"gcloud storage rsync --recursive '{source}' '{destination}' --project={project}"
+        cmd = f"gcloud storage rsync --recursive '{source}' '{destination}' --billing-project={project}"
     else:
-        cmd = f"gcloud storage cp '{source}' '{destination}' --project={project}"
+        cmd = (
+            f"gcloud storage cp '{source}' '{destination}' --billing-project={project}"
+        )
 
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
     if result.returncode == 0:
@@ -61,7 +84,13 @@ def gcloud_rsync(source, destination, directory: bool = False, project: str | No
         print(f"gcloud command failed: {result.stderr}")
     return result.stdout
 
-def gcloud_mv(source, destination, directory=False, project: str | None = None):
+
+def gcloud_mv(
+    source: str | Path,
+    destination: str | Path,
+    directory=False,
+    project: str | None = None,
+):
     """
     moves the files between os.path.join(paths, GCS) bucket path
 
@@ -75,15 +104,22 @@ def gcloud_mv(source, destination, directory=False, project: str | None = None):
     Returns:
        None.
     """
+    # probably not nescessary but defensive
+    if not isinstance(source, str):
+        source = str(source)
+    if not isinstance(destination, str):
+        destination = str(destination)
 
     default_project = "dnastack-asap-parkinsons"
     if project is None:
         project = default_project
 
     if directory:
-        cmd = f"gcloud storage mv --recursive '{source}' '{destination}' --project={project}"
+        cmd = f"gcloud storage mv --recursive '{source}' '{destination}' --billing-project={project}"
     else:
-        cmd = f"gcloud storage mv '{source}' '{destination}' --project={project}"
+        cmd = (
+            f"gcloud storage mv '{source}' '{destination}' --billing-project={project}"
+        )
 
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
     if result.returncode == 0:
@@ -93,6 +129,8 @@ def gcloud_mv(source, destination, directory=False, project: str | None = None):
 
     return result.stdout
 
+
+# NOTE: this is deprecated
 def authenticate_with_service_account(key_file_path):
     """
     Authenticates with a Google Cloud service account using a key file.
@@ -106,7 +144,8 @@ def authenticate_with_service_account(key_file_path):
 
     return result
 
-def gcloud_rm(destination, directory=False, project: str | None = None):
+
+def gcloud_rm(destination: str | Path, directory=False, project: str | None = None):
     """
     copies the files to a GCS bucket path
 
@@ -118,15 +157,19 @@ def gcloud_rm(destination, directory=False, project: str | None = None):
     Returns:
        None.
     """
+    if not isinstance(destination, str):
+        destination = str(destination)
 
     default_project = "dnastack-asap-parkinsons"
     if project is None:
         project = default_project
 
     if directory:
-        cmd = f"gcloud storage rm --recursive '{destination}' --project={project}"
+        cmd = (
+            f"gcloud storage rm --recursive '{destination}' --billing-project={project}"
+        )
     else:
-        cmd = f"gcloud storage rm '{destination}' --project={project}"
+        cmd = f"gcloud storage rm '{destination}' --billing-project={project}"
 
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
     if result.returncode == 0:
