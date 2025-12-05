@@ -118,7 +118,6 @@ def prep_release_metadata_cell(
 
     print(asap_ids_schema)
 
-    # # %%
     datasetid_mapper, cellid_mapper, sampleid_mapper = load_cell_id_mappers(
         map_path, suffix
     )
@@ -132,7 +131,6 @@ def prep_release_metadata_cell(
 
     req_tables = PROTEOMICS_TABLES if proteomics else CELL_TABLES
 
-    # table_names = [table.stem for table in tables if table.stem in req_tables]
     table_names = [
         os.path.splitext(os.path.basename(table))[0]
         for table in tables
@@ -220,7 +218,6 @@ def prep_release_metadata_mouse(
     asap_ids_df = read_CDE_asap_ids()
     asap_ids_schema = asap_ids_df[["Table", "Field"]]
 
-    # # %%
     datasetid_mapper, mouseid_mapper, sampleid_mapper = load_mouse_id_mappers(
         map_path, suffix
     )
@@ -340,7 +337,6 @@ def prep_release_metadata_pmdbs(
     asap_ids_df = read_CDE_asap_ids()
     asap_ids_schema = asap_ids_df[["Table", "Field"]]
 
-    # # %%
     (
         datasetid_mapper,
         subjectid_mapper,
@@ -363,7 +359,6 @@ def prep_release_metadata_pmdbs(
     if spatial:
         req_tables.append("SPATIAL")
 
-    # table_names = [table.stem for table in tables if table.stem in req_tables]
     table_names = [
         os.path.splitext(os.path.basename(table))[0]
         for table in tables
@@ -520,7 +515,6 @@ def get_release_metadata_cell(
     asap_ids_df = read_CDE_asap_ids()
     asap_ids_schema = asap_ids_df[["Table", "Field"]]
 
-    # # %%
     datasetid_mapper, cellid_mapper, sampleid_mapper = load_cell_id_mappers(
         map_path, suffix
     )
@@ -529,7 +523,6 @@ def get_release_metadata_cell(
     tables = [table for table in os.listdir(mdata_path) if table.endswith(".csv")]
 
     req_tables = CELL_TABLES if not proteomics else PROTEOMICS_TABLES
-    # table_names = [table.stem for table in tables if table.stem in req_tables]
     table_names = [
         os.path.splitext(os.path.basename(table))[0]
         for table in tables
@@ -578,8 +571,6 @@ def get_release_metadata_mouse(
     CDE = read_CDE(schema_version)
     asap_ids_df = read_CDE_asap_ids()
     asap_ids_schema = asap_ids_df[["Table", "Field"]]
-
-    # # %%
     datasetid_mapper, mouseid_mapper, sampleid_mapper = load_mouse_id_mappers(
         map_path, suffix
     )
@@ -594,7 +585,6 @@ def get_release_metadata_mouse(
     req_tables = MOUSE_TABLES.copy()
     if spatial:
         req_tables.append("SPATIAL")
-    # table_names = [table.stem for table in tables if table.stem in req_tables]
     table_names = [
         os.path.splitext(os.path.basename(table))[0]
         for table in tables
@@ -672,7 +662,6 @@ def get_release_metadata_pmdbs(
     if spatial:
         req_tables.append("SPATIAL")
 
-    # table_names = [table.stem for table in tables if table.stem in req_tables]
     table_names = [
         os.path.splitext(os.path.basename(table))[0]
         for table in tables
@@ -733,7 +722,6 @@ def get_release_metadata_human(
     asap_ids_df = read_CDE_asap_ids()
     asap_ids_schema = asap_ids_df[["Table", "Field"]]
 
-    # # %%
     (
         datasetid_mapper,
         subjectid_mapper,
@@ -742,7 +730,6 @@ def get_release_metadata_human(
         sourceid_mapper,
     ) = load_pmdbs_id_mappers(map_path, suffix)
 
-    # os.makedirs(ds_path, exist_ok=True)
     if schema_version == "v2.1":
         mdata_path = os.path.join(ds_path, "metadata", "v2")
     else:
@@ -758,7 +745,6 @@ def get_release_metadata_human(
     if spatial:
         req_tables.append("SPATIAL")
 
-    # table_names = [table.stem for table in tables if table.stem in req_tables]
     table_names = [
         os.path.splitext(os.path.basename(table))[0]
         for table in tables

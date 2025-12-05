@@ -79,26 +79,20 @@ def load_id_mapper(id_mapper_path: Path) -> dict:
 
 #     return id_mapper
 
-
-# TODO: test this function save the old one before overwriting
 def write_id_mapper(id_mapper: dict, id_mapper_path: str | Path):
     """write the id mapper to the json file"""
     id_mapper_path = Path(id_mapper_path)
+
     if os.path.exists(id_mapper_path):
         # copy the old file to a backup using datetime to make it unique
-        # Get the current date and time
-
-        backup_path = Path(
-            f"{id_mapper_path.parent}/backup/{pd.Timestamp.now().strftime('%Y%m%d')}_{id_mapper_path.name}"
-        )
-
-        if not os.path.exists(backup_path.parent):
-            backup_path.os.makedirs(parent, exist_ok=True)
+        backup_dir = id_mapper_path.parent / "backup"
+        os.makedirs(backup_dir, exist_ok=True)
+        backup_path = backup_dir / f"{pd.Timestamp.now().strftime('%Y%m%d')}_{id_mapper_path.name}"
         shutil.copy2(id_mapper_path, backup_path)
         print(f"backed up old id_mapper to {backup_path}")
 
     if not os.path.exists(id_mapper_path.parent):
-        id_mapper_path.os.makedirs(parent, exist_ok=True)
+        os.makedirs(id_mapper_path.parent, exist_ok=True)
         print(f"created directory for id_mapper export at {id_mapper_path.parent}")
 
     mode = "w"
@@ -111,7 +105,6 @@ def write_id_mapper(id_mapper: dict, id_mapper_path: str | Path):
             return 1
         print(f"saved id_mapper to {id_mapper_path}")
     return 0
-
 
 def get_sampr(v):
     return int(v.split("_")[3].replace("s", ""))
