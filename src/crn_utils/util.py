@@ -68,7 +68,7 @@ def list_expected_metadata_tables(source: str,
     lookup_modality = {
         "rna": ["ASSAY_RNAseq"],
         "spatial": ["ASSAY_RNAseq", "SPATIAL"],
-        "proteomics": ["PROTEOMICS"],
+        "proteomics": ["PROTEOMICS", "SDRF"],
     }
     
     tables = lookup_source[source].copy()
