@@ -81,7 +81,13 @@ def apply_field_moves(
         src_aligned = src[old_field].reindex(dst.index, fill_value=NULL)
         dst[new_field] = src_aligned.values
         print(f"Copied '{old_table}.{old_field}' -> '{new_table}.{new_field}'")
-    
+        
+        # Remove the old field if its a rename in the same table (moves are
+        # handled by removing deprecated columns in update_table_columns)
+        if old_table == new_table and old_field != new_field:
+            dst = dst.drop(columns = [old_field])
+            print(f"Deprecated column '{old_table}.{old_field}' removed after rename")
+        
         updated_tables[new_table] = dst
     
     return updated_tables
@@ -127,9 +133,11 @@ def update_table_columns(
     extra_cols = current_cols_set - old_cols_set - new_cols_set
     if extra_cols:
         print(f"Extra columns for {table_name} will be kept as-is: {', '.join(sorted(extra_cols))}")
+    
+    final_cols = new_cols + list(extra_cols)
           
     # Ensure correct column order
-    updated_table = updated_table[new_cols]
+    updated_table = updated_table[final_cols]
     
     return updated_table
     
