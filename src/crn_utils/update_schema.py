@@ -134,9 +134,8 @@ def update_table_columns(
     if extra_cols:
         print(f"Extra columns for {table_name} will be kept as-is: {', '.join(sorted(extra_cols))}")
     
-    final_cols = new_cols + list(extra_cols)
-          
-    # Ensure correct column order
+    # Preserve column order of old table
+    final_cols = [col for col in updated_table.columns if col not in deprecated_cols]
     updated_table = updated_table[final_cols]
     
     return updated_table
