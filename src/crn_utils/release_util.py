@@ -1552,7 +1552,6 @@ def get_cohort_stats_table(dfs: dict[pd.DataFrame], source: str = "pmdbs"):
         report["N_teams"] = N_teams
 
     elif source == "mouse":
-        print("No mouse cohorts yet.")
         datasets = dfs["STUDY"]["ASAP_dataset_id"].unique()
         stat_df = pd.DataFrame()
         for dataset in datasets:
