@@ -1552,9 +1552,19 @@ def get_cohort_stats_table(dfs: dict[pd.DataFrame], source: str = "pmdbs"):
         report["N_teams"] = N_teams
 
     elif source == "mouse":
-        print("No mouse cohorts yet.")
-        report, df = get_stat_tabs_mouse(dfs)
-        # TODO:
+        datasets = dfs["STUDY"]["ASAP_dataset_id"].unique()
+        stat_df = pd.DataFrame()
+        for dataset in datasets:
+            dfs_ = {k: v[v["ASAP_dataset_id"] == dataset] for k, v in dfs.items()}
+            df = make_stats_df_mouse(dfs_)
+            stat_df = pd.concat([stat_df, df])
+
+        report = get_stats_mouse(stat_df)
+
+        N_datasets = stat_df["ASAP_dataset_id"].nunique()
+        N_teams = stat_df["ASAP_team_id"].nunique()
+        report["N_datasets"] = N_datasets
+        report["N_teams"] = N_teams
     else:
         raise ValueError(f"Unknown source {source}")
         report = {}
