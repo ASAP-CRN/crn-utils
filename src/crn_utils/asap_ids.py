@@ -47,6 +47,62 @@ __all__ = [
 ]
 
 
+# The following functions are for generic ID utilities for the Dec2035 refactor
+# to support a unified prep_release_metadata() worfkflow.
+# TODO: Following PRs will handle ID creation and revisit legacy code
+# ----
+
+
+def load_all_id_mappers(map_path: Path, 
+                        source: str) -> dict[str, dict]:
+    """
+    Load the ID mappers for the given source type.
+
+    Returns a dict with standardized keys:
+      - "dataset": dataset ID mapper (always present)
+      - "subject": subject/mouse/cell ID mapper (always present)
+      - "sample": sample ID mapper (always present)
+      - "gp2": GP2 ID mapper (PMDBS only, optional)
+      - "source_subject": source subject ID mapper (PMDBS only, optional)
+    """
+    map_path = Path(map_path)
+    mappers = {}
+    
+    # Normalize source
+    if source in ["ipsc", "cell"]:
+        source = "invitro"
+        
+    # Dataset is common to all sources
+    dataset_mapper_path = map_path / "ASAP_dataset_ids.json"
+    mappers["dataset"] = load_id_mapper(dataset_mapper_path)
+    
+    if source == "pmdbs":
+        mappers["subject"] = load_id_mapper(map_path / "ASAP_PMDBS_subj_ids.json")
+        mappers["sample"] = load_id_mapper(map_path / "ASAP_PMDBS_samp_ids.json")
+        mappers["gp2"] = load_id_mapper(map_path / "ASAP_PMDBS_gp2_ids.json")
+        mappers["source_subject"] = load_id_mapper(map_path / "ASAP_PMDBS_sourcesubj_ids.json")
+    
+    elif source == "mouse":
+        mappers["subject"] = load_id_mapper(map_path / "ASAP_MOUSE_ids.json")
+        mappers["sample"] = load_id_mapper(map_path / "ASAP_MOUSE_samp_ids.json")
+    
+    elif source == "invitro":
+        mappers["subject"] = load_id_mapper(map_path / "ASAP_INVITRO_ids.json")
+        mappers["sample"] = load_id_mapper(map_path / "ASAP_INVITRO_samp_ids.json")
+    
+    else:
+        raise ValueError(f"Unknown source: {source}.")
+
+    return mappers
+
+
+
+# The following code is from the original workflow to generate/map IDs in a
+# source-specific manner. It is kept for backwards compatibility and reference
+# but is currently being deprecated in favor of the unified functions above.
+# ----
+
+
 #####################
 # general id utils
 #####################
