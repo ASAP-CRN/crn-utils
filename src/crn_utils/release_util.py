@@ -41,6 +41,138 @@ __all__ = [
 ]
 
 
+# The following function is the main function to prepare release metadata and is
+# a refactored version of the older prep_release_metadata_* functions, to create
+# a source-agnostic workflow. Following functions will be refactored/deprecated
+# in future iterations.
+# ----
+
+def prep_release_metadata(dataset_id: str,
+                          source: str,
+                          team: str,
+                          modality: str,
+                          cde_version: str,
+                          metadata_dir: Path,
+                          dataset_dir: Path,
+                          map_path: Path) -> None:
+    """
+    Prepares dataset metadata for release.
+    
+    Workflow:
+      1. Load staged metadata tables from metadata_dir
+      2. Inject ASAP IDs from master ID mappers
+      3. Fetch and save file metadata from GCP raw bucket
+      4. Merge file metadata with DATA table
+      5. Inject DOI into STUDY table
+      6. Inject GCP URIs into DATA (and SPATIAL if applicable)
+      7. Export final release tables to {dataset_dir}/metadata/release/
+    
+        Args:
+        dataset_id: Full dataset identifier (e.g., "cragg-mouse-sn-rnaseq-striatum")
+        source: Data source type ("pmdbs", "mouse", "invitro")
+        team: Team name (e.g., "cragg")
+        modality: Assay modality (e.g., "rna", "spatial")
+        cde_version: CDE schema version (e.g., "v3.3")
+        metadata_dir: Path to metadata directory
+        dataset_dir: Path to dataset directory
+    """
+    # ---- Load metadata tables ----
+    logging.info(f"Loading metadata tables from {metadata_dir}...")
+    expected_tables = list_expected_metadata_tables(source, modality)
+    meta_tables = load_tables(metadata_dir, expected_tables)
+    
+    for table in expected_tables: # TODO: migrate check to refactored load_tables
+        if table not in meta_tables:
+            raise ValueError(f"Expected metadata table '{table}' not found in loaded metadata tables.")
+    
+    # ---- Inserting ASAP IDs ----
+    logging.info("Inserting ASAP IDs into metadata tables...")
+    
+    # Mappers assign a dataset ID and associate contributor IDs to ASAP IDs
+    id_mappers = load_all_id_mappers(map_path, source)
+    
+    # TODO: refactor/rename: this gets the fields to be updated with ASAP IDs
+    asap_ids_df = read_CDE_asap_ids(schema_version=cde_version)
+    asap_ids_schema = asap_ids_df[["Table", "Field"]]
+    
+    # Update metadata tables with ASAP IDs
+    updated_meta_tables = update_meta_tables_with_asap_ids(
+        meta_tables=meta_tables,
+        dataset_id = dataset_id,
+        source=source,
+        team=team,
+        id_mappers=id_mappers,
+        asap_ids_schema=asap_ids_schema,
+        expected_tables=expected_tables)
+    
+    # ---- Generating and and inserting file metadata ----
+    logging.info("Generating and inserting file metadata...")
+    
+    file_metadata_path = dataset_dir / "file_metadata"
+    file_metadata_path.mkdir(exist_ok=True)
+    
+    # Generates intermediate file metadata files after querying the raw bucket
+    raw_bucket_name = f"asap-raw-team-{dataset_id}"
+    
+    gen_raw_bucket_summary(
+        raw_bucket_name=raw_bucket_name,
+        dl_path=file_metadata_path,
+        dataset_name=dataset_id,
+        flatten=False   # TODO: confirm if this is ever True?
+    )
+    
+    if modality == "spatial":  # TODO: see if this can be more generic
+        gen_spatial_bucket_summary(
+            raw_bucket_name=raw_bucket_name,
+            dl_path=file_metadata_path,
+            dataset_name=dataset_id
+        )
+        
+    # Reads in these intermediate files and joins to DATA to save out raw_files.csv
+    make_file_metadata(
+        ds_path=dataset_dir,
+        dl_path=file_metadata_path,
+        data_df=updated_meta_tables["DATA"],
+        spatial=(modality == "spatial")
+    )
+    
+    # Inserting DOIs and GCP URIs from the generated file metadata
+    updated_meta_tables["STUDY"] = update_study_table_with_doi(
+        study_df=updated_meta_tables["STUDY"],
+        ds_path=dataset_dir
+    )
+    
+    updated_meta_tables["DATA"] = update_data_table_with_gcp_uri(
+        data_df=updated_meta_tables["DATA"],
+        ds_path=dataset_dir
+    )
+    
+    if modality == "spatial":
+        is_visium = "geomx" not in dataset_id  # TODO: this is fragile/indirect
+        updated_meta_tables["SPATIAL"] = update_spatial_table_with_gcp_uri(
+            spatial_df=updated_meta_tables["SPATIAL"],
+            ds_path=dataset_dir,
+            visium=is_visium
+        )
+    
+    #  ---- Exporting updated metadata tables ----
+    # TODO: we will be changing from saving directly into release/
+    out_dir = dataset_dir / "metadata" / "release"
+    out_dir.mkdir(parents=False, exist_ok=True)
+    logging.info(f"Exporting updated metadata tables into {out_dir}...")
+    
+    export_meta_tables(updated_meta_tables, out_dir)
+    write_version(cde_version, (out_dir / "cde_version"))
+    
+    logging.info(f"Metadata preparation complete for {dataset_id}")
+
+    return None
+
+
+# The following functions are retained from previous code for compatibility
+# ----
+
+
 def create_metadata_package(
     dfs: dict[str, pd.DataFrame], metadata_path: str | Path, schema_version: str
 ):
@@ -56,7 +188,7 @@ def create_metadata_package(
 
 
 ### this is a wrapper to call source specific prep_release_metadata_* functions
-def prep_release_metadata(
+def old_prep_release_metadata(
     ds_path: str | Path,
     schema_version: str,
     map_path: Path,
