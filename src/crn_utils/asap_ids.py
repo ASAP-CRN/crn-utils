@@ -19,6 +19,8 @@ from .constants import *
 
 __all__ = [
     "load_id_mapper",
+    "load_all_id_mappers",
+    "update_meta_tables_with_asap_ids",
     "write_id_mapper",
     "get_sampr",
     "get_id",
@@ -45,6 +47,132 @@ __all__ = [
     "update_cell_meta_tables_with_asap_ids",
     # "process_meta_files"
 ]
+
+
+# The following functions are for generic ID utilities for the Dec2025 refactor
+# to support a unified prep_release_metadata() worfkflow.
+# TODO: Following PRs will handle ID creation and revisit legacy code
+# ----
+
+
+def load_all_id_mappers(map_path: Path, 
+                        source: str) -> dict[str, dict]:
+    """
+    Load the ID mappers for the given source type.
+
+    Returns a dict with standardized keys:
+      - "dataset": dataset ID mapper (always present)
+      - "subject": subject/mouse/cell ID mapper (always present)
+      - "sample": sample ID mapper (always present)
+      - "gp2": GP2 ID mapper (PMDBS only, optional)
+      - "source_subject": source subject ID mapper (PMDBS only, optional)
+    """
+    map_path = Path(map_path)
+    id_mappers = {}
+    
+    # Normalize source
+    if source in ["ipsc", "cell"]:
+        source = "invitro"
+        
+    # Dataset is common to all sources
+    dataset_mapper_path = map_path / "ASAP_dataset_ids.json"
+    id_mappers["dataset"] = load_id_mapper(dataset_mapper_path)
+    
+    if source == "pmdbs":
+        id_mappers["subject"] = load_id_mapper(map_path / "ASAP_PMDBS_subj_ids.json")
+        id_mappers["sample"] = load_id_mapper(map_path / "ASAP_PMDBS_samp_ids.json")
+        id_mappers["gp2"] = load_id_mapper(map_path / "ASAP_PMDBS_gp2_ids.json")
+        id_mappers["source_subject"] = load_id_mapper(map_path / "ASAP_PMDBS_sourcesubj_ids.json")
+    
+    elif source == "mouse":
+        id_mappers["subject"] = load_id_mapper(map_path / "ASAP_MOUSE_ids.json")
+        id_mappers["sample"] = load_id_mapper(map_path / "ASAP_MOUSE_samp_ids.json")
+    
+    elif source == "invitro":
+        id_mappers["subject"] = load_id_mapper(map_path / "ASAP_INVITRO_ids.json")
+        id_mappers["sample"] = load_id_mapper(map_path / "ASAP_INVITRO_samp_ids.json")
+    
+    else:
+        raise ValueError(f"Unknown source: {source}.")
+
+    return id_mappers
+
+
+def update_meta_tables_with_asap_ids(
+    meta_tables: dict[str, pd.DataFrame],
+    dataset_id: str,
+    source: str,
+    team: str,
+    id_mappers: dict[str, dict],
+    asap_ids_schema: pd.DataFrame,
+    expected_tables: list[str]) -> dict[str, pd.DataFrame]:
+    """
+    Inject ASAP IDs into the metadata tables based on the provided ID mappers.
+    Assumes that the ID mappers have already been populated for the given dataset.
+    
+    Returns a dict of the updated metadata tables with ASAP IDs injected.
+    """
+    # Normalize source
+    if source in ["ipsc", "cell"]:
+        source = "invitro"
+    
+    # Getting the individual mappers
+    asap_dataset_id = id_mappers["dataset"].get(dataset_id)
+    subject_mapper = id_mappers["subject"]
+    sample_mapper = id_mappers["sample"]
+    
+    # Determine which tables need which IDs
+    sample_id_tables = asap_ids_schema[
+        asap_ids_schema["Field"] == "ASAP_sample_id"
+    ]["Table"].to_list()
+    
+    subject_id_tables = asap_ids_schema[
+        asap_ids_schema["Field"].isin(["ASAP_subject_id", "ASAP_mouse_id", "ASAP_cell_id"])
+    ]["Table"].to_list()
+    
+    # Inject IDs into tables
+    for table_name in expected_tables:
+        meta_table = meta_tables[table_name]
+        
+        # Inject subject IDs (subject/mouse/cell)
+        if table_name in subject_id_tables:
+            # subject_id assumed across all, but check for fallbacks
+            subject_col = None
+            if "subject_id" in meta_table.columns:
+                subject_col = "subject_id"
+            elif source == "mouse" and "mouse_id" in meta_table.columns:
+                subject_col = "mouse_id"
+            elif source == "invitro" and "cell_id" in meta_table.columns:
+                subject_col = "cell_id"
+            
+            if subject_col:
+                # Determine ASAP ID field name
+                id_field = "ASAP_subject_id"
+                if source == "mouse":
+                    id_field = "ASAP_mouse_id"
+                elif source == "invitro":
+                    id_field = "ASAP_cell_id"
+                
+                asap_subject_ids = meta_table[subject_col].map(subject_mapper)
+                meta_table.insert(0, id_field, asap_subject_ids)
+        
+        # Inject sample IDs
+        if table_name in sample_id_tables and "sample_id" in meta_table.columns:
+            asap_sample_ids = meta_table["sample_id"].map(sample_mapper)
+            meta_table.insert(0, "ASAP_sample_id", asap_sample_ids)
+        
+        # Insert dataset and team IDs at the front of each table
+        meta_table.insert(0, "ASAP_dataset_id", asap_dataset_id)
+        meta_table.insert(0, "ASAP_team_id", f"TEAM_{team.upper()}")
+
+    return meta_tables
+
+
+
+# The following code is from the original workflow to generate/map IDs in a
+# source-specific manner. It is kept for backwards compatibility and reference
+# but is currently being deprecated in favor of the unified functions above.
+# ----
 
 
 #####################
