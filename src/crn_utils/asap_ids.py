@@ -49,7 +49,7 @@ __all__ = [
 ]
 
 
-# The following functions are for generic ID utilities for the Dec2035 refactor
+# The following functions are for generic ID utilities for the Dec2025 refactor
 # to support a unified prep_release_metadata() worfkflow.
 # TODO: Following PRs will handle ID creation and revisit legacy code
 # ----

@@ -190,6 +190,9 @@ def create_metadata_package(
     write_version(schema_version, os.path.join(final_metadata_path, "cde_version"))
 
 
+
+# !!!NOTE!!! This was used up to and including the December 2025 release. 
+# Importantly, it includes ID generation which is now handled separately.
 ### this is a wrapper to call source specific prep_release_metadata_* functions
 def old_prep_release_metadata(
     ds_path: str | Path,
