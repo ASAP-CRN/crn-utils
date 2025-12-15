@@ -1,11 +1,15 @@
-import pandas as pd
-from pathlib import Path
+
 import os
 import docx
 import json
+import logging
+import pandas as pd
+from pathlib import Path
 from numpy import nan as np_nan
 
+
 from .util import (
+    list_expected_metadata_tables,
     read_CDE,
     NULL,
     read_meta_table,
@@ -41,10 +45,10 @@ __all__ = [
 ]
 
 
-# The following function is the main function to prepare release metadata and is
-# a refactored version of the older prep_release_metadata_* functions, to create
-# a source-agnostic workflow. Following functions will be refactored/deprecated
-# in future iterations.
+# The following is a refactor of the main function to prepare metadata for a 
+# release. It combines the previous source-specific functions into a unified
+# call, while removing the ID generation step which is now handled separately.
+# Following PRs will continue to refactor/deprecate the previous workflow.
 # ----
 
 def prep_release_metadata(dataset_id: str,
@@ -169,7 +173,7 @@ def prep_release_metadata(dataset_id: str,
     return None
 
 
-# The following functions are retained from previous code for compatibility
+# The following are the older source-specific prep_release_metadata_* functionality
 # ----
 
 

@@ -19,6 +19,8 @@ from .constants import *
 
 __all__ = [
     "load_id_mapper",
+    "load_all_id_mappers",
+    "update_meta_tables_with_asap_ids",
     "write_id_mapper",
     "get_sampr",
     "get_id",
