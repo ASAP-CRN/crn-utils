@@ -32,10 +32,10 @@ def gcloud_ls(bucket_name: str, prefix: str, project: str | None = None):
 
     cmd = f"gcloud storage ls gs://{bucket_name}/{prefix} --billing-project={project}"
 
-    print(f"IN: {cmd}")
+    # print(f"IN: {cmd}")
     prefix = prefix + "/" if not prefix.endswith("/") else prefix
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-    print(f"OUT: {result.stdout}")
+    # print(f"OUT: {result.stdout}")
     if result.returncode == 0:
         pass
     else:
