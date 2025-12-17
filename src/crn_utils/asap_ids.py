@@ -1,10 +1,11 @@
 import os
 import pandas as pd
 import json
-
-# import ijson
-from pathlib import Path
+import logging
 import argparse
+import shutil
+from pathlib import Path
+# import ijson  # TODO: rm if truly unused
 
 from .util import (
     read_CDE,
@@ -13,7 +14,7 @@ from .util import (
     load_tables,
     export_meta_tables,
 )
-import shutil
+
 
 from .constants import *
 
@@ -21,6 +22,8 @@ __all__ = [
     "load_id_mapper",
     "load_all_id_mappers",
     "update_meta_tables_with_asap_ids",
+    "export_all_id_mappers",
+    "update_all_id_mappers",
     "write_id_mapper",
     "get_sampr",
     "get_id",
@@ -51,7 +54,9 @@ __all__ = [
 
 # The following functions are for generic ID utilities for the Dec2025 refactor
 # to support a unified prep_release_metadata() worfkflow.
-# TODO: Following PRs will handle ID creation and revisit legacy code
+# ID generation and mapping functionality currently wraps existsting source-specific
+# functions and leaves thise intact for backwards compatibility.
+# TODO: Following PRs will revisit legacy source-specific calls code
 # ----
 
 
@@ -166,6 +171,57 @@ def update_meta_tables_with_asap_ids(
         meta_table.insert(0, "ASAP_team_id", f"TEAM_{team.upper()}")
 
     return meta_tables
+
+
+def export_all_id_mappers(
+    map_path: Path,
+    source: str,
+    id_mappers: dict[str, dict],
+    suffix: str = "ids"  # unclear if this ever changes
+    ) -> None:
+    """
+    This function wraps source-specific export calls to give a unified interface.
+    """
+    map_path = Path(map_path)
+    
+    # Normalize source
+    if source in ["ipsc", "cell"]:
+        source = "invitro"
+        
+    # Source-specific exports
+    if source == "pmdbs":
+        export_pmdbs_id_mappers(
+            map_path=map_path,
+            suffix=suffix,
+            datasetid_mapper=id_mappers["dataset"],
+            subjectid_mapper=id_mappers["subject"],
+            sampleid_mapper=id_mappers["sample"],
+            gp2id_mapper=id_mappers["gp2"],
+            sourceid_mapper=id_mappers["source_subject"]
+        )
+    elif source == "mouse":
+        export_mouse_id_mappers(
+            map_path=map_path,
+            suffix=suffix,
+            datasetid_mapper=id_mappers["dataset"],
+            mouseid_mapper=id_mappers["subject"],
+            sampleid_mapper=id_mappers["sample"]
+        )
+    elif source == "invitro":
+        export_cell_id_mappers(
+            map_path=map_path,
+            suffix=suffix,
+            datasetid_mapper=id_mappers["dataset"],
+            cellid_mapper=id_mappers["subject"],
+            sampleid_mapper=id_mappers["sample"]
+        )
+    else:
+        raise ValueError(f"Unknown source: {source}")
+    
+
+
+    
+    
 
 
 
