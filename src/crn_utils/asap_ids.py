@@ -1,10 +1,11 @@
 import os
 import pandas as pd
 import json
-
-# import ijson
-from pathlib import Path
+import logging
 import argparse
+import shutil
+from pathlib import Path
+# import ijson  # TODO: rm if truly unused
 
 from .util import (
     read_CDE,
@@ -13,7 +14,7 @@ from .util import (
     load_tables,
     export_meta_tables,
 )
-import shutil
+
 
 from .constants import *
 
@@ -21,6 +22,8 @@ __all__ = [
     "load_id_mapper",
     "load_all_id_mappers",
     "update_meta_tables_with_asap_ids",
+    "export_all_id_mappers",
+    "update_all_id_mappers",
     "write_id_mapper",
     "get_sampr",
     "get_id",
@@ -51,7 +54,9 @@ __all__ = [
 
 # The following functions are for generic ID utilities for the Dec2025 refactor
 # to support a unified prep_release_metadata() worfkflow.
-# TODO: Following PRs will handle ID creation and revisit legacy code
+# ID generation and mapping functionality currently wraps existing source-specific
+# functions and leaves these intact for backwards compatibility.
+# TODO: Following PRs will revisit legacy source-specific calls code
 # ----
 
 
@@ -168,6 +173,154 @@ def update_meta_tables_with_asap_ids(
     return meta_tables
 
 
+def export_all_id_mappers(
+    map_path: Path,
+    source: str,
+    id_mappers: dict[str, dict],
+    suffix: str = "ids"  # unclear if this ever changes
+    ) -> None:
+    """
+    This function wraps source-specific export calls to give a unified interface.
+    """
+    map_path = Path(map_path)
+    
+    # Normalize source
+    if source in ["ipsc", "cell"]:
+        source = "invitro"
+        
+    # Source-specific exports
+    if source == "pmdbs":
+        export_pmdbs_id_mappers(
+            map_path=map_path,
+            suffix=suffix,
+            datasetid_mapper=id_mappers["dataset"],
+            subjectid_mapper=id_mappers["subject"],
+            sampleid_mapper=id_mappers["sample"],
+            gp2id_mapper=id_mappers["gp2"],
+            sourceid_mapper=id_mappers["source_subject"]
+        )
+    elif source == "mouse":
+        export_mouse_id_mappers(
+            map_path=map_path,
+            suffix=suffix,
+            datasetid_mapper=id_mappers["dataset"],
+            mouseid_mapper=id_mappers["subject"],
+            sampleid_mapper=id_mappers["sample"]
+        )
+    elif source == "invitro":
+        export_cell_id_mappers(
+            map_path=map_path,
+            suffix=suffix,
+            datasetid_mapper=id_mappers["dataset"],
+            cellid_mapper=id_mappers["subject"],
+            sampleid_mapper=id_mappers["sample"]
+        )
+    else:
+        raise ValueError(f"Unknown source: {source}")
+    
+
+
+def update_all_id_mappers(
+    dataset_id: str,
+    source: str,
+    metadata_dir: Path,
+    map_path: Path,
+    dry_run: bool = False
+) -> dict[str, dict]:
+    """
+    This is a source-agnostic orchestrator that wraps source-specific calls to
+    update a dataset's ID mappers and export them.
+    
+    On a dry run no files are written, otherwise the updated mappers are saved 
+    but a backup of existing files is made first. The updated mappers are always
+    returned as a dict.
+    """
+    metadata_dir = Path(metadata_dir)
+    map_path = Path(map_path)
+    
+    # Normalize source
+    if source in ["ipsc", "cell"]:
+        source = "invitro"
+        
+    logging.info(f"Updating ID mappers for dataset: {dataset_id} of source: {source}")
+    
+    # Load existing ID mappers which will be updated
+    id_mappers = load_all_id_mappers(map_path=map_path, source=source)
+    
+    # Each source updates SAMPLE, then affects specific additional tables
+    expected_tables = ["SAMPLE"]
+    if source == "pmdbs":
+        expected_tables.extend(["CLINPATH", "SUBJECT"])
+    elif source == "mouse":
+        expected_tables.extend(["MOUSE"])
+    elif source == "invitro":
+        expected_tables.extend(["CELL"])
+    
+    meta_tables = load_tables(metadata_dir, expected_tables)
+    
+    for table_name in expected_tables:
+        if table_name not in meta_tables:
+            raise ValueError(
+                f"Required metadata table '{table_name}' not found in {metadata_dir}"
+            )
+    
+    # Call source-specific update functions, which return tuples of updated mappers
+    if source == "pmdbs":
+        (
+            id_mappers["dataset"],
+            id_mappers["subject"],
+            id_mappers["sample"],
+            id_mappers["gp2"],
+            id_mappers["source_subject"],
+        ) = update_pmdbs_id_mappers(
+            clinpath_df=meta_tables["CLINPATH"],
+            sample_df=meta_tables["SAMPLE"],
+            long_dataset_name=dataset_id,
+            datasetid_mapper=id_mappers["dataset"],
+            subjectid_mapper=id_mappers["subject"],
+            sampleid_mapper=id_mappers["sample"],
+            gp2id_mapper=id_mappers["gp2"],
+            sourceid_mapper=id_mappers["source_subject"],
+        )
+    elif source == "mouse":
+        (
+            id_mappers["dataset"],
+            id_mappers["subject"],
+            id_mappers["sample"],
+        ) = update_mouse_id_mappers(
+            subject_df=meta_tables["MOUSE"],
+            sample_df=meta_tables["SAMPLE"],
+            long_dataset_name=dataset_id,
+            datasetid_mapper=id_mappers["dataset"],
+            mouseid_mapper=id_mappers["subject"],
+            sampleid_mapper=id_mappers["sample"],
+        )
+    elif source == "invitro":
+        (
+            id_mappers["dataset"],
+            id_mappers["subject"],
+            id_mappers["sample"],
+        ) = update_cell_id_mappers(
+            cell_df=meta_tables["CELL"],
+            sample_df=meta_tables["SAMPLE"],
+            long_dataset_name=dataset_id,
+            datasetid_mapper=id_mappers["dataset"],
+            cellid_mapper=id_mappers["subject"],
+            sampleid_mapper=id_mappers["sample"],
+        )
+    else:
+        raise ValueError(f"Unknown source: {source}")
+    
+    # Export (note that even if dry_run is True, we still return the updated
+    # mappers; if dry_run is False, we write to disk but a backup is made first)
+    if not dry_run:
+        logging.info(f"Writing updated ID mappers to: {map_path}")
+        export_all_id_mappers(map_path=map_path, source=source, id_mappers=id_mappers)
+    else:
+        logging.info(f"Dry run: would write updated ID mappers to: {map_path}")
+        
+    return id_mappers
+    
 
 # The following code is from the original workflow to generate/map IDs in a
 # source-specific manner. It is kept for backwards compatibility and reference
