@@ -54,8 +54,8 @@ __all__ = [
 
 # The following functions are for generic ID utilities for the Dec2025 refactor
 # to support a unified prep_release_metadata() worfkflow.
-# ID generation and mapping functionality currently wraps existsting source-specific
-# functions and leaves thise intact for backwards compatibility.
+# ID generation and mapping functionality currently wraps existing source-specific
+# functions and leaves these intact for backwards compatibility.
 # TODO: Following PRs will revisit legacy source-specific calls code
 # ----
 
