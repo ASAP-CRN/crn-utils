@@ -58,7 +58,5 @@ Should unify the business logic for the following resources and tools:
 - util
 - constants
 
-### dataset
-
-### release
-
+## Pull requests
+- Template available at: [.github/pull_request_template.md](https://github.com/ASAP-CRN/crn-utils/blob/main/.github/pull_request_template.md)
