@@ -481,16 +481,18 @@ def load_tables(table_path: Path, tables: list[str]) -> dict[str, pd.DataFrame]:
     return dfs
 
 
-def export_meta_tables(dfs: dict[str, pd.DataFrame], export_path: Path):
+def export_meta_tables(dfs: dict[str, pd.DataFrame], export_path: Path) -> None:
+    """
+    Save the dictionary of metadata tables (dfs) to CSV files in export_path.
+    """
+    export_path = Path(export_path)
+    if not export_path.exists():
+        raise ValueError(f"export_path {export_path} does not exist")
+    
     for tab in dfs.keys():
-        if tab not in dfs:  # BUG:?  can this ever be true
-            print(f"Table {tab} not found in dataset tables")
-            continue
-        dfs[tab].to_csv(os.path.join(export_path, f"{tab}.csv"))
-    else:
-        print(f"Exported {len(dfs)} tables to {export_path}")
-        return 1
-    return 0
+        table_path = export_path / f"{tab}.csv"
+        dfs[tab].to_csv(table_path, index=False)
+
 
 # depricate (there is a create_metadata_package in release_util.py) and this is no longer used
 # TODO: remove
