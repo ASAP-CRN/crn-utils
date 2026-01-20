@@ -90,9 +90,9 @@ def apply_field_moves(
         # Cross-table move
         else:
             if join_key is None:
-                raise ValueError(f"Join_Key must be provided for cross-table moves: {old_table}.{old_field} -> {new_table}.{new_field}")
+                raise ValueError(f"ERROR: Join_Key must be provided for cross-table moves: {old_table}.{old_field} -> {new_table}.{new_field}")
             if join_key not in src.columns or join_key not in dst.columns:
-                raise ValueError(f"WARNING: Join key '{join_key}' not found in source or destination table")
+                raise ValueError(f"ERROR: Join key '{join_key}' not found in source or destination table")
             
             # Create a mapping dict and apply
             mapper = dict(zip(src[join_key], src[old_field]))
