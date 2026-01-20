@@ -37,14 +37,16 @@ def get_field_transfer_map() -> pd.DataFrame:
     """
     
     transfers = [
-        # Format: [Old_Table, New_Table, Old_Field, New_Field]
-        ["SUBJECT", "SAMPLE", "age_at_collection", "age_at_collection"],
-        ["STUDY", "STUDY", "project_dataset", "dataset_name"],
-        ["CLINPATH", "CLINPATH", "path_infarcs", "path_infarcts"]
+        # Format: [Old_Table, New_Table, Old_Field, New_Field, Join_key (optional)]
+        # Join_key is only needed if mapping columns between tables
+        ["SUBJECT", "SAMPLE", "age_at_collection", "age_at_collection", "subject_id"],
+        ["STUDY", "STUDY", "project_dataset", "dataset_name", None],
+        ["CLINPATH", "CLINPATH", "path_infarcs", "path_infarcts", None]
         # Add more here as required
     ]
     
-    return pd.DataFrame(transfers, columns=["Old_Table", "New_Table", "Old_Field", "New_Field"])
+    transfer_df = pd.DataFrame(transfers, columns=["Old_Table", "New_Table", "Old_Field", "New_Field", "Join_Key"])
+    return transfer_df 
 
 
 def apply_field_moves(
@@ -52,7 +54,7 @@ def apply_field_moves(
     transfer_map: pd.DataFrame
 ) -> dict[str, pd.DataFrame]:
     """
-    Apply moves and same-table renames according to transfer_map.
+    Apply cross-table moves and same-table renames according to transfer_map.
     """
     # Make a copy to avoid mutating the input
     updated_tables = {k: v.copy() for k, v in tables.items()}
@@ -62,6 +64,7 @@ def apply_field_moves(
         new_table = row["New_Table"]
         old_field = row["Old_Field"]
         new_field = row["New_Field"]
+        join_key = row.get("Join_Key", None)
         
         # Check if both tables in the map exist in the provided tables
         if old_table not in updated_tables or new_table not in updated_tables:
@@ -77,18 +80,27 @@ def apply_field_moves(
             print(f"WARNING: Field '{old_field}' not found in '{old_table}', skipping transfer")
             continue
         
-        # Align the two tables and overwrite destination field
-        src_aligned = src[old_field].reindex(dst.index, fill_value=NULL)
-        dst[new_field] = src_aligned.values
-        print(f"Copied '{old_table}.{old_field}' -> '{new_table}.{new_field}'")
-        
-        # Remove the old field if its a rename in the same table (moves are
-        # handled by removing deprecated columns in update_table_columns)
-        if old_table == new_table and old_field != new_field:
-            dst = dst.drop(columns = [old_field])
-            print(f"Deprecated column '{old_table}.{old_field}' removed after rename")
-        
-        updated_tables[new_table] = dst
+        # Same-table rename
+        if old_table == new_table:
+            dst[new_field] = dst[old_field]
+            dst = dst.drop(columns=[old_field])
+            updated_tables[new_table] = dst
+            print(f"Renamed '{old_table}.{old_field}' -> '{old_table}.{new_field}'")
+            
+        # Cross-table move
+        else:
+            if join_key is None:
+                raise ValueError(f"ERROR: Join_Key must be provided for cross-table moves: {old_table}.{old_field} -> {new_table}.{new_field}")
+            if join_key not in src.columns or join_key not in dst.columns:
+                raise ValueError(f"ERROR: Join key '{join_key}' not found in source or destination table")
+            
+            # Create a mapping dict and apply
+            mapper = dict(zip(src[join_key], src[old_field]))
+            dst[new_field] = dst[join_key].map(mapper).fillna(NULL)
+            src = src.drop(columns=[old_field])
+            updated_tables[new_table] = dst
+            updated_tables[old_table] = src
+            print(f"Moved '{old_table}.{old_field}' -> '{new_table}.{new_field}'")
     
     return updated_tables
 
