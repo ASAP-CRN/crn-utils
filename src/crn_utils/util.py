@@ -476,8 +476,9 @@ def prep_table(df_in: pd.DataFrame, CDE: pd.DataFrame) -> pd.DataFrame:
 def load_tables(table_path: Path, tables: list[str]) -> dict[str, pd.DataFrame]:
     dfs = {}
     for tab in tables:
-        # print(f"loading {tab}")
-        dfs[tab] = read_meta_table(os.path.join(table_path, f"{tab}.csv"))
+        infile = os.path.join(table_path, f"{tab}.csv")
+        print(f"loading {infile}")
+        dfs[tab] = read_meta_table(infile)
     return dfs
 
 
@@ -522,7 +523,7 @@ def _create_metadata_package(metadata_source: Path, package_destination: Path):
             else:
                 dest = os.path.join(package_destination, folder.name)
                 # os.makedirs(dest, exist_ok=True)
-                shutil.copy2tree(folder, dest, dirs_exist_ok=True)
+                shutil.copytree(folder, dest, dirs_exist_ok=True)
 
                 print(f"Copied {folder} to {dest}")
                 copied.append(folder)
