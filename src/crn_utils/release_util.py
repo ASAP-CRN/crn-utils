@@ -55,9 +55,11 @@ def prep_release_metadata(dataset_id: str,
                           team: str,
                           modality: str,
                           cde_version: str,
+                          release_version: str,
                           metadata_dir: Path,
                           dataset_dir: Path,
-                          map_path: Path) -> None:
+                          map_path: Path
+                          ) -> None:
     """
     Prepares dataset metadata for release.
     
@@ -70,7 +72,7 @@ def prep_release_metadata(dataset_id: str,
       6. Inject GCP URIs into DATA (and SPATIAL if applicable)
       7. Export final release tables to {dataset_dir}/metadata/release/
     
-        Args:
+    Args:
         dataset_id: Full dataset identifier (e.g., "cragg-mouse-sn-rnaseq-striatum")
         source: Data source type ("pmdbs", "mouse", "invitro")
         team: Team name (e.g., "cragg")
@@ -159,8 +161,7 @@ def prep_release_metadata(dataset_id: str,
         )
     
     #  ---- Exporting updated metadata tables ----
-    # TODO: we will be changing from saving directly into release/
-    out_dir = dataset_dir / "metadata" / "release"
+    out_dir = dataset_dir / "metadata" / "release" / release_version
     out_dir.mkdir(parents=False, exist_ok=True)
     logging.info(f"Exporting updated metadata tables into {out_dir}...")
     
