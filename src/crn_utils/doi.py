@@ -56,7 +56,6 @@ def setup_DOI_info(
     study_df = read_meta_table(os.path.join(ds_path, "metadata/STUDY.csv"))
     ingest_DOI_doc(ds_path, doi_doc_path, study_df, publication_date=publication_date)
     make_readme_file(ds_path)
-    update_study_table(ds_path)
 
 
 def ingest_DOI_doc(
@@ -457,26 +456,6 @@ def make_pdf_file(html_content: str, output_filepath: str | Path):
         )
 
     return not pisa_status.err  # True if conversion was successful
-
-
-def update_study_table(ds_path: str | Path):
-    """ """
-    ds_path = Path(ds_path)
-    metadata_path = os.path.join(ds_path, "metadata")
-    STUDY = read_meta_table(os.path.join(metadata_path, "STUDY.csv"))
-
-    # load jsons
-    doi_path = os.path.join(ds_path, "DOI")
-    with open(os.path.join(doi_path, f"project.json"), "r") as f:
-        data = json.load(f)
-    # data = clean_json_read(doi_path / f"project.json")
-
-    STUDY["project_name"] = data["project_name"]
-    STUDY["project_description"] = data["project_description"]
-    STUDY["dataset_title"] = data["dataset_title"]
-    STUDY["dataset_description"] = data["dataset_description"]
-    # export STUDY
-    STUDY.to_csv(os.path.join(metadata_path, "STUDY.csv"), index=False)
 
 
 def setup_zenodo(sandbox: bool = None):
