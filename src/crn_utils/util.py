@@ -473,13 +473,19 @@ def prep_table(df_in: pd.DataFrame, CDE: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def load_tables(table_path: Path, tables: list[str]) -> dict[str, pd.DataFrame]:
-    dfs = {}
-    for tab in tables:
-        infile = os.path.join(table_path, f"{tab}.csv")
-        print(f"loading {infile}")
-        dfs[tab] = read_meta_table(infile)
-    return dfs
+def load_tables(table_dir: Path, table_names: list[str]) -> dict[str, pd.DataFrame]:
+    """
+    Load the specified metadata tables from table_path into a dictionary of DataFrames.
+    """
+    table_dir = Path(table_dir)
+    tables = {}
+    for tab in table_names:
+        table_path = table_dir / f"{tab}.csv"
+        if not table_path.exists():
+            raise FileNotFoundError(f"Table file not found: {table_path}")
+        tables[tab] = read_meta_table(table_path)
+    
+    return tables
 
 
 def export_meta_tables(dfs: dict[str, pd.DataFrame], export_path: Path) -> None:
