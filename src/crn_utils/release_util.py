@@ -66,11 +66,10 @@ def prep_release_metadata(dataset_id: str,
     Workflow:
       1. Load staged metadata tables from metadata_dir
       2. Inject ASAP IDs from master ID mappers
-      3. Fetch and save file metadata from GCP raw bucket
+      3. Fetch and save file metadata and GCP URIs from GCP raw bucket
       4. Merge file metadata with DATA table
-      5. Inject DOI into STUDY table
-      6. Inject GCP URIs into DATA (and SPATIAL if applicable)
-      7. Export final release tables to {dataset_dir}/metadata/release/
+      5. Inject DOI and project info from intake docx into STUDY table
+      6. Export final release tables to {dataset_dir}/metadata/release/{release_version}/
     
     Args:
         dataset_id: Full dataset identifier (e.g., "cragg-mouse-sn-rnaseq-striatum")
@@ -78,9 +77,11 @@ def prep_release_metadata(dataset_id: str,
         team: Team name (e.g., "cragg")
         modality: Assay modality (e.g., "rna", "spatial")
         cde_version: CDE schema version (e.g., "v3.3")
+        release_version: CRN release version (e.g., "v4.0.1")
         metadata_dir: Path to metadata directory
         dataset_dir: Path to dataset directory
     """
+    
     # ---- Load metadata tables ----
     logging.info(f"Loading metadata tables from {metadata_dir}...")
     expected_tables = list_expected_metadata_tables(source, modality)
@@ -96,7 +97,7 @@ def prep_release_metadata(dataset_id: str,
     # Mappers assign a dataset ID and associate contributor IDs to ASAP IDs
     id_mappers = load_all_id_mappers(map_path, source)
     
-    # TODO: refactor/rename: this gets the fields to be updated with ASAP IDs
+    # Isolate the CDE fields to be updated with ASAP IDs
     asap_ids_df = read_CDE_asap_ids(schema_version=cde_version)
     asap_ids_schema = asap_ids_df[["Table", "Field"]]
     
@@ -110,13 +111,13 @@ def prep_release_metadata(dataset_id: str,
         asap_ids_schema=asap_ids_schema,
         expected_tables=expected_tables)
     
-    # ---- Generating and and inserting file metadata ----
+    # ---- Generating contents of file_metadata/ and inserting into DATA ----
     logging.info("Generating and inserting file metadata...")
     
     file_metadata_path = dataset_dir / "file_metadata"
     file_metadata_path.mkdir(exist_ok=True)
     
-    # Generates intermediate file metadata files after querying the raw bucket
+    # Saves intermediate raw bucket summary files to file_metadata/
     raw_bucket_name = f"asap-raw-team-{dataset_id}"
     
     gen_raw_bucket_summary(
@@ -141,12 +142,7 @@ def prep_release_metadata(dataset_id: str,
         spatial=(modality == "spatial")
     )
     
-    # Inserting DOIs and GCP URIs from the generated file metadata
-    updated_meta_tables["STUDY"] = update_study_table_with_doi(
-        study_df=updated_meta_tables["STUDY"],
-        ds_path=dataset_dir
-    )
-    
+    # Inserting GCP URIs from the generated file metadata
     updated_meta_tables["DATA"] = update_data_table_with_gcp_uri(
         data_df=updated_meta_tables["DATA"],
         ds_path=dataset_dir
@@ -159,6 +155,12 @@ def prep_release_metadata(dataset_id: str,
             ds_path=dataset_dir,
             visium=is_visium
         )
+        
+    # ---- Inserting DOI/project informatioin into STUDY ----
+    updated_meta_tables["STUDY"] = update_study_table_with_doi(
+        study_df=updated_meta_tables["STUDY"],
+        ds_path=dataset_dir
+    )
     
     #  ---- Exporting updated metadata tables ----
     out_dir = dataset_dir / "metadata" / "release" / release_version
