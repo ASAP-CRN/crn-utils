@@ -56,7 +56,6 @@ def setup_DOI_info(
     study_df = read_meta_table(os.path.join(ds_path, "metadata/STUDY.csv"))
     ingest_DOI_doc(ds_path, doi_doc_path, study_df, publication_date=publication_date)
     make_readme_file(ds_path)
-    update_study_table(ds_path)
 
 
 def ingest_DOI_doc(
@@ -459,26 +458,6 @@ def make_pdf_file(html_content: str, output_filepath: str | Path):
     return not pisa_status.err  # True if conversion was successful
 
 
-def update_study_table(ds_path: str | Path):
-    """ """
-    ds_path = Path(ds_path)
-    metadata_path = os.path.join(ds_path, "metadata")
-    STUDY = read_meta_table(os.path.join(metadata_path, "STUDY.csv"))
-
-    # load jsons
-    doi_path = os.path.join(ds_path, "DOI")
-    with open(os.path.join(doi_path, f"project.json"), "r") as f:
-        data = json.load(f)
-    # data = clean_json_read(doi_path / f"project.json")
-
-    STUDY["project_name"] = data["project_name"]
-    STUDY["project_description"] = data["project_description"]
-    STUDY["dataset_title"] = data["dataset_title"]
-    STUDY["dataset_description"] = data["dataset_description"]
-    # export STUDY
-    STUDY.to_csv(os.path.join(metadata_path, "STUDY.csv"), index=False)
-
-
 def setup_zenodo(sandbox: bool = None):
     """Setup zenodo client.
 
@@ -778,24 +757,32 @@ def archive_deposition_local(ds_path: Path, arch_name: str, deposition: dict):
 
 
 def update_study_table_with_doi(study_df: pd.DataFrame, ds_path: str | Path):
-    """ """
+    """ 
+    Update STUDY table with DOI and project metadata from project.json
+    """
     ds_path = Path(ds_path)
-    metadata_path = os.path.join(ds_path, "metadata")
-    STUDY = read_meta_table(os.path.join(metadata_path, "STUDY.csv"))
-
-    # load jsons
-    doi_path = os.path.join(ds_path, "DOI")
-
-    with open(os.path.join(doi_path, "dataset.doi"), "r") as f:
+    doi_path = ds_path / "DOI"
+   
+    # Read DOIs
+    with open(doi_path / "dataset.doi", "r") as f:
         ds_doi = f.read().strip()
     study_df["dataset_DOI"] = ds_doi
     study_df["dataset_DOI_url"] = f"https://doi.org/{ds_doi}"
-
-    # get dataset version from version file
-    with open(os.path.join(ds_path, "version"), "r") as f:
+    
+    # Read dataset version
+    with open(ds_path / "version", "r") as f:
         ds_ver = f.read().strip()
     study_df["dataset_version"] = ds_ver
-
+    
+    # Read project.json and inject into STUDY
+    with open(doi_path / "project.json", "r") as f:
+        project_data = json.load(f)
+        
+    study_df["project_name"] = project_data["project_name"]
+    study_df["project_description"] = project_data["project_description"]
+    study_df["dataset_title"] = project_data["dataset_title"]
+    study_df["dataset_description"] = project_data["dataset_description"]
+    
     return study_df
 
 
