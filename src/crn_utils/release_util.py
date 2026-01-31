@@ -175,7 +175,9 @@ def prep_release_metadata(dataset_id: str,
     logging.info(f"Exporting release metadata tables to [{out_dir}]...")
     
     export_meta_tables(updated_meta_tables, out_dir)
-    write_version(cde_version, (out_dir / "cde_version"))
+    
+    version_info = f"CDE_VERSION={cde_version}\nRELEASE_VERSION={release_version}\n"
+    (out_dir / "VERSION").write_text(version_info)
     
     logging.info(f"Release metadata saved: {len(updated_meta_tables)} tables written to [{out_dir}]")
 
