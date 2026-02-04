@@ -1,4 +1,5 @@
 import os
+import logging
 import pandas as pd
 from pathlib import Path
 import argparse
@@ -28,6 +29,9 @@ __all__ = [
     "v2_to_v3_PMDBS",
     "update_metadata_to_version",
 ]
+
+
+log = logging.getLogger(__name__)
 
 
 def get_field_transfer_map() -> pd.DataFrame:
@@ -67,18 +71,15 @@ def apply_field_moves(
         new_field = row["New_Field"]
         join_key = row.get("Join_Key", None)
         
-        # Check if both tables in the map exist in the provided tables
+        # Pass if the table is not part of this dataset
         if old_table not in updated_tables or new_table not in updated_tables:
-            print(
-                f"WARNING: Cannot transfer '{old_field}' -> {new_field} - missing table "
-                f"(Old: {old_table in updated_tables}, New: {new_table in updated_tables})")
             continue
         
         src = updated_tables[old_table]
         dst = updated_tables[new_table]
         
+        # Pass if the outdated field is not present in the old table
         if old_field not in src.columns:
-            print(f"WARNING: Field '{old_field}' not found in '{old_table}', skipping transfer")
             continue
         
         # Same-table rename
@@ -86,7 +87,7 @@ def apply_field_moves(
             dst[new_field] = dst[old_field]
             dst = dst.drop(columns=[old_field])
             updated_tables[new_table] = dst
-            print(f"Renamed '{old_table}.{old_field}' -> '{old_table}.{new_field}'")
+            log.info(f"Renamed '{old_table}.{old_field}' -> '{old_table}.{new_field}'")
             
         # Cross-table move
         else:
@@ -101,7 +102,7 @@ def apply_field_moves(
             src = src.drop(columns=[old_field])
             updated_tables[new_table] = dst
             updated_tables[old_table] = src
-            print(f"Moved '{old_table}.{old_field}' -> '{new_table}.{new_field}'")
+            log.info(f"Moved '{old_table}.{old_field}' -> '{new_table}.{new_field}'")
     
     return updated_tables
 
@@ -168,7 +169,7 @@ def apply_table_update_map(
             # 1:1 rename where new table doesn't exist (MOUSE -> SUBJECT)
             if new_table not in tables:
                 updated_tables[new_table] = source_dfs[0].copy()
-                print(f"Renamed '{old_table}' -> {new_table}'")
+                log.info(f"Renamed '{old_table}' -> {new_table}'")
                 
             # Merge into existing table (PMDBS -> SAMPLE)
             else:
@@ -183,7 +184,7 @@ def apply_table_update_map(
                     on=join_key, 
                     how="outer"
                 )
-                print(f"Merged '{old_table}' -> '{new_table}' (joined on '{join_key}')")
+                log.info(f"Merged '{old_table}' -> '{new_table}' (joined on '{join_key}')")
             
         # Multiple source tables (SPATIAL + ASSAY_RNAseq -> ASSAY)
         else:
@@ -197,7 +198,7 @@ def apply_table_update_map(
                                                  on=join_key, 
                                                  how="outer"
                                                 )
-            print(f"Merged '{', '.join(old_tables_exist)}' -> '{new_table}' (joined on '{join_key}')")
+            log.info(f"Merged '{', '.join(old_tables_exist)}' -> '{new_table}' (joined on '{join_key}')")
             
     # Remove old tables that have been processed
     for old_table in remove_tables:
@@ -221,8 +222,9 @@ def update_table_columns(
     - Columns that are in the new CDE but not the old CDE will be added as empty
     - Columns that are in neither CDE but are present in the current table will be kept as-is
     """
-    old_cols = old_cde[old_cde["Table"] == table_name]["Field"].tolist()
-    new_cols = new_cde[new_cde["Table"] == table_name]["Field"].tolist()
+    # Only get the non-assigned columns for the specific table
+    old_cols = old_cde[(old_cde["Table"] == table_name) & (old_cde["Required"] != "Assigned")]["Field"].tolist()
+    new_cols = new_cde[(new_cde["Table"] == table_name) & (new_cde["Required"] != "Assigned")]["Field"].tolist()
     
     old_cols_set = set(old_cols)
     new_cols_set = set(new_cols)
@@ -234,19 +236,19 @@ def update_table_columns(
     deprecated_cols = old_cols_set - new_cols_set
     deprecated_cols = deprecated_cols.intersection(current_cols_set)
     if deprecated_cols:
-        print(f"Deprecated columns for {table_name} will be removed: {', '.join(sorted(deprecated_cols))}")
+        log.info(f"Deprecated columns for {table_name} will be removed: {', '.join(sorted(deprecated_cols))}")
     
     # Add columns that are in the new CDE but not already present after transfer 
     cols_to_add = new_cols_set - current_cols_set
     if cols_to_add:
-        print(f"New columns for {table_name} will be added: {', '.join(sorted(cols_to_add))}")
+        log.info(f"New columns for {table_name} will be added: {', '.join(sorted(cols_to_add))}")
         for col in cols_to_add:
             updated_table[col] = NULL
     
     # Log columns that are in current table but neither CDE - these will be kept
     extra_cols = current_cols_set - old_cols_set - new_cols_set
     if extra_cols:
-        print(f"Extra columns for {table_name} will be kept as-is: {', '.join(sorted(extra_cols))}")
+        log.info(f"Extra columns for {table_name} will be kept as-is: {', '.join(sorted(extra_cols))}")
     
     # Preserve column order of old table
     final_cols = [col for col in updated_table.columns if col not in deprecated_cols]
