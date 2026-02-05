@@ -43,37 +43,28 @@ SUPPORTED_CDE_VERSIONS = [
 
 
 
-def list_expected_metadata_tables(source: str, 
-                                  modality: str = "rna") -> list[str]:
+# TODO: This will be deprecated in favor of call to list tables by source/species/assay
+def list_expected_metadata_tables() -> list[str]:
     """
-    Return the expected metadata table names associated with source and modality
+    This returns a list of all CRN metadata tables
     """
-    valid_sources = {"pmdbs", "mouse", "human", "invitro"}
-    valid_modals = {"rna", "spatial", "proteomics", "atac", "metagenomics"}
-    
-    if source not in valid_sources:
-        raise ValueError(f"source must be one of {valid_sources}")
-    
-    if modality not in valid_modals:
-        raise ValueError(f"modality must be one of {valid_modals}")
-    
-    common = ["STUDY", "PROTOCOL", "SAMPLE", "DATA", "CONDITION"]
-
-    lookup_source = {
-        "mouse": common + ["MOUSE"],
-        "pmdbs": common + ["PMDBS", "SUBJECT", "CLINPATH"],
-        "invitro": common + ["CELL"],
-    }
-    
-    lookup_modality = {
-        "rna": ["ASSAY_RNAseq"],
-        "spatial": ["ASSAY_RNAseq", "SPATIAL"],
-        "proteomics": ["PROTEOMICS", "SDRF"],
-    }
-    
-    tables = lookup_source[source].copy()
-    tables.extend(lookup_modality[modality])
-    
+    tables = [
+        "STUDY",
+        "PROTOCOL",
+        "SUBJECT",
+        "SAMPLE",
+        "ASSAY_RNAseq",
+        "DATA",
+        "PMDBS",
+        "CLINPATH",
+        "CONDITION",
+        "MOUSE",
+        "SPATIAL",
+        "CELL",
+        "PROTEOMICS",
+        "SDRF"
+    ]
+        
     return tables
 
 
