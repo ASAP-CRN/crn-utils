@@ -30,6 +30,7 @@ from .file_metadata import (
 )
 from .constants import *
 from .doi import update_study_table_with_doi
+from .google_spreadsheets import read_google_sheet
 
 __all__ = [
     "prep_release_metadata",
@@ -82,9 +83,12 @@ def prep_release_metadata(dataset_id: str,
         dataset_dir: Path to dataset directory
     """
     
-    # ---- Load metadata tables ----
+    # ---- Load metadata tables ----    
     logging.info(f"Loading metadata tables from {metadata_dir}...")
-    expected_tables = list_expected_metadata_tables(source, modality)
+    
+    # TODO: This is a temporary heuristic as we move away from list_expected_metadata_table()
+    present_files = [f.stem for f in metadata_dir.glob("*.csv")]
+    expected_tables = [t for t in list_expected_metadata_tables() if t in present_files]
     meta_tables = load_tables(metadata_dir, expected_tables)
     
     logging.info(f"Loaded {len(meta_tables)} metadata tables: {', '.join(meta_tables.keys())}")
@@ -94,7 +98,11 @@ def prep_release_metadata(dataset_id: str,
     
 
     id_mappers = load_all_id_mappers(map_path, source)
-    asap_ids_df = read_CDE_asap_ids(schema_version=cde_version)
+    
+    # TODO: This is a temporary heuristic until read_CDE() is updated for googlesheets
+    # asap_ids_df = read_CDE_asap_ids(schema_version=cde_version)
+    asap_ids_df = read_google_sheet("1c0z5KvRELdT2AtQAH2Dus8kwAyyLrR0CROhKOjpU4Vc", tab_name=cde_version)
+    asap_ids_df = asap_ids_df[asap_ids_df["Required"] == "Assigned"]
     asap_ids_schema = asap_ids_df[["Table", "Field"]]
     
     updated_meta_tables = update_meta_tables_with_asap_ids(
