@@ -46,7 +46,9 @@ def get_field_transfer_map() -> pd.DataFrame:
         # Join_key is only needed if mapping columns between tables
         ["SUBJECT", "SAMPLE", "age_at_collection", "age_at_collection", "subject_id"],
         ["STUDY", "STUDY", "project_dataset", "dataset_name", None],
-        ["CLINPATH", "CLINPATH", "path_infarcs", "path_infarcts", None]
+        ["CLINPATH", "CLINPATH", "path_infarcs", "path_infarcts", None],
+        ["ASSAY", "ASSAY", "sequencing_instrument", "instrument", None]
+        
         # Add more here as required
     ]
     
@@ -261,8 +263,6 @@ def update_metadata_to_version(
     tables: dict[str, pd.DataFrame],
     old_cde_version: str,
     new_cde_version: str,
-    source: str,
-    modality: str,
 ) -> dict[str, pd.DataFrame]:
     """
     Update tables from old CDE version to new CDE version
