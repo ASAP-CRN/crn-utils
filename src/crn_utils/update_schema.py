@@ -36,20 +36,58 @@ log = logging.getLogger(__name__)
 
 def get_field_transfer_map() -> pd.DataFrame:
     """
-    Dataframe that defines old -> new mappings (moves and same-table renames).
-    - Pure move: Old_Field == New_Field
-    - Same-table rename: Old_Table == New_Table and Old_Field != New_Field
+    Dataframe that defines field mappings between old (CDE v3.x) and new (CDE v4.x) schemas.
+    Handles two types of transformations:
+    which can be moving fields between tables or renaming a field within a table.
+    - Cross-table move: Field moves from one table to another (Old_Table != New_Table)
+    - Same-table rename: Field is renamed within the same table (Old_Table == New_Table)
+    
+    !!!IMPORTANT!!! 
+    Field transfer happens AFTER table consolidation. This means Old_Table and 
+    New_Table must refer to POST-CONSOLIDATION table names.
+    
+    Example workflow for ASSAY_RNAseq.sequencing_instrument -> ASSAY.instrument:
+    
+    1. BEFORE field transfer (after table consolidation):
+       - ASSAY_RNAseq -> ASSAY (via get_table_update_map)
+       - Result: ASSAY table has column "sequencing_instrument"
+    
+    2. Field transfer entry:
+       - ["ASSAY", "ASSAY", "sequencing_instrument", "instrument", None]
+       - Old_Table = "ASSAY" (NOT "ASSAY_RNAseq" - consolidation already happened!)
+       - This is a same-table rename
+    
+    3. AFTER field transfer:
+       - Result: ASSAY table has column "instrument"
+    
+    Example for SUBJECT.age_at_collection -> SAMPLE.age_at_collection:
+    
+    1. BEFORE field transfer (after table consolidation):
+       - SUBJECT table has column "age_at_collection"
+       - SAMPLE table exists
+    
+    2. Field transfer entry:
+       - ["SUBJECT", "SAMPLE", "age_at_collection", "age_at_collection", "subject_id"]
+       - This is a cross-table move, so Join_Key is required
+    
+    3. AFTER field transfer:
+       - SUBJECT table no longer has "age_at_collection"
+       - SAMPLE table has new column "age_at_collection" (values mapped via subject_id) 
     """
     
     transfers = [
-        # Format: [Old_Table, New_Table, Old_Field, New_Field, Join_key (optional)]
-        # Join_key is only needed if mapping columns between tables
+        # Format: [Old_Table, New_Table, Old_Field, New_Field, Join_key]
+        # Join_key is required for cross-table moves, None for same-table renames
+        
+        # Cross-table move
         ["SUBJECT", "SAMPLE", "age_at_collection", "age_at_collection", "subject_id"],
+        
+        # Same-table renames
         ["STUDY", "STUDY", "project_dataset", "dataset_name", None],
         ["CLINPATH", "CLINPATH", "path_infarcs", "path_infarcts", None],
-        ["ASSAY", "ASSAY", "sequencing_instrument", "instrument", None]
+        ["ASSAY", "ASSAY", "sequencing_instrument", "instrument", None],
         
-        # Add more here as required
+        # Add more as needed
     ]
     
     transfer_df = pd.DataFrame(transfers, columns=["Old_Table", "New_Table", "Old_Field", "New_Field", "Join_Key"])
@@ -112,6 +150,8 @@ def apply_field_moves(
 def get_table_update_map() -> dict:
     """
     CDE 4.X+ consolidated tables, this maps the old to new table names
+    
+    IMPORTANT: Table map happens BEFORE field/column map
     """
     table_map = {
         "MOUSE": "SUBJECT",
@@ -275,7 +315,7 @@ def update_metadata_to_version(
     5. Filter to only expected tables for given source/modality
     
     IMPORTANT: Table mapping (MOUSE -> SUBJECT) happens BEFORE field transfers/
-    renames, so the field transfer map must refer to the final table names.
+    renames, so the field transfer map must refer to the final target table names.
     """
     # TODO: replace when read_CDE() updated
     # old_cde = read_CDE(old_cde_version)
