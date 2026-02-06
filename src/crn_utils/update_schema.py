@@ -1,4 +1,5 @@
 import os
+import logging
 import pandas as pd
 from pathlib import Path
 import argparse
@@ -14,6 +15,7 @@ from .util import (
 )
     
 from .validate import validate_table, create_valid_table
+from crn_utils.google_spreadsheets import read_google_sheet
 
 __all__ = [
     "update_tables_v3_0_to_3_2",
@@ -29,20 +31,63 @@ __all__ = [
 ]
 
 
+log = logging.getLogger(__name__)
+
+
 def get_field_transfer_map() -> pd.DataFrame:
     """
-    Dataframe that defines old -> new mappings (moves and same-table renames).
-    - Pure move: Old_Field == New_Field
-    - Same-table rename: Old_Table == New_Table and Old_Field != New_Field
+    Dataframe that defines field mappings between old (CDE v3.x) and new (CDE v4.x) schemas.
+    Handles two types of transformations:
+    which can be moving fields between tables or renaming a field within a table.
+    - Cross-table move: Field moves from one table to another (Old_Table != New_Table)
+    - Same-table rename: Field is renamed within the same table (Old_Table == New_Table)
+    
+    !!!IMPORTANT!!! 
+    Field transfer happens AFTER table consolidation. This means Old_Table and 
+    New_Table must refer to POST-CONSOLIDATION table names.
+    
+    Example workflow for ASSAY_RNAseq.sequencing_instrument -> ASSAY.instrument:
+    
+    1. BEFORE field transfer (after table consolidation):
+       - ASSAY_RNAseq -> ASSAY (via get_table_update_map)
+       - Result: ASSAY table has column "sequencing_instrument"
+    
+    2. Field transfer entry:
+       - ["ASSAY", "ASSAY", "sequencing_instrument", "instrument", None]
+       - Old_Table = "ASSAY" (NOT "ASSAY_RNAseq" - consolidation already happened!)
+       - This is a same-table rename
+    
+    3. AFTER field transfer:
+       - Result: ASSAY table has column "instrument"
+    
+    Example for SUBJECT.age_at_collection -> SAMPLE.age_at_collection:
+    
+    1. BEFORE field transfer (after table consolidation):
+       - SUBJECT table has column "age_at_collection"
+       - SAMPLE table exists
+    
+    2. Field transfer entry:
+       - ["SUBJECT", "SAMPLE", "age_at_collection", "age_at_collection", "subject_id"]
+       - This is a cross-table move, so Join_Key is required
+    
+    3. AFTER field transfer:
+       - SUBJECT table no longer has "age_at_collection"
+       - SAMPLE table has new column "age_at_collection" (values mapped via subject_id) 
     """
     
     transfers = [
-        # Format: [Old_Table, New_Table, Old_Field, New_Field, Join_key (optional)]
-        # Join_key is only needed if mapping columns between tables
+        # Format: [Old_Table, New_Table, Old_Field, New_Field, Join_key]
+        # Join_key is required for cross-table moves, None for same-table renames
+        
+        # Cross-table move
         ["SUBJECT", "SAMPLE", "age_at_collection", "age_at_collection", "subject_id"],
+        
+        # Same-table renames
         ["STUDY", "STUDY", "project_dataset", "dataset_name", None],
-        ["CLINPATH", "CLINPATH", "path_infarcs", "path_infarcts", None]
-        # Add more here as required
+        ["CLINPATH", "CLINPATH", "path_infarcs", "path_infarcts", None],
+        ["ASSAY", "ASSAY", "sequencing_instrument", "instrument", None],
+        
+        # Add more as needed
     ]
     
     transfer_df = pd.DataFrame(transfers, columns=["Old_Table", "New_Table", "Old_Field", "New_Field", "Join_Key"])
@@ -66,18 +111,15 @@ def apply_field_moves(
         new_field = row["New_Field"]
         join_key = row.get("Join_Key", None)
         
-        # Check if both tables in the map exist in the provided tables
+        # Pass if the table is not part of this dataset
         if old_table not in updated_tables or new_table not in updated_tables:
-            print(
-                f"WARNING: Cannot transfer '{old_field}' -> {new_field} - missing table "
-                f"(Old: {old_table in updated_tables}, New: {new_table in updated_tables})")
             continue
         
         src = updated_tables[old_table]
         dst = updated_tables[new_table]
         
+        # Pass if the outdated field is not present in the old table
         if old_field not in src.columns:
-            print(f"WARNING: Field '{old_field}' not found in '{old_table}', skipping transfer")
             continue
         
         # Same-table rename
@@ -85,7 +127,7 @@ def apply_field_moves(
             dst[new_field] = dst[old_field]
             dst = dst.drop(columns=[old_field])
             updated_tables[new_table] = dst
-            print(f"Renamed '{old_table}.{old_field}' -> '{old_table}.{new_field}'")
+            log.info(f"Renamed '{old_table}.{old_field}' -> '{old_table}.{new_field}'")
             
         # Cross-table move
         else:
@@ -100,7 +142,110 @@ def apply_field_moves(
             src = src.drop(columns=[old_field])
             updated_tables[new_table] = dst
             updated_tables[old_table] = src
-            print(f"Moved '{old_table}.{old_field}' -> '{new_table}.{new_field}'")
+            log.info(f"Moved '{old_table}.{old_field}' -> '{new_table}.{new_field}'")
+    
+    return updated_tables
+
+
+def get_table_update_map() -> dict:
+    """
+    CDE 4.X+ consolidated tables, this maps the old to new table names
+    
+    IMPORTANT: Table map happens BEFORE field/column map
+    """
+    table_map = {
+        "MOUSE": "SUBJECT",
+        "CELL": "SUBJECT",
+        "PMDBS": "SAMPLE",
+        "ASSAY_RNAseq": "ASSAY",
+        "SPATIAL": "ASSAY",
+        "PROTEOMICS": "ASSAY",
+        # "SDRF": "ASSAY"  # Currently not in CDE 4.1
+    }
+    
+    return table_map
+
+
+def apply_table_update_map(
+    tables: dict[str, pd.DataFrame],
+    table_update_map: dict,
+    join_key: str = "sample_id",
+) -> dict[str, pd.DataFrame]:
+    """
+    Rename or merge old tables according to table_update_map.
+    
+    Handles 3 scenarios:
+    1. Simple 1:1 rename: (MOUSE -> SUBJECT, SUBJECT doesn't exist)
+    2. Merge into existing table: (PMDBS -> SAMPLE, SAMPLE already exists)
+    3. Merge two tables into one (SPATIAL + ASSAY_RNAseq -> ASSAY)
+    """
+    # Initiate with existing tables and track of tables to remove after processing
+    updated_tables = {k: v.copy() for k, v in tables.items()}
+    remove_tables = set()
+    
+    # Group old tables by their target new table ("ASSAY": ["SPATIAL", "ASSAY_RNAseq"])
+    new_to_old = {}
+    for old_table, new_table in table_update_map.items():
+        if new_table not in new_to_old:
+            new_to_old[new_table] = []
+        new_to_old[new_table].append(old_table)
+        
+    # Process each table, merging or renaming old -> new as needed
+    for new_table, old_tables_possible in new_to_old.items():
+        
+        # Collect the source/old table names that exist in the dataset
+        old_tables_exist = [t for t in old_tables_possible if t in tables]
+        
+        if not old_tables_exist:
+            continue
+
+        source_dfs = []  # Holds the actual tables
+        for old_table in old_tables_exist:
+            source_dfs.append(tables[old_table])
+            remove_tables.add(old_table)
+
+        # One source table: either rename or merge into existing
+        if len(source_dfs) == 1:  
+            old_table = old_tables_exist[0]
+            
+            # 1:1 rename where new table doesn't exist (MOUSE -> SUBJECT)
+            if new_table not in tables:
+                updated_tables[new_table] = source_dfs[0].copy()
+                log.info(f"Renamed '{old_table}' -> {new_table}'")
+                
+            # Merge into existing table (PMDBS -> SAMPLE)
+            else:
+                if join_key not in source_dfs[0].columns:
+                    raise ValueError(f"Join key {join_key} not found in {old_table}")
+                if join_key not in tables[new_table].columns:
+                    raise ValueError(f"ERROR: Join key '{join_key}' not found in {old_table}")
+            
+                updated_tables[new_table] = pd.merge(
+                    updated_tables[new_table], 
+                    source_dfs[0], 
+                    on=join_key, 
+                    how="outer"
+                )
+                log.info(f"Merged '{old_table}' -> '{new_table}' (joined on '{join_key}')")
+            
+        # Multiple source tables (SPATIAL + ASSAY_RNAseq -> ASSAY)
+        else:
+            if join_key not in source_dfs[0].columns:
+                raise ValueError(f"Join key {join_key} not found in {old_tables_exist[0]}") 
+            if join_key not in source_dfs[1].columns:
+                raise ValueError(f"Join key {join_key} not found in {old_tables_exist[1]}") 
+            
+            updated_tables[new_table] = pd.merge(source_dfs[0], 
+                                                 source_dfs[1], 
+                                                 on=join_key, 
+                                                 how="outer"
+                                                )
+            log.info(f"Merged '{', '.join(old_tables_exist)}' -> '{new_table}' (joined on '{join_key}')")
+            
+    # Remove old tables that have been processed
+    for old_table in remove_tables:
+        if old_table in updated_tables:
+            del updated_tables[old_table]
     
     return updated_tables
 
@@ -119,8 +264,9 @@ def update_table_columns(
     - Columns that are in the new CDE but not the old CDE will be added as empty
     - Columns that are in neither CDE but are present in the current table will be kept as-is
     """
-    old_cols = old_cde[old_cde["Table"] == table_name]["Field"].tolist()
-    new_cols = new_cde[new_cde["Table"] == table_name]["Field"].tolist()
+    # Only get the non-assigned columns for the specific table
+    old_cols = old_cde[(old_cde["Table"] == table_name) & (old_cde["Required"] != "Assigned")]["Field"].tolist()
+    new_cols = new_cde[(new_cde["Table"] == table_name) & (new_cde["Required"] != "Assigned")]["Field"].tolist()
     
     old_cols_set = set(old_cols)
     new_cols_set = set(new_cols)
@@ -132,19 +278,19 @@ def update_table_columns(
     deprecated_cols = old_cols_set - new_cols_set
     deprecated_cols = deprecated_cols.intersection(current_cols_set)
     if deprecated_cols:
-        print(f"Deprecated columns for {table_name} will be removed: {', '.join(sorted(deprecated_cols))}")
+        log.info(f"Deprecated columns for {table_name} will be removed: {', '.join(sorted(deprecated_cols))}")
     
     # Add columns that are in the new CDE but not already present after transfer 
     cols_to_add = new_cols_set - current_cols_set
     if cols_to_add:
-        print(f"New columns for {table_name} will be added: {', '.join(sorted(cols_to_add))}")
+        log.info(f"New columns for {table_name} will be added: {', '.join(sorted(cols_to_add))}")
         for col in cols_to_add:
             updated_table[col] = NULL
     
     # Log columns that are in current table but neither CDE - these will be kept
     extra_cols = current_cols_set - old_cols_set - new_cols_set
     if extra_cols:
-        print(f"Extra columns for {table_name} will be kept as-is: {', '.join(sorted(extra_cols))}")
+        log.info(f"Extra columns for {table_name} will be kept as-is: {', '.join(sorted(extra_cols))}")
     
     # Preserve column order of old table
     final_cols = [col for col in updated_table.columns if col not in deprecated_cols]
@@ -157,50 +303,50 @@ def update_metadata_to_version(
     tables: dict[str, pd.DataFrame],
     old_cde_version: str,
     new_cde_version: str,
-    source: str,
-    modality: str,
 ) -> dict[str, pd.DataFrame]:
     """
-    For a given set of metadata tables and their associated old CDE version,
-    update the tables to match the new CDE version.
-    Notes on behavior:
-    - Tables that are in the old CDE but not the new CDE will be removed
-    - Tables that are in the new CDE but not the old CDE will be created as an empty table
-    - Tables that are in neither CDE but are present in the current set will be removed
-    - Fields explicitly mapped in get_field_transfer_map will have their data transferred
-    """
-    expected_tables = list_expected_metadata_tables(source, modality)
-    current_tables = list(tables.keys())
- 
-    old_cde = read_CDE(old_cde_version)
-    new_cde = read_CDE(new_cde_version)
+    Update tables from old CDE version to new CDE version
     
-    # Transfer any fields that have moved between tables
+    Workflow:
+    1. Load old and new CDE
+    2. Apply table merges or renames
+    3. Apply field transfers between tables or renames within tables
+    4. Update table columns (add missing, remove deprecated)
+    5. Filter to only expected tables for given source/modality
+    
+    IMPORTANT: Table mapping (MOUSE -> SUBJECT) happens BEFORE field transfers/
+    renames, so the field transfer map must refer to the final target table names.
+    """
+    # TODO: replace when read_CDE() updated
+    # old_cde = read_CDE(old_cde_version)
+    # new_cde = read_CDE(new_cde_version)
+    old_cde = read_google_sheet("1c0z5KvRELdT2AtQAH2Dus8kwAyyLrR0CROhKOjpU4Vc", tab_name=old_cde_version)
+    new_cde = read_google_sheet("1c0z5KvRELdT2AtQAH2Dus8kwAyyLrR0CROhKOjpU4Vc", tab_name=new_cde_version)
+    
+    # Merge or rename tables according to table update map
+    table_update_map = get_table_update_map()
+    tables = apply_table_update_map(tables, table_update_map)
+    
+    # Transfer any fields that have moved between tables or have been renamed
     transfer_map = get_field_transfer_map()
     tables = apply_field_moves(tables, transfer_map)
     
-    # Then update all table schemas post-transfer
+    # Getting the names of tables in the new CDE
+    new_cde_tables = set(new_cde["Table"].unique())
+    
+    # Update columns for all tables that currently exist
     updated_tables = {}
-    for table_name in expected_tables:
-        # If the table is missing, create a blank one
-        if table_name not in current_tables:
-            print(f"WARNING: {table_name} not found in old version, creating empty table")
-            new_cols = new_cde[new_cde["Table"] == table_name]["Field"].tolist()
-            updated_tables[table_name] = pd.DataFrame(columns=new_cols)
-        # Otherwise, update the columns of the existing table    
-        else:
+    for table_name in tables.keys():
+        if table_name in new_cde_tables:
             updated_tables[table_name] = update_table_columns(
                 table=tables[table_name],
                 table_name=table_name,
                 old_cde=old_cde,
                 new_cde=new_cde,
             )
-   
-    # Log which tables are removed (old CDE or are not expected for source)
-    extra_tables = set(current_tables) - set(expected_tables)
-    if extra_tables:
-        print(f"WARNING: Removing tables that are not expected for '{source}': {', '.join(sorted(extra_tables))}")
-    
+        else:
+            raise ValueError(f"Table '{table_name}' not found in new CDE version '{new_cde_version}'")
+        
     return updated_tables
 
 
