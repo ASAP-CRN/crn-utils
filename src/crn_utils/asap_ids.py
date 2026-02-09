@@ -83,7 +83,7 @@ def load_all_id_mappers(map_path: Path,
     dataset_mapper_path = map_path / "ASAP_dataset_ids.json"
     id_mappers["dataset"] = load_id_mapper(dataset_mapper_path)
     
-    if source == "pmdbs":
+    if source in ["pmdbs", "fecal"]:
         id_mappers["subject"] = load_id_mapper(map_path / "ASAP_PMDBS_subj_ids.json")
         id_mappers["sample"] = load_id_mapper(map_path / "ASAP_PMDBS_samp_ids.json")
         id_mappers["gp2"] = load_id_mapper(map_path / "ASAP_PMDBS_gp2_ids.json")
@@ -189,7 +189,7 @@ def export_all_id_mappers(
         source = "invitro"
         
     # Source-specific exports
-    if source == "pmdbs":
+    if source in ["pmdbs", "fecal"]:
         export_pmdbs_id_mappers(
             map_path=map_path,
             suffix=suffix,
@@ -247,15 +247,11 @@ def update_all_id_mappers(
     # Load existing ID mappers which will be updated
     id_mappers = load_all_id_mappers(map_path=map_path, source=source)
     
-    # Each source updates SAMPLE, then affects specific additional tables
-    expected_tables = ["SAMPLE"]
+    # Each source updates SAMPLE and SUBJECT, with PMDBS having further IDs
+    expected_tables = ["SAMPLE", "SUBJECT"]
     if source == "pmdbs":
-        expected_tables.extend(["CLINPATH", "SUBJECT"])
-    elif source == "mouse":
-        expected_tables.extend(["MOUSE"])
-    elif source == "invitro":
-        expected_tables.extend(["CELL"])
-    
+        expected_tables.extend(["CLINPATH"])
+
     meta_tables = load_tables(metadata_dir, expected_tables)
     
     for table_name in expected_tables:
@@ -265,7 +261,15 @@ def update_all_id_mappers(
             )
     
     # Call source-specific update functions, which return tuples of updated mappers
-    if source == "pmdbs":
+    if source in ["pmdbs", "fecal"]:
+        # Create a minimimal CLINPATH if it doesn't exist (needed for fecal)
+        clinpath_df = meta_tables.get("CLINPATH")
+        if clinpath_df is None:
+            logging.info("No CLINPATH table found, deriving from SUBJECT")
+            subject_df = meta_tables["SUBJECT"]
+            clinpath_df = subject_df[["subject_id", "source_subject_id"]].copy()
+            # Add empty GP2_id column since PMDBS functions expect it
+            clinpath_df["GP2_id"] = pd.NA
         (
             id_mappers["dataset"],
             id_mappers["subject"],
@@ -273,7 +277,7 @@ def update_all_id_mappers(
             id_mappers["gp2"],
             id_mappers["source_subject"],
         ) = update_pmdbs_id_mappers(
-            clinpath_df=meta_tables["CLINPATH"],
+            clinpath_df=clinpath_df,
             sample_df=meta_tables["SAMPLE"],
             long_dataset_name=dataset_id,
             datasetid_mapper=id_mappers["dataset"],
@@ -288,7 +292,7 @@ def update_all_id_mappers(
             id_mappers["subject"],
             id_mappers["sample"],
         ) = update_mouse_id_mappers(
-            subject_df=meta_tables["MOUSE"],
+            subject_df=meta_tables["SUBJECT"],
             sample_df=meta_tables["SAMPLE"],
             long_dataset_name=dataset_id,
             datasetid_mapper=id_mappers["dataset"],
@@ -301,7 +305,7 @@ def update_all_id_mappers(
             id_mappers["subject"],
             id_mappers["sample"],
         ) = update_cell_id_mappers(
-            cell_df=meta_tables["CELL"],
+            cell_df=meta_tables["SUBJECT"],
             sample_df=meta_tables["SAMPLE"],
             long_dataset_name=dataset_id,
             datasetid_mapper=id_mappers["dataset"],
