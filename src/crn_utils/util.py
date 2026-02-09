@@ -53,6 +53,7 @@ def list_expected_metadata_tables() -> list[str]:
         "PROTOCOL",
         "SUBJECT",
         "SAMPLE",
+        "ASSAY",
         "ASSAY_RNAseq",
         "DATA",
         "PMDBS",
@@ -396,7 +397,7 @@ def export_table(table_name: str, df: pd.DataFrame, out_dir: str):
 def read_meta_table(table_path: str | Path) -> pd.DataFrame:
     # read the whole table
     try:
-        table_df = pd.read_csv(table_path, dtype=str)
+        table_df = pd.read_csv(table_path, encoding="utf-8", dtype=str)
     except UnicodeDecodeError:
         print(f"UnicodeDecodeError: {table_path}")
         table_df = pd.read_csv(table_path, encoding="latin1", dtype=str)
@@ -474,7 +475,9 @@ def load_tables(table_dir: Path, table_names: list[str]) -> dict[str, pd.DataFra
         table_path = table_dir / f"{tab}.csv"
         if not table_path.exists():
             raise FileNotFoundError(f"Table file not found: {table_path}")
-        tables[tab] = read_meta_table(table_path)
+        # TODO: read_meta_table() was propagating latin1 encoding errors
+        # tables[tab] = read_meta_table(table_path)
+        tables[tab] = pd.read_csv(table_path, encoding="utf-8")
     
     return tables
 
