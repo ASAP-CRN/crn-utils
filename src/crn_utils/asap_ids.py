@@ -5,7 +5,7 @@ import logging
 import argparse
 import shutil
 from pathlib import Path
-# import ijson  # TODO: rm if truly unused
+
 
 from .util import (
     read_CDE,
@@ -79,11 +79,14 @@ def load_all_id_mappers(map_path: Path,
     if source in ["ipsc", "cell"]:
         source = "invitro"
         
+    if source in ["pmdbs", "fecal"]:
+        source = "pmdbs"
+        
     # Dataset is common to all sources
     dataset_mapper_path = map_path / "ASAP_dataset_ids.json"
     id_mappers["dataset"] = load_id_mapper(dataset_mapper_path)
     
-    if source in ["pmdbs", "fecal"]:
+    if source == "pmdbs":
         id_mappers["subject"] = load_id_mapper(map_path / "ASAP_PMDBS_subj_ids.json")
         id_mappers["sample"] = load_id_mapper(map_path / "ASAP_PMDBS_samp_ids.json")
         id_mappers["gp2"] = load_id_mapper(map_path / "ASAP_PMDBS_gp2_ids.json")
@@ -109,8 +112,7 @@ def update_meta_tables_with_asap_ids(
     source: str,
     team: str,
     id_mappers: dict[str, dict],
-    asap_ids_schema: pd.DataFrame,
-    expected_tables: list[str]) -> dict[str, pd.DataFrame]:
+    asap_ids_schema: pd.DataFrame) -> dict[str, pd.DataFrame]:
     """
     Inject ASAP IDs into the metadata tables based on the provided ID mappers.
     Assumes that the ID mappers have already been populated for the given dataset.
@@ -120,6 +122,9 @@ def update_meta_tables_with_asap_ids(
     # Normalize source
     if source in ["ipsc", "cell"]:
         source = "invitro"
+        
+    if source in ["pmdbs", "fecal"]:
+        source = "pmdbs"
     
     # Getting the individual mappers
     asap_dataset_id = id_mappers["dataset"].get(dataset_id)
@@ -132,34 +137,24 @@ def update_meta_tables_with_asap_ids(
     ]["Table"].to_list()
     
     subject_id_tables = asap_ids_schema[
-        asap_ids_schema["Field"].isin(["ASAP_subject_id", "ASAP_mouse_id", "ASAP_cell_id"])
+        asap_ids_schema["Field"] == "ASAP_subject_id"
     ]["Table"].to_list()
     
     # Inject IDs into tables
-    for table_name in expected_tables:
+    for table_name in meta_tables.keys():
         meta_table = meta_tables[table_name]
         
-        # Inject subject IDs (subject/mouse/cell)
+        # Inject subject IDs
         if table_name in subject_id_tables:
-            # subject_id assumed across all, but check for fallbacks
-            subject_col = None
-            if "subject_id" in meta_table.columns:
-                subject_col = "subject_id"
-            elif source == "mouse" and "mouse_id" in meta_table.columns:
-                subject_col = "mouse_id"
-            elif source == "invitro" and "cell_id" in meta_table.columns:
-                subject_col = "cell_id"
+            if "subject_id" not in meta_table.columns:
+                raise ValueError(
+                    f"Table '{table_name}' is missing required 'subject_id' column. "
+                    f"Please ensure SUBJECT table uses 'subject_id' (not 'mouse_id' or 'cell_id')."
+                )
             
-            if subject_col:
-                # Determine ASAP ID field name
-                id_field = "ASAP_subject_id"
-                if source == "mouse":
-                    id_field = "ASAP_mouse_id"
-                elif source == "invitro":
-                    id_field = "ASAP_cell_id"
-                
-                asap_subject_ids = meta_table[subject_col].map(subject_mapper)
-                meta_table.insert(0, id_field, asap_subject_ids)
+            # Map subject_id -> ASAP_subject_id
+            asap_subject_ids = meta_table["subject_id"].map(subject_mapper)
+            meta_table.insert(0, "ASAP_subject_id", asap_subject_ids)
         
         # Inject sample IDs
         if table_name in sample_id_tables and "sample_id" in meta_table.columns:
@@ -188,8 +183,11 @@ def export_all_id_mappers(
     if source in ["ipsc", "cell"]:
         source = "invitro"
         
-    # Source-specific exports
     if source in ["pmdbs", "fecal"]:
+        source = "pmdbs"
+        
+    # Source-specific exports
+    if source == "pmdbs":
         export_pmdbs_id_mappers(
             map_path=map_path,
             suffix=suffix,
@@ -242,6 +240,9 @@ def update_all_id_mappers(
     if source in ["ipsc", "cell"]:
         source = "invitro"
         
+    if source in ["pmdbs", "fecal"]:
+        source = "pmdbs"
+        
     logging.info(f"Updating ID mappers for dataset: {dataset_id} of source: {source}")
     
     # Load existing ID mappers which will be updated
@@ -261,15 +262,7 @@ def update_all_id_mappers(
             )
     
     # Call source-specific update functions, which return tuples of updated mappers
-    if source in ["pmdbs", "fecal"]:
-        # Create a minimimal CLINPATH if it doesn't exist (needed for fecal)
-        clinpath_df = meta_tables.get("CLINPATH")
-        if clinpath_df is None:
-            logging.info("No CLINPATH table found, deriving from SUBJECT")
-            subject_df = meta_tables["SUBJECT"]
-            clinpath_df = subject_df[["subject_id", "source_subject_id"]].copy()
-            # Add empty GP2_id column since PMDBS functions expect it
-            clinpath_df["GP2_id"] = pd.NA
+    if source == "pmdbs":
         (
             id_mappers["dataset"],
             id_mappers["subject"],
@@ -277,7 +270,7 @@ def update_all_id_mappers(
             id_mappers["gp2"],
             id_mappers["source_subject"],
         ) = update_pmdbs_id_mappers(
-            clinpath_df=clinpath_df,
+            clinpath_df=meta_tables["CLINPATH"],
             sample_df=meta_tables["SAMPLE"],
             long_dataset_name=dataset_id,
             datasetid_mapper=id_mappers["dataset"],
