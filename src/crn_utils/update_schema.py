@@ -38,7 +38,6 @@ def get_field_transfer_map() -> pd.DataFrame:
     """
     Dataframe that defines field mappings between old (CDE v3.x) and new (CDE v4.x) schemas.
     Handles two types of transformations:
-    which can be moving fields between tables or renaming a field within a table.
     - Cross-table move: Field moves from one table to another (Old_Table != New_Table)
     - Same-table rename: Field is renamed within the same table (Old_Table == New_Table)
     

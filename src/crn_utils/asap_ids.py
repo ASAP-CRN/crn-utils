@@ -5,7 +5,7 @@ import logging
 import argparse
 import shutil
 from pathlib import Path
-# import ijson  # TODO: rm if truly unused
+
 
 from .util import (
     read_CDE,
@@ -56,7 +56,13 @@ __all__ = [
 # to support a unified prep_release_metadata() worfkflow.
 # ID generation and mapping functionality currently wraps existing source-specific
 # functions and leaves these intact for backwards compatibility.
-# TODO: Following PRs will revisit legacy source-specific calls code
+# !!!NOTE!!:
+# FEB2026 release uses CDE v4.1, which has SUBJECT instead of CELL and MOUSE, 
+# meaning subject_id must be uniform. Further, this release included 
+# schapira-fecal-metagenome-human-baseline, the first non-PMDBS human dataset.
+# For this urgent release we are using the PMDBS ID mappers, but future PRs will
+# 1) Replace the single-source calls with species/source/assay from a universal look up
+# 2) Implement an ID system that best captures non-PMDBS human samples
 # ----
 
 
@@ -78,6 +84,9 @@ def load_all_id_mappers(map_path: Path,
     # Normalize source
     if source in ["ipsc", "cell"]:
         source = "invitro"
+        
+    if source in ["pmdbs", "fecal"]:
+        source = "pmdbs"
         
     # Dataset is common to all sources
     dataset_mapper_path = map_path / "ASAP_dataset_ids.json"
@@ -109,8 +118,7 @@ def update_meta_tables_with_asap_ids(
     source: str,
     team: str,
     id_mappers: dict[str, dict],
-    asap_ids_schema: pd.DataFrame,
-    expected_tables: list[str]) -> dict[str, pd.DataFrame]:
+    asap_ids_schema: pd.DataFrame) -> dict[str, pd.DataFrame]:
     """
     Inject ASAP IDs into the metadata tables based on the provided ID mappers.
     Assumes that the ID mappers have already been populated for the given dataset.
@@ -120,6 +128,9 @@ def update_meta_tables_with_asap_ids(
     # Normalize source
     if source in ["ipsc", "cell"]:
         source = "invitro"
+        
+    if source in ["pmdbs", "fecal"]:
+        source = "pmdbs"
     
     # Getting the individual mappers
     asap_dataset_id = id_mappers["dataset"].get(dataset_id)
@@ -132,34 +143,24 @@ def update_meta_tables_with_asap_ids(
     ]["Table"].to_list()
     
     subject_id_tables = asap_ids_schema[
-        asap_ids_schema["Field"].isin(["ASAP_subject_id", "ASAP_mouse_id", "ASAP_cell_id"])
+        asap_ids_schema["Field"] == "ASAP_subject_id"
     ]["Table"].to_list()
     
     # Inject IDs into tables
-    for table_name in expected_tables:
+    for table_name in meta_tables.keys():
         meta_table = meta_tables[table_name]
         
-        # Inject subject IDs (subject/mouse/cell)
+        # Inject subject IDs
         if table_name in subject_id_tables:
-            # subject_id assumed across all, but check for fallbacks
-            subject_col = None
-            if "subject_id" in meta_table.columns:
-                subject_col = "subject_id"
-            elif source == "mouse" and "mouse_id" in meta_table.columns:
-                subject_col = "mouse_id"
-            elif source == "invitro" and "cell_id" in meta_table.columns:
-                subject_col = "cell_id"
+            if "subject_id" not in meta_table.columns:
+                raise ValueError(
+                    f"Table '{table_name}' is missing required 'subject_id' column. "
+                    f"Please ensure SUBJECT table uses 'subject_id' (not 'mouse_id' or 'cell_id')."
+                )
             
-            if subject_col:
-                # Determine ASAP ID field name
-                id_field = "ASAP_subject_id"
-                if source == "mouse":
-                    id_field = "ASAP_mouse_id"
-                elif source == "invitro":
-                    id_field = "ASAP_cell_id"
-                
-                asap_subject_ids = meta_table[subject_col].map(subject_mapper)
-                meta_table.insert(0, id_field, asap_subject_ids)
+            # Map subject_id -> ASAP_subject_id
+            asap_subject_ids = meta_table["subject_id"].map(subject_mapper)
+            meta_table.insert(0, "ASAP_subject_id", asap_subject_ids)
         
         # Inject sample IDs
         if table_name in sample_id_tables and "sample_id" in meta_table.columns:
@@ -187,6 +188,9 @@ def export_all_id_mappers(
     # Normalize source
     if source in ["ipsc", "cell"]:
         source = "invitro"
+        
+    if source in ["pmdbs", "fecal"]:
+        source = "pmdbs"
         
     # Source-specific exports
     if source == "pmdbs":
@@ -242,20 +246,19 @@ def update_all_id_mappers(
     if source in ["ipsc", "cell"]:
         source = "invitro"
         
+    if source in ["pmdbs", "fecal"]:
+        source = "pmdbs"
+        
     logging.info(f"Updating ID mappers for dataset: {dataset_id} of source: {source}")
     
     # Load existing ID mappers which will be updated
     id_mappers = load_all_id_mappers(map_path=map_path, source=source)
     
-    # Each source updates SAMPLE, then affects specific additional tables
-    expected_tables = ["SAMPLE"]
+    # Each source updates SAMPLE and SUBJECT, with PMDBS having further IDs
+    expected_tables = ["SAMPLE", "SUBJECT"]
     if source == "pmdbs":
-        expected_tables.extend(["CLINPATH", "SUBJECT"])
-    elif source == "mouse":
-        expected_tables.extend(["MOUSE"])
-    elif source == "invitro":
-        expected_tables.extend(["CELL"])
-    
+        expected_tables.extend(["CLINPATH"])
+
     meta_tables = load_tables(metadata_dir, expected_tables)
     
     for table_name in expected_tables:
@@ -288,7 +291,7 @@ def update_all_id_mappers(
             id_mappers["subject"],
             id_mappers["sample"],
         ) = update_mouse_id_mappers(
-            subject_df=meta_tables["MOUSE"],
+            subject_df=meta_tables["SUBJECT"],
             sample_df=meta_tables["SAMPLE"],
             long_dataset_name=dataset_id,
             datasetid_mapper=id_mappers["dataset"],
@@ -301,7 +304,7 @@ def update_all_id_mappers(
             id_mappers["subject"],
             id_mappers["sample"],
         ) = update_cell_id_mappers(
-            cell_df=meta_tables["CELL"],
+            cell_df=meta_tables["SUBJECT"],
             sample_df=meta_tables["SAMPLE"],
             long_dataset_name=dataset_id,
             datasetid_mapper=id_mappers["dataset"],

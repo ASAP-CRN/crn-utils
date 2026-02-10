@@ -111,8 +111,7 @@ def prep_release_metadata(dataset_id: str,
         source=source,
         team=team,
         id_mappers=id_mappers,
-        asap_ids_schema=asap_ids_schema,
-        expected_tables=expected_tables)
+        asap_ids_schema=asap_ids_schema)
     
     logging.info("ASAP IDs injected successfully")
     
@@ -178,12 +177,14 @@ def prep_release_metadata(dataset_id: str,
     
     #  ---- Exporting release metadata ----
     out_dir = dataset_dir / "metadata" / "release" / release_version
-    out_dir.mkdir(parents=False, exist_ok=True)
+    out_dir.mkdir(parents=True, exist_ok=True)
     
     logging.info(f"Exporting release metadata tables to [{out_dir}]...")
     
-    export_meta_tables(updated_meta_tables, out_dir)
-    
+    for table_name, df in updated_meta_tables.items():
+        out_path = out_dir / f"{table_name}.csv"
+        df.to_csv(out_path, index=False, encoding="utf-8")
+
     version_info = f"CDE_VERSION={cde_version}\nRELEASE_VERSION={release_version}\n"
     (out_dir / "VERSION").write_text(version_info)
     
