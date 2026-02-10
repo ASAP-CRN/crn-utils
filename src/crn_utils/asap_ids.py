@@ -58,7 +58,7 @@ __all__ = [
 # functions and leaves these intact for backwards compatibility.
 # !!!NOTE!!:
 # FEB2026 release uses CDE v4.1, which has SUBJECT instead of CELL and MOUSE, 
-# meaning subject_id must be unfiform. Further, this release included 
+# meaning subject_id must be uniform. Further, this release included 
 # schapira-fecal-metagenome-human-baseline, the first non-PMDBS human dataset.
 # For this urgent release we are using the PMDBS ID mappers, but future PRs will
 # 1) Replace the single-source calls with species/source/assay from a universal look up
