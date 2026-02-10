@@ -56,7 +56,13 @@ __all__ = [
 # to support a unified prep_release_metadata() worfkflow.
 # ID generation and mapping functionality currently wraps existing source-specific
 # functions and leaves these intact for backwards compatibility.
-# TODO: Following PRs will revisit legacy source-specific calls code
+# !!!NOTE!!:
+# FEB2026 release uses CDE v4.1, which has SUBJECT instead of CELL and MOUSE, 
+# meaning subject_id must be unfiform. Further, this release included 
+# schapira-fecal-metagenome-human-baseline, the first non-PMDBS human dataset.
+# For this urgent release we are using the PMDBS ID mappers, but future PRs will
+# 1) Replace the single-source calls with species/source/assay from a universal look up
+# 2) Implement an ID system that best captures non-PMDBS human samples
 # ----
 
 
