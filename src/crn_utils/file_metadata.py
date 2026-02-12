@@ -115,16 +115,27 @@ def make_file_metadata(
 
 
 def update_data_table_with_gcp_uri(data_df: pd.DataFrame, ds_path: str | Path):
-    """ """
+    """
+    Add GCP URIs to DATA table.
+    Handles pooled/multiplexed files where multiple samples share the same file_name.
+    """
     ds_path = Path(ds_path)
     file_metadata_path = os.path.join(ds_path, "file_metadata")
 
     raw_files = pd.read_csv(os.path.join(file_metadata_path, "raw_files.csv"))
-
-    raw_files = raw_files[["file_name", "gcp_uri"]]
-    data_df = data_df.merge(raw_files, on="file_name", how="left")
-
-    print(f"Updated 'DATA.csv' with gcp_uri")
+    
+    # Deduplicate by file_name before merging
+    # Multiple samples share the same physical files in pooled sequencing
+    raw_files_unique = raw_files[["file_name", "gcp_uri"]].drop_duplicates(subset=["file_name"])
+    
+    # Ensure we're not creating duplicates
+    initial_rows = len(data_df)
+    data_df = data_df.merge(raw_files_unique, on="file_name", how="left", validate="many_to_one")
+    
+    if len(data_df) != initial_rows:
+        print(f"WARNING: Row count changed from {initial_rows} to {len(data_df)} during merge!")
+    
+    print(f"Updated 'DATA.csv' with gcp_uri ({len(data_df)} rows)")
 
     return data_df
 
