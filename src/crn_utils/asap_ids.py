@@ -59,12 +59,17 @@ __all__ = [
 # !!!NOTE!!:
 # FEB2026 release uses CDE v4.1, which has SUBJECT instead of CELL and MOUSE, 
 # meaning subject_id must be uniform. Further, this release included 
-# schapira-fecal-metagenome-human-baseline, the first non-PMDBS human dataset.
-# For this urgent release we are using the PMDBS ID mappers, but future PRs will
+# schapira-fecal-metagenome-human-baseline and liddle-human-colon-spatial-cosmx*,
+# the first non-PMDBS human datasets.
+# For this urgent release we are using the PMDBS ID mappers (exceptions_handle_as_pmdbs),
+# but future PRs will:
 # 1) Replace the single-source calls with species/source/assay from a universal look up
 # 2) Implement an ID system that best captures non-PMDBS human samples
 # ----
 
+# TODO: This is a temporary hack for the Feb2026 release and will be replaced in future PRs that look 
+# to implement a more robust ID mapping system and universal look up for species/source/assay 
+exceptions_handle_as_pmdbs = ["pmdbs", "fecal", "human-colon"]
 
 def load_all_id_mappers(map_path: Path, 
                         source: str) -> dict[str, dict]:
@@ -85,7 +90,7 @@ def load_all_id_mappers(map_path: Path,
     if source in ["ipsc", "cell"]:
         source = "invitro"
         
-    if source in ["pmdbs", "fecal"]:
+    if source in exceptions_handle_as_pmdbs:
         source = "pmdbs"
         
     # Dataset is common to all sources
@@ -129,7 +134,7 @@ def update_meta_tables_with_asap_ids(
     if source in ["ipsc", "cell"]:
         source = "invitro"
         
-    if source in ["pmdbs", "fecal"]:
+    if source in exceptions_handle_as_pmdbs:
         source = "pmdbs"
     
     # Getting the individual mappers
@@ -189,7 +194,7 @@ def export_all_id_mappers(
     if source in ["ipsc", "cell"]:
         source = "invitro"
         
-    if source in ["pmdbs", "fecal"]:
+    if source in exceptions_handle_as_pmdbs:
         source = "pmdbs"
         
     # Source-specific exports
@@ -246,7 +251,7 @@ def update_all_id_mappers(
     if source in ["ipsc", "cell"]:
         source = "invitro"
         
-    if source in ["pmdbs", "fecal"]:
+    if source in exceptions_handle_as_pmdbs:
         source = "pmdbs"
         
     logging.info(f"Updating ID mappers for dataset: {dataset_id} of source: {source}")
