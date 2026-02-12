@@ -44,6 +44,19 @@ __all__ = [
     "get_crn_release_metadata",
 ]
 
+def get_spatial_subtype_from_dataset_id(dataset_id: str) -> str:
+    """
+    Determine spatial subtype (i.e. visium, geomx or cosmx) from dataset_id.
+    """
+    if "visium" in dataset_id.lower():
+        return "visium"
+    elif "geomx" in dataset_id.lower():
+        return "geomx"
+    elif "cosmx" in dataset_id.lower():
+        return "cosmx"
+    else:
+        raise KeyError(f"Unable to determine spatial subtype from dataset_id: {dataset_id}. ")
+
 
 # The following is a refactor of the main function to prepare metadata for a 
 # release. It combines the previous source-specific functions into a unified
@@ -130,7 +143,7 @@ def prep_release_metadata(dataset_id: str,
         flatten=False   # TODO: confirm if this is ever True?
     )
     
-    if modality == "spatial":  # TODO: see if this can be more generic
+    if "spatial" in modality.lower():
         gen_spatial_bucket_summary(
             raw_bucket_name=raw_bucket_name,
             dl_path=file_metadata_path,
@@ -141,7 +154,7 @@ def prep_release_metadata(dataset_id: str,
         ds_path=dataset_dir,
         dl_path=file_metadata_path,
         data_df=updated_meta_tables["DATA"],
-        spatial=(modality == "spatial")
+        spatial=("spatial" in modality.lower())
     )
         
     logging.info(f"File metadata summaries saved to [{file_metadata_path}]")
@@ -155,13 +168,16 @@ def prep_release_metadata(dataset_id: str,
         ds_path=dataset_dir
     )
     
-    if modality == "spatial":
-        is_visium = "geomx" not in dataset_id  # TODO: this is fragile/indirect
-        updated_meta_tables["SPATIAL"] = update_spatial_table_with_gcp_uri(
-            spatial_df=updated_meta_tables["SPATIAL"],
-            ds_path=dataset_dir,
-            visium=is_visium
-        )
+    # There is no SPATIAL table for CosMx datasets.
+    # For CDE >v4.0 this needs to be modified for visium and geomx datasets as well as there is no longer SPATIAL table
+    if "spatial" in modality.lower():
+        spatial_subtype = get_spatial_subtype_from_dataset_id(dataset_id)
+        if not spatial_subtype == "cosmx":
+            updated_meta_tables["SPATIAL"] = update_spatial_table_with_gcp_uri(
+                spatial_df=updated_meta_tables["SPATIAL"],
+                ds_path=dataset_dir,
+                spatial_subtype=spatial_subtype
+            )
     
     logging.info("File metadata merged with DATA table")
     
@@ -269,8 +285,6 @@ def prep_release_metadata_cell(
     short_dataset_name = "-".join(ds_parts[2:])
     raw_bucket_name = f"asap-raw-team-{team}-{source}-{short_dataset_name}"
 
-    visium = "geomx" not in dataset_name
-
     CDE = read_CDE(schema_version)
     asap_ids_df = read_CDE_asap_ids()
     asap_ids_schema = asap_ids_df[["Table", "Field"]]
@@ -371,8 +385,6 @@ def prep_release_metadata_mouse(
     short_dataset_name = "-".join(ds_parts[2:])
     raw_bucket_name = f"asap-raw-team-{team}-{source}-{short_dataset_name}"
 
-    visium = "geomx" not in dataset_name
-
     CDE = read_CDE(schema_version)
     asap_ids_df = read_CDE_asap_ids()
     asap_ids_schema = asap_ids_df[["Table", "Field"]]
@@ -442,11 +454,17 @@ def prep_release_metadata_mouse(
 
     dfs["STUDY"] = update_study_table_with_doi(dfs["STUDY"], ds_path)
     dfs["DATA"] = update_data_table_with_gcp_uri(dfs["DATA"], ds_path)
+    
+    # There is no SPATIAL table for CosMx datasets.
+    # For CDE >v4.0 this needs to be modified for visium and geomx datasets as well as there is no longer SPATIAL table
     if spatial:
-
-        dfs["SPATIAL"] = update_spatial_table_with_gcp_uri(
-            dfs["SPATIAL"], ds_path, visium=visium
-        )
+        spatial_subtype = get_spatial_subtype_from_dataset_id(dataset_name)
+        if not spatial_subtype == "cosmx":
+            dfs["SPATIAL"] = update_spatial_table_with_gcp_uri(
+                spatial_df=dfs["SPATIAL"],
+                ds_path=ds_path,
+                spatial_subtype=spatial_subtype
+            )
 
     # HACK:
     # need to change file_metadata so artifacts.csv and (eventually curated_files.csv) point to curated bucket
@@ -568,12 +586,18 @@ def prep_release_metadata_pmdbs(
     make_file_metadata(ds_path, file_metadata_path, dfs["DATA"], spatial=spatial)
 
     dfs["STUDY"] = update_study_table_with_doi(dfs["STUDY"], ds_path)
-
     dfs["DATA"] = update_data_table_with_gcp_uri(dfs["DATA"], ds_path)
+
+    # There is no SPATIAL table for CosMx datasets.
+    # For CDE >v4.0 this needs to be modified for visium and geomx datasets as well as there is no longer SPATIAL table
     if spatial:
-        dfs["SPATIAL"] = update_spatial_table_with_gcp_uri(
-            dfs["SPATIAL"], ds_path, visium=visium
-        )
+        spatial_subtype = get_spatial_subtype_from_dataset_id(dataset_name)
+        if not spatial_subtype == "cosmx":
+            dfs["SPATIAL"] = update_spatial_table_with_gcp_uri(
+                spatial_df=dfs["SPATIAL"],
+                ds_path=ds_path,
+                spatial_subtype=spatial_subtype
+                )
 
     # export the tables to the metadata directory in a release subdirectory
     out_dir = os.path.join(ds_path, "metadata", "release")
@@ -764,10 +788,17 @@ def get_release_metadata_mouse(
 
     dfs["STUDY"] = update_study_table_with_doi(dfs["STUDY"], ds_path)
     dfs["DATA"] = update_data_table_with_gcp_uri(dfs["DATA"], ds_path)
+
+    # There is no SPATIAL table for CosMx datasets.
+    # For CDE >v4.0 this needs to be modified for visium and geomx datasets as well as there is no longer SPATIAL table
     if spatial:
-        dfs["SPATIAL"] = update_spatial_table_with_gcp_uri(
-            dfs["SPATIAL"], ds_path, visium=visium
-        )
+        spatial_subtype = get_spatial_subtype_from_dataset_id(dataset_name)
+        if not spatial_subtype == "cosmx":
+            dfs["SPATIAL"] = update_spatial_table_with_gcp_uri(
+                spatial_df=dfs["SPATIAL"],
+                ds_path=ds_path,
+                spatial_subtype=spatial_subtype
+                )
 
     # TODO add proteoimics mouse stuff here
 
@@ -842,12 +873,18 @@ def get_release_metadata_pmdbs(
     )
 
     dfs["STUDY"] = update_study_table_with_doi(dfs["STUDY"], ds_path)
-
     dfs["DATA"] = update_data_table_with_gcp_uri(dfs["DATA"], ds_path)
+
+    # There is no SPATIAL table for CosMx datasets.
+    # For CDE >v4.0 this needs to be modified for visium and geomx datasets as well as there is no longer SPATIAL table
     if spatial:
-        dfs["SPATIAL"] = update_spatial_table_with_gcp_uri(
-            dfs["SPATIAL"], ds_path, visium=visium
-        )
+        spatial_subtype = get_spatial_subtype_from_dataset_id(dataset_name)
+        if not spatial_subtype == "cosmx":
+            dfs["SPATIAL"] = update_spatial_table_with_gcp_uri(
+                spatial_df=dfs["SPATIAL"],
+                ds_path=ds_path,
+                spatial_subtype=spatial_subtype
+                )
 
     # TODO add proteoimics pmdbs stuff here
 
@@ -925,12 +962,18 @@ def get_release_metadata_human(
     )
 
     dfs["STUDY"] = update_study_table_with_doi(dfs["STUDY"], ds_path)
-
     dfs["DATA"] = update_data_table_with_gcp_uri(dfs["DATA"], ds_path)
+
+    # There is no SPATIAL table for CosMx datasets.
+    # For CDE >v4.0 this needs to be modified for visium and geomx datasets as well as there is no longer SPATIAL table
     if spatial:
-        dfs["SPATIAL"] = update_spatial_table_with_gcp_uri(
-            dfs["SPATIAL"], ds_path, visium=visium
-        )
+        spatial_subtype = get_spatial_subtype_from_dataset_id(dataset_name)
+        if not spatial_subtype == "cosmx":
+            dfs["SPATIAL"] = update_spatial_table_with_gcp_uri(
+                spatial_df=dfs["SPATIAL"],
+                ds_path=ds_path,
+                spatial_subtype=spatial_subtype
+                )
 
     # TODO add proteoimics pmdbs stuff here
 

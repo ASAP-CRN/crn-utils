@@ -141,7 +141,7 @@ def update_data_table_with_gcp_uri(data_df: pd.DataFrame, ds_path: str | Path):
 
 
 def update_spatial_table_with_gcp_uri(
-    spatial_df: pd.DataFrame, ds_path: str | Path, visium: bool = True
+    spatial_df: pd.DataFrame, ds_path: str | Path, spatial_subtype: str = "other"
 ):
     """ """
     ds_path = Path(ds_path)
@@ -167,10 +167,14 @@ def update_spatial_table_with_gcp_uri(
     spatial_file_gcp_mapper.update(raw_file_gcp_mapper)
     spatial_file_md5_mapper.update(raw_file_md5_mapper)
 
-    if visium:
+    if spatial_subtype == "visium":
         left_ons = ["visium_cytassist"]
-    else:
+    elif spatial_subtype == "geomx":
         left_ons = ["geomx_config", "geomx_dsp_config", "geomx_annotation_file"]
+    elif spatial_subtype == "cosmx":
+        left_ons = [] # currently no files in SPATIAL table for CosMx datasets
+    else:
+        raise ValueError(f"Unsupported spatial subtype: {spatial_subtype}")
 
     for left_on in left_ons:
         spatial_df[f"{left_on}_md5"] = spatial_df[left_on].map(spatial_file_md5_mapper)
