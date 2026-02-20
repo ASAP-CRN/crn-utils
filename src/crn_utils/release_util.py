@@ -38,7 +38,9 @@ __all__ = [
     "process_schema",
     "create_metadata_package",
     "get_stat_tabs_pmdbs",
+    "get_stat_tabs_human_non_brain",
     "get_stat_tabs_mouse",
+    "get_stat_tabs_mouse_non_brain",
     "get_stats_table",
     "get_cohort_stats_table",
     "get_crn_release_metadata",
@@ -55,7 +57,7 @@ def get_spatial_subtype_from_dataset_id(dataset_id: str) -> str:
     elif "cosmx" in dataset_id.lower():
         return "cosmx"
     else:
-        raise KeyError(f"Unable to determine spatial subtype from dataset_id: {dataset_id}. ")
+        raise KeyError(f"get_spatial_subtype_from_dataset_id: Unable to determine spatial subtype from dataset_id: {dataset_id}")
 
 
 # The following is a refactor of the main function to prepare metadata for a 
@@ -263,7 +265,7 @@ def old_prep_release_metadata(
             ds_path, schema_version, map_path, suffix, proteomics, flatten
         )
     else:
-        raise ValueError(f"Unknown source {source}")
+        raise ValueError(f"old_prep_release_metadata: Unknown source {source}")
 
 
 def prep_release_metadata_cell(
@@ -671,7 +673,7 @@ def get_crn_release_metadata(
             ds_path, schema_version, map_path, suffix, proteomics=True
         )
     else:
-        raise ValueError(f"Unknown source {source}")
+        raise ValueError(f"get_crn_release_metadata: Unknown source {source}")
 
     return dfs
 
@@ -1103,59 +1105,9 @@ def ingest_ds_info_doc(
         else:
             print("what is this extra thing?")
             print(table_data)
-    # created
-    # timestamp	Creation time of deposition (in ISO8601 format).
-    # doi
-    # string	Digital Object Identifier (DOI). When you publish your deposition, we register a DOI in DataCite for your upload, unless you manually provided us with one. This field is only present for published depositions.
-    # doi_url
-    # url	Persistent link to your published deposition. This field is only present for published depositions.
-    # files
-    # array	A list of deposition files resources.
-    # id
-    # integer	Deposition identifier
-    # metadata
-    # object	A deposition metadata resource
-    # modified
-    # timestamp	Last modification time of deposition (in ISO8601 format).
-    # owner
-    # integer	User identifier of the owner of the deposition.
-    # record_id
-    # integer	Record identifier. This field is only present for published depositions.
-    # record_url
-    # url	URL to public version of record for this deposition. This field is only present for published depositions.
-    # state
-    # string	One of the values:
-    # * inprogress: Deposition metadata can be updated. If deposition is also unsubmitted (see submitted) files can be updated as well.
-    # * done: Deposition has been published.
-    # * error: Deposition is in an error state - contact our support.
-
-    # submitted
-    # bool	True if the deposition has been published, False otherwise.
-
-    # title
-    # string	Title of deposition (automatically set from metadata). Defaults to empty string.
-
-    # upload_type  string	Yes	Controlled vocabulary:
-    # * publication: Publication
-    # * poster: Poster
-    # * presentation: Presentation
-    # * dataset: Dataset
-    # * image: Image
-    # * video: Video/Audio
-    # * software: Software
-    # * lesson: Lesson
-    # * physicalobject: Physical object
-    # * other: Other
-
     title = dataset_title
     upload_type = "dataset"
 
-    # creators
-    # array of objects	Yes	The creators/authors of the deposition. Each array element is an object with the attributes:
-    # * name: Name of creator in the format Family name, Given names
-    # * affiliation: Affiliation of creator (optional).
-    # * orcid: ORCID identifier of creator (optional).
-    # * gnd: GND identifier of creator (optional).
     creators = []
     for indiv in data:
         name = f"{indiv[0].strip()}, {indiv[1].strip()}"  # , ".join(indiv[:2])
@@ -1173,17 +1125,14 @@ def ingest_ds_info_doc(
         else:
             to_append["orcid"] = oricid
         creators.append(to_append)
-        # creators.append({"name": name, "affiliation": affiliation, "orcid": oricid})
 
-    # description
-    # string (allows HTML)	Yes	Abstract or description for deposition.
     description = dataset_description
     # ASAP
     communities = [{"identifier": "asaphub"}]
     # version
-    version = ds_ver  # "2.0"?  also do "v1.0"
+    version = ds_ver
     # publication_date
-    publication_date = pd.Timestamp.now().strftime("%Y-%m-%d")  # "2.0"?  also do "v1.0"
+    publication_date = pd.Timestamp.now().strftime("%Y-%m-%d")
 
     export_data = {
         "metadata": {
@@ -1275,21 +1224,43 @@ def fix_study_table(metadata_path: str | Path, doi_path: str | Path | None = Non
     STUDY.to_csv(os.path.join(metadata_path, "STUDY.csv"), index=False)
 
 
-def get_stats_table(dfs: dict[pd.DataFrame], source: str = "pmdbs"):
+def get_stats_table(dfs: dict[pd.DataFrame], 
+                    organism: str = None,
+                    sample_source: str = None,
+                    ) -> None:
     """
-    generate the datasets stats for making the CRN release report
-    Note that proteomics for now is also "cell" based ("invitro")
+    Sorts organism and sample_source to get dataset stats.
+    Note: starting release v4.0.1 (CDE v4.1) it's required to define organism and sample_source
+          using controlled vocabularies from the CDE Google Spreadsheet tab ValidCategories.
+    
+    Parameters
+    ----------
+    dfs
+        Dictionary of dataframes containing the metadata tables for a dataset release
+    organism
+        Organism name (e.g., "Human", "Mouse")
+    sample_source
+        Sample source (e.g., "Brain")
+    """
 
-    """
-    if source == "pmdbs":
-        return get_stat_tabs_pmdbs(dfs)
-    elif source == "mouse":
-        return get_stat_tabs_mouse(dfs)
-    elif source in ["cell", "invitro", "ipsc"]:
-        return get_stat_tabs_cell(dfs)
+    if organism == "Human":
+        if sample_source == "Brain":
+            return get_stat_tabs_pmdbs(dfs)
+        elif sample_source in ["Cell lines", "Cell", "iPSC", "InVitro"]:
+            return get_stat_tabs_cell(dfs)
+        else:
+            return get_stat_tabs_human_non_brain(dfs)
+        
+    elif organism == "Mouse":
+        if sample_source == "Brain":
+            return get_stat_tabs_mouse(dfs)
+        elif sample_source in ["Cell lines", "Cell", "iPSC", "InVitro"]:
+            return get_stat_tabs_cell(dfs)
+        else:
+            return get_stat_tabs_mouse_non_brain(dfs)
+    
     else:
-        raise ValueError(f"Unknown source {source}")
-        return {}, pd.DataFrame()
+        raise ValueError(f"get_stats_table: Unexpected categories: organism {organism}, sample_source {sample_source}")
 
 
 _brain_region_coder = {
@@ -1393,7 +1364,6 @@ def make_stats_df_pmdbs(dfs: dict[pd.DataFrame]) -> pd.DataFrame:
         "source_subject_id",
         "biobank_name",
         "sex",
-        # "age_at_collection",
         "race",
         "primary_diagnosis",
         "primary_diagnosis_text",
@@ -1418,7 +1388,7 @@ def make_stats_df_pmdbs(dfs: dict[pd.DataFrame]) -> pd.DataFrame:
     elif "age_at_collection" in dfs["SAMPLE"].columns:
         sample_cols.append("age_at_collection")
     else:
-        raise ValueError("No age_at_collection column found in SUBJECT or SAMPLE")
+        raise ValueError(f"get_stats_pmdbs: No age_at_collection column found in SUBJECT or SAMPLE")
 
     SAMPLE_ = dfs["SAMPLE"][sample_cols]
 
@@ -1556,6 +1526,197 @@ def get_stats_pmdbs(df: pd.DataFrame) -> dict:
     return report
 
 
+def make_stats_df_human_non_brain(dfs: dict[pd.DataFrame]) -> pd.DataFrame:
+    """
+    Build a flat stats DataFrame for human non-brain datasets (e.g. Blood, Skin,
+    Gastrointestinal tissue, etc.) by joining SAMPLE + CONDITION + SUBJECT.
+
+    Unlike make_stats_df_pmdbs there is no PMDBS or CLINPATH join and therefore
+    no brain-region columns.  Compatible with both CDE v4.1 (age_at_collection in
+    SAMPLE, primary_diagnosis removed) and older schema versions (age_at_collection
+    in SUBJECT, primary_diagnosis present).
+    """
+    sample_cols = [
+        "ASAP_sample_id",
+        "ASAP_subject_id",
+        "ASAP_team_id",
+        "ASAP_dataset_id",
+        "replicate",
+        "repeated_sample",
+        "batch",
+        "organism",
+        "tissue",
+        "condition_id",
+    ]
+
+    # replicate_count and assay_type were removed in CDE v4.1; include only if present
+    for optional_col in ["replicate_count", "assay_type"]:
+        if optional_col in dfs["SAMPLE"].columns:
+            sample_cols.append(optional_col)
+
+    subject_cols = [
+        "ASAP_subject_id",
+        "source_subject_id",
+        "biobank_name",
+        "sex",
+    ]
+
+    # race is Human-specific and required in v4.1 SUBJECT; include if present
+    if "race" in dfs["SUBJECT"].columns:
+        subject_cols.append("race")
+
+    # primary_diagnosis / primary_diagnosis_text existed pre-v4.1
+    for legacy_col in ["primary_diagnosis", "primary_diagnosis_text"]:
+        if legacy_col in dfs["SUBJECT"].columns:
+            subject_cols.append(legacy_col)
+
+    condition_cols = [
+        "condition_id",
+        "intervention_name",
+    ]
+
+    # age_at_collection: in SUBJECT for pre-v4.1 datasets, in SAMPLE for v4.1+
+    if "age_at_collection" in dfs["SUBJECT"].columns:
+        subject_cols.append("age_at_collection")
+    elif "age_at_collection" in dfs["SAMPLE"].columns:
+        sample_cols.append("age_at_collection")
+    else:
+        raise ValueError(f"get_stats_human_non_brain: No age_at_collection column found in SUBJECT or SAMPLE")
+
+    SAMPLE_ = dfs["SAMPLE"][sample_cols]
+    CONDITION_ = dfs["CONDITION"][condition_cols]
+
+    if "gp2_phenotype" in dfs["SUBJECT"].columns:
+        subject_cols.append("gp2_phenotype")
+        SUBJECT_ = dfs["SUBJECT"][subject_cols]
+    else:
+        SUBJECT_ = dfs["SUBJECT"][subject_cols]
+        if "primary_diagnosis" in SUBJECT_.columns:
+            SUBJECT_ = SUBJECT_.copy()
+            SUBJECT_["gp2_phenotype"] = SUBJECT_["primary_diagnosis"]
+        else:
+            SUBJECT_ = SUBJECT_.copy()
+            SUBJECT_["gp2_phenotype"] = "NA"
+
+    df = pd.merge(SAMPLE_, CONDITION_, on="condition_id", how="left")
+    df = (
+        pd.merge(df, SUBJECT_, on="ASAP_subject_id", how="left")
+        .drop_duplicates()
+        .reset_index(drop=True)
+    )
+    return df
+
+
+def get_stat_tabs_human_non_brain(dfs: dict[pd.DataFrame]):
+    """
+    Compute summary statistics for human non-brain datasets (e.g. Blood, Skin,
+    Gastrointestinal tissue, etc.).
+
+    Returns
+    -------
+    report : dict
+        Nested statistics dictionary (same structure as get_stat_tabs_pmdbs but
+        without brain_region / brain_code entries).
+    df : pd.DataFrame
+        Flat stats DataFrame produced by make_stats_df_human_non_brain.
+    """
+    df = make_stats_df_human_non_brain(dfs)
+    report = get_stats_human_non_brain(df)
+    return report, df
+
+
+def get_stats_human_non_brain(df: pd.DataFrame) -> dict:
+    """
+    Compile summary statistics for human non-brain datasets from a flat stats
+    DataFrame (as returned by make_stats_df_human_non_brain).
+
+    The report structure mirrors get_stats_pmdbs but omits brain_region and
+    brain_code since those are not applicable outside brain sample sources.
+    """
+    n_samples = df[["ASAP_sample_id", "replicate"]].drop_duplicates().shape[0]
+    n_subjects = df["ASAP_subject_id"].nunique()
+
+    # --- Sample-level stats (one row per unique sample × replicate) ---
+    sw_cols = [
+        "ASAP_sample_id",
+        "ASAP_subject_id",
+        "replicate",
+        "gp2_phenotype",
+        "age_at_collection",
+        "condition_id",
+        "sex",
+    ]
+    sw_df = df[[c for c in sw_cols if c in df.columns]].drop_duplicates()
+
+    print(f"shape df: {df.shape}, shape sw_df: {sw_df.shape}")
+
+    PD_status = (sw_df["gp2_phenotype"].value_counts().to_dict(),)
+    condition_id = (sw_df["condition_id"].value_counts().to_dict(),)
+    sex = (sw_df["sex"].value_counts().to_dict(),)
+
+    age_at_collection = sw_df["age_at_collection"].replace({"NA": np_nan}).astype("float")
+    age = dict(
+        mean=f"{age_at_collection.mean():.1f}",
+        median=f"{age_at_collection.median():.1f}",
+        max=f"{age_at_collection.max():.1f}",
+        min=f"{age_at_collection.min():.1f}",
+    )
+
+    samples = dict(
+        n_samples=n_samples,
+        PD_status=PD_status,
+        condition_id=condition_id,
+        age_at_collection=age,
+        sex=sex,
+    )
+
+    # --- Subject-level stats (one row per unique subject) ---
+    sub_cols = [
+        "ASAP_subject_id",
+        "gp2_phenotype",
+        "sex",
+        "age_at_collection",
+        "condition_id",
+    ]
+    sub_df = df[[c for c in sub_cols if c in df.columns]].drop_duplicates()
+
+    PD_status = (sub_df["gp2_phenotype"].value_counts().to_dict(),)
+    condition_id = (sub_df["condition_id"].value_counts().to_dict(),)
+    sex = (sub_df["sex"].value_counts().to_dict(),)
+
+    age_at_collection = sub_df["age_at_collection"].replace({"NA": np_nan}).astype("float")
+    age = dict(
+        mean=f"{age_at_collection.mean():.1f}",
+        median=f"{age_at_collection.median():.1f}",
+        max=f"{age_at_collection.max():.1f}",
+        min=f"{age_at_collection.min():.1f}",
+    )
+
+    subject = dict(
+        n_subjects=n_subjects,
+        PD_status=PD_status,
+        condition_id=condition_id,
+        age_at_collection=age,
+        sex=sex,
+    )
+
+    report = dict(
+        subject=subject,
+        samples=samples,
+    )
+    return report
+
+
+def get_stat_tabs_mouse_non_brain(dfs: dict[pd.DataFrame]):
+    """
+    Compute summary statistics for mouse non-brain datasets.
+
+    Mouse datasets do not carry brain-region columns regardless of sample source,
+    so this is a direct alias for get_stat_tabs_mouse.
+    """
+    return get_stat_tabs_mouse(dfs)
+
+
 def make_stats_df_cell(dfs: dict[pd.DataFrame]) -> pd.DataFrame:
     """ """
     sample_cols = [
@@ -1625,61 +1786,91 @@ def get_stats_cell(df: pd.DataFrame) -> dict:
 
     # get stats for the dataset
     N = uq_df["ASAP_sample_id"].nunique()
-
-    # brain_region = (df["brain_region"].value_counts().to_dict(),)
-    # PD_status = (df["gp2_phenotype"].value_counts().to_dict(),)
     condition_id = (uq_df["condition_id"].value_counts().to_dict(),)
-    # diagnosis = (df["primary_diagnosis"].value_counts().to_dict(),)
-
     report = dict(
         N=N,
         condition_id=condition_id,
     )
     return report
 
-
 def make_stats_df_mouse(dfs: dict[pd.DataFrame]) -> pd.DataFrame:
-    """ """
+    """
+    Build a flat stats DataFrame for mouse datasets by joining SAMPLE + CONDITION
+    + SUBJECT (or the legacy MOUSE table for pre-v4.1 datasets).
+
+    Schema changes in CDE v4.1:
+    - MOUSE table removed; subject info (sex, strain) moved to the universal SUBJECT table.
+    - ASAP_subject_id is the join key between SAMPLE and SUBJECT in v4.1.
+    - ASAP_mouse_id is a secondary identifier now in SAMPLE (not the join key to SUBJECT).
+    - age renamed to age_at_collection (now in SAMPLE).
+    - replicate_count and assay_type removed from SAMPLE.
+    """
     sample_cols = [
         "ASAP_sample_id",
-        "ASAP_mouse_id",
         "ASAP_team_id",
         "ASAP_dataset_id",
         "replicate",
-        "replicate_count",
         "repeated_sample",
         "batch",
         "organism",
         "tissue",
-        "assay_type",
         "condition_id",
     ]
 
-    subject_cols = [
-        "ASAP_mouse_id",
-        "sex",
-        "age",
-        "strain",
-    ]
+    # ASAP_subject_id: join key to universal SUBJECT table in v4.1+
+    if "ASAP_subject_id" in dfs["SAMPLE"].columns:
+        sample_cols.append("ASAP_subject_id")
+
+    # replicate_count and assay_type were removed in CDE v4.1
+    for optional_col in ["replicate_count", "assay_type"]:
+        if optional_col in dfs["SAMPLE"].columns:
+            sample_cols.append(optional_col)
+
+    # ASAP_mouse_id: secondary ID, include for reference if present
+    if "ASAP_mouse_id" in dfs["SAMPLE"].columns:
+        sample_cols.append("ASAP_mouse_id")
+
+    # age_at_collection: in SAMPLE for v4.1+; legacy datasets use age in MOUSE
+    if "age_at_collection" in dfs["SAMPLE"].columns:
+        sample_cols.append("age_at_collection")
 
     condition_cols = [
         "condition_id",
         "intervention_name",
-        "intervention_id",
-        "protocol_id",
-        "intervention_aux_table",
     ]
+    for optional_col in ["intervention_id", "protocol_id", "intervention_aux_table"]:
+        if optional_col in dfs["CONDITION"].columns:
+            condition_cols.append(optional_col)
 
     SAMPLE_ = dfs["SAMPLE"][sample_cols]
-
-    SUBJECT_ = dfs["MOUSE"][subject_cols]
     CONDITION_ = dfs["CONDITION"][condition_cols]
 
     df = pd.merge(SAMPLE_, CONDITION_, on="condition_id", how="left")
 
-    # then JOIN the result with SUBJECT on "ASAP_subject_id" how=left to get "age_at_collection", "sex", "primary_diagnosis"
+    # v4.1+: MOUSE table removed, subject info now in universal SUBJECT table.
+    # Join key is ASAP_subject_id (present in both SAMPLE and SUBJECT).
+    # Pre-v4.1: MOUSE table exists; join key is ASAP_mouse_id.
+    if "MOUSE" in dfs:
+        subject_df = dfs["MOUSE"]
+        subject_join_key = "ASAP_mouse_id"
+        subject_cols = ["ASAP_mouse_id"]
+        for col in ["sex", "strain", "age"]:
+            if col in subject_df.columns:
+                subject_cols.append(col)
+    else:
+        subject_df = dfs["SUBJECT"]
+        subject_join_key = "ASAP_subject_id"
+        if subject_join_key not in df.columns:
+            raise ValueError(f"get_stats_mouse: Cannot join SAMPLE to SUBJECT: {subject_join_key} not found in SAMPLE")
+        subject_cols = [subject_join_key]
+        for col in ["sex", "strain"]:
+            if col in subject_df.columns:
+                subject_cols.append(col)
+
+    SUBJECT_ = subject_df[subject_cols]
+
     df = (
-        pd.merge(df, SUBJECT_, on="ASAP_mouse_id", how="left")
+        pd.merge(df, SUBJECT_, on=subject_join_key, how="left")
         .drop_duplicates()
         .reset_index(drop=True)
     )
@@ -1697,33 +1888,32 @@ def get_stat_tabs_mouse(dfs: dict[pd.DataFrame]):
 
 def get_stats_mouse(df: pd.DataFrame) -> dict:
     """
-    compile stats from stats table (tab)
+    Compile stats from stats table (tab).
+    Compatible with CDE v4.1 (age_at_collection in SAMPLE) and pre-v4.1 (age in MOUSE).
     """
-    uq_df = df[
-        [
-            "ASAP_sample_id",
-            "condition_id",
-            "sex",
-            "age",
-        ]
-    ].drop_duplicates()
+    # age field: age_at_collection for v4.1+, age for pre-v4.1
+    if "age_at_collection" in df.columns:
+        age_col = "age_at_collection"
+    elif "age" in df.columns:
+        age_col = "age"
+    else:
+        raise ValueError(f"get_stats_mouse: No age column found in stats DataFrame (expected 'age_at_collection' or 'age')")
 
-    print(f"shape df: {df.shape}, shape suq_dfw_df: {uq_df.shape}")
+    uq_cols = ["ASAP_sample_id", "condition_id", "sex", age_col]
+    uq_df = df[[c for c in uq_cols if c in df.columns]].drop_duplicates()
 
-    age_at_collection = uq_df["age"].astype("float")
+    print(f"shape df: {df.shape}, shape uq_df: {uq_df.shape}")
+
+    age_series = uq_df[age_col].replace({"NA": np_nan}).astype("float")
     age = dict(
-        mean=f"{age_at_collection.mean():.1f}",
-        median=f"{age_at_collection.median():.1f}",
-        max=f"{age_at_collection.max():.1f}",
-        min=f"{age_at_collection.min():.1f}",
+        mean=f"{age_series.mean():.1f}",
+        median=f"{age_series.median():.1f}",
+        max=f"{age_series.max():.1f}",
+        min=f"{age_series.min():.1f}",
     )
 
     N = uq_df["ASAP_sample_id"].nunique()
-
-    # brain_region = (df["brain_region"].value_counts().to_dict(),)
-    # PD_status = (df["gp2_phenotype"].value_counts().to_dict(),)
     condition_id = (uq_df["condition_id"].value_counts().to_dict(),)
-    # diagnosis = (df["primary_diagnosis"].value_counts().to_dict(),)
     sex = (uq_df["sex"].value_counts().to_dict(),)
 
     report = dict(
@@ -1735,7 +1925,7 @@ def get_stats_mouse(df: pd.DataFrame) -> dict:
     return report
 
 
-def get_cohort_stats_table(dfs: dict[pd.DataFrame], source: str = "pmdbs"):
+def get_cohort_stats_table(dfs: dict[pd.DataFrame], source: str = None):
     """ """
     if source == "pmdbs":
         # get stats_df by dataset, concatenate and then get stats
@@ -1768,8 +1958,6 @@ def get_cohort_stats_table(dfs: dict[pd.DataFrame], source: str = "pmdbs"):
         report["N_datasets"] = N_datasets
         report["N_teams"] = N_teams
     else:
-        raise ValueError(f"Unknown source {source}")
-        report = {}
-        stat_df = pd.DataFrame()
+        raise ValueError(f"get_cohort_stats_table: Unknown source {source}")
 
     return report, stat_df
