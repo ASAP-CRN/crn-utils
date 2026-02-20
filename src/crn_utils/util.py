@@ -28,20 +28,20 @@ __all__ = [
     "list_expected_metadata_tables",
 ]
 
-SUPPORTED_CDE_VERSIONS = [
-    "v1",
-    "v2",
-    "v2.1",
-    "v3",
-    "v3.0",
-    "v3.0-beta",
-    "v3.1",
-    "v3.2",
-    "v3.2-beta",
-    "v3.3",
-]
-
-
+SUPPORTED_CDE_VERSIONS = {
+    "v1": "v1",
+    "v2": "v2",
+    "v2.1": "v2.1",
+    "v3": "v3",
+    "v3.0": "v3.0",
+    "v3.0.0": "v3.0",
+    "v3.0-beta": "v3.0-beta",
+    "v3.1": "v3.1",
+    "v3.2": "v3.2",
+    "v3.2-beta": "v3.2",
+    "v3.3": "v3.3",
+    "v4.1": "v4.1",
+}
 
 # TODO: This will be deprecated in favor of call to list tables by source/species/assay
 def list_expected_metadata_tables() -> list[str]:
@@ -103,45 +103,19 @@ def read_CDE(
     ]
 
     # set up fallback
-    if cde_version == "v1":
-        resource_fname = "ASAP_CDE_v1"
-    elif cde_version == "v2":
-        resource_fname = "ASAP_CDE_v2"
-    elif cde_version == "v2.1":
-        resource_fname = "ASAP_CDE_v2.1"
-    elif cde_version == "v3.0-beta":
-        resource_fname = "ASAP_CDE_v3.0-beta"
-    elif cde_version in ["v3", "v3.0", "v3.0.0"]:
-        resource_fname = "ASAP_CDE_v3.0"
-    elif cde_version in ["v3.1"]:
-        resource_fname = "ASAP_CDE_v3.1"
-    elif cde_version in ["v3.2", "v3.2-beta"]:
-        resource_fname = "ASAP_CDE_v3.2"
-    elif cde_version == "v3.3":
-        resource_fname = "ASAP_CDE_v3.3"
+    if cde_version in SUPPORTED_CDE_VERSIONS:
+        resource_fname = "ASAP_CDE_" + SUPPORTED_CDE_VERSIONS[cde_version]
+        print(f"cde_version: {resource_fname}")
     else:
         sys.exit(f"Unsupported cde_version: {cde_version}")
 
     # add the Shared_key column for v3
-    if cde_version in [
-        "v3.3",
-        "v3.2",
-        "v3.2-beta",
-        "v3.1",
-        "v3",
-        "v3.0",
-        "v3.0-beta",
-    ]:
+    if cde_version.startswith("v3"):
         column_list.append("Shared_key")
 
     # insert "DisplayName" after "Field"
     if cde_version in ["v3.2", "v3.2-beta", "v3.3"]:
         column_list.insert(2, "DisplayName")
-
-    if cde_version in SUPPORTED_CDE_VERSIONS:
-        print(f"cde_version: {resource_fname}")
-    else:
-        print(f"Unsupported cde_version: {resource_fname}")
 
     cde_url = f"https://docs.google.com/spreadsheets/d/{GOOGLE_SHEET_ID}/gviz/tq?tqx=out:csv&sheet={cde_version}"
     print(cde_url)
@@ -153,30 +127,12 @@ def read_CDE(
         print(f"reading from googledoc {cde_url}")
 
     try:
-        # if cde_version == "v3.2":
-        #     cde_version = "CDE_final"
-        # cde_url = f"https://docs.google.com/spreadsheets/d/{GOOGLE_SHEET_ID}/gviz/tq?tqx=out:csv&sheet={cde_version}"
-
         CDE_df = pd.read_csv(cde_url)
-        print(f"read CDE")
-
-        # read_source = "url" if not local_path else "local file"
+        print(f"read CDE from URL: {cde_url}")
     except:
-        # import requests
-
-        # # download the cde_url to a temp file
-        # print(f"downloading {cde_url} to {resource_fname}.csv")
-        # response = requests.get(cde_url)
-        # response.raise_for_status()  # Check if the request was successful
-        # # save to ../../resource/CDE/
-        # new_resource_fname = f"../../resource/CDE/_{resource_fname}.csv"
-        # with open(new_resource_fname, "wb") as file:
-        #     file.write(response.content)
-
-        # CDE_df = pd.read_csv(new_resource_fname)
-        # print(f"exception:read local file: {new_resource_fname}")
-        CDE_df = pd.read_csv(os.path.join(crn_utils_root, "/resource/CDE/", f"{resource_fname}.csv"))
-        print(f"exception:read fallback file: ../../resource/CDE/{resource_fname}.csv")
+        cde_local = os.path.join(crn_utils_root, "resource/CDE", f"{resource_fname}.csv")
+        CDE_df = pd.read_csv(cde_local)
+        print(f"read CDE from local file: {cde_local}")
 
     # drop ASAP_ids if not requested
     if not include_asap_ids:
@@ -207,8 +163,6 @@ def read_CDE(
         "v3.0-beta",
     ]:
         CDE_df["Shared_key"] = CDE_df["Shared_key"].fillna(0).astype(int)
-    # force extraneous columns to be dropped.
-    # CDE_df["Validation"] = CDE_df["Validation"].apply(sanitize_validation_string)
 
     return clean_cde_schema(CDE_df)
 
