@@ -28,20 +28,20 @@ __all__ = [
     "list_expected_metadata_tables",
 ]
 
-SUPPORTED_CDE_VERSIONS = [
-    "v1",
-    "v2",
-    "v2.1",
-    "v3",
-    "v3.0",
-    "v3.0-beta",
-    "v3.1",
-    "v3.2",
-    "v3.2-beta",
-    "v3.3",
-]
-
-
+SUPPORTED_CDE_VERSIONS = {
+    "v1": "v1",
+    "v2": "v2",
+    "v2.1": "v2.1",
+    "v3": "v3",
+    "v3.0": "v3.0",
+    "v3.0.0": "v3.0",
+    "v3.0-beta": "v3.0-beta",
+    "v3.1": "v3.1",
+    "v3.2": "v3.2",
+    "v3.2-beta": "v3.2",
+    "v3.3": "v3.3",
+    "v4.1": "v4.1",
+}
 
 # TODO: This will be deprecated in favor of call to list tables by source/species/assay
 def list_expected_metadata_tables() -> list[str]:
@@ -103,45 +103,19 @@ def read_CDE(
     ]
 
     # set up fallback
-    if cde_version == "v1":
-        resource_fname = "ASAP_CDE_v1"
-    elif cde_version == "v2":
-        resource_fname = "ASAP_CDE_v2"
-    elif cde_version == "v2.1":
-        resource_fname = "ASAP_CDE_v2.1"
-    elif cde_version == "v3.0-beta":
-        resource_fname = "ASAP_CDE_v3.0-beta"
-    elif cde_version in ["v3", "v3.0", "v3.0.0"]:
-        resource_fname = "ASAP_CDE_v3.0"
-    elif cde_version in ["v3.1"]:
-        resource_fname = "ASAP_CDE_v3.1"
-    elif cde_version in ["v3.2", "v3.2-beta"]:
-        resource_fname = "ASAP_CDE_v3.2"
-    elif cde_version == "v3.3":
-        resource_fname = "ASAP_CDE_v3.3"
+    if cde_version in SUPPORTED_CDE_VERSIONS:
+        resource_fname = "ASAP_CDE_" + SUPPORTED_CDE_VERSIONS[cde_version]
+        print(f"cde_version: {resource_fname}")
     else:
         sys.exit(f"Unsupported cde_version: {cde_version}")
 
     # add the Shared_key column for v3
-    if cde_version in [
-        "v3.3",
-        "v3.2",
-        "v3.2-beta",
-        "v3.1",
-        "v3",
-        "v3.0",
-        "v3.0-beta",
-    ]:
+    if cde_version.startswith("v3"):
         column_list.append("Shared_key")
 
     # insert "DisplayName" after "Field"
     if cde_version in ["v3.2", "v3.2-beta", "v3.3"]:
         column_list.insert(2, "DisplayName")
-
-    if cde_version in SUPPORTED_CDE_VERSIONS:
-        print(f"cde_version: {resource_fname}")
-    else:
-        print(f"Unsupported cde_version: {resource_fname}")
 
     cde_url = f"https://docs.google.com/spreadsheets/d/{GOOGLE_SHEET_ID}/gviz/tq?tqx=out:csv&sheet={cde_version}"
     print(cde_url)
@@ -153,30 +127,12 @@ def read_CDE(
         print(f"reading from googledoc {cde_url}")
 
     try:
-        # if cde_version == "v3.2":
-        #     cde_version = "CDE_final"
-        # cde_url = f"https://docs.google.com/spreadsheets/d/{GOOGLE_SHEET_ID}/gviz/tq?tqx=out:csv&sheet={cde_version}"
-
         CDE_df = pd.read_csv(cde_url)
-        print(f"read CDE")
-
-        # read_source = "url" if not local_path else "local file"
+        print(f"read CDE from URL: {cde_url}")
     except:
-        # import requests
-
-        # # download the cde_url to a temp file
-        # print(f"downloading {cde_url} to {resource_fname}.csv")
-        # response = requests.get(cde_url)
-        # response.raise_for_status()  # Check if the request was successful
-        # # save to ../../resource/CDE/
-        # new_resource_fname = f"../../resource/CDE/_{resource_fname}.csv"
-        # with open(new_resource_fname, "wb") as file:
-        #     file.write(response.content)
-
-        # CDE_df = pd.read_csv(new_resource_fname)
-        # print(f"exception:read local file: {new_resource_fname}")
-        CDE_df = pd.read_csv(os.path.join(crn_utils_root, "/resource/CDE/", f"{resource_fname}.csv"))
-        print(f"exception:read fallback file: ../../resource/CDE/{resource_fname}.csv")
+        cde_local = os.path.join(crn_utils_root, "resource/CDE", f"{resource_fname}.csv")
+        CDE_df = pd.read_csv(cde_local)
+        print(f"read CDE from local file: {cde_local}")
 
     # drop ASAP_ids if not requested
     if not include_asap_ids:
@@ -207,8 +163,6 @@ def read_CDE(
         "v3.0-beta",
     ]:
         CDE_df["Shared_key"] = CDE_df["Shared_key"].fillna(0).astype(int)
-    # force extraneous columns to be dropped.
-    # CDE_df["Validation"] = CDE_df["Validation"].apply(sanitize_validation_string)
 
     return clean_cde_schema(CDE_df)
 
@@ -394,7 +348,49 @@ def export_table(table_name: str, df: pd.DataFrame, out_dir: str):
     })
     df.to_csv(os.path.join(out_dir, f"{table_name}.csv"), index=False)
 
-def read_meta_table(table_path: str | Path) -> pd.DataFrame:
+def remove_special_characters_ascii_printable(value: object) -> object:
+    """
+    For URL/DOI-like fields, keep only ASCII printable characters (0x20..0x7E),
+    drop control chars, and drop U+FFFD.
+
+    Note: even after .str.encode("latin1", errors="replace").str.decode("utf-8", errors="replace") 
+    some non-ASCII characters can remain as "�" (U+FFFD) which can cause hyperlinking issues.
+    """
+    if value is None or value is pd.NA:
+        return value
+
+    value_str = str(value)
+
+    # Remove Unicode replacement char explicitly.
+    value_str = value_str.replace("\ufffd", "")
+
+    # Keep only ASCII printable characters (space through ~).
+    # This removes things like Ê (U+00CA) and any other non-ASCII artifacts.
+    value_str = "".join(
+        character
+        for character in value_str
+        if 32 <= ord(character) <= 126
+    )
+    return value_str.strip()
+
+def remove_ending_dot(field: object) -> object:
+    """
+    For URL/DOI-like fields, remove ending dots, which cause hyperlinking issues.
+    """
+    if field is None or field is pd.NA:
+        return field
+
+    field_str = str(field)
+
+    # Remove ending dot if it exists
+    if field_str.endswith("."):
+        field_str = field_str[:-1]
+    return field_str.strip()
+
+def read_meta_table(
+    table_path: str | Path,
+    columns_remove_special_characters_and_ending_dots: list[str] | None = None
+) -> pd.DataFrame:
     # read the whole table
     try:
         table_df = pd.read_csv(table_path, encoding="utf-8", dtype=str)
@@ -411,6 +407,15 @@ def read_meta_table(table_path: str | Path) -> pd.DataFrame:
 
     for col in table_df.columns:
         table_df[col] = table_df[col].apply(sanitize_validation_string)
+
+    # Special treatment for URL/DOI-like fields to
+    # remove non-ASCII characters and ending dots which cause hyperlinking issues
+    # (e.g., github_url, protocols_io_DOI, other_reference, publication_DOI) 
+    if columns_remove_special_characters_and_ending_dots is not None:
+        for col in columns_remove_special_characters_and_ending_dots:
+            if col in table_df.columns:
+                table_df[col] = table_df[col].apply(remove_special_characters_ascii_printable)
+                table_df[col] = table_df[col].apply(remove_ending_dot)
 
     # drop the first column if it is just the index incase it was saved with index = True
     if table_df.columns[0] == "Unnamed: 0":
