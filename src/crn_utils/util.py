@@ -41,6 +41,7 @@ SUPPORTED_CDE_VERSIONS = {
     "v3.2-beta": "v3.2",
     "v3.3": "v3.3",
     "v4.1": "v4.1",
+    "v4.2": "v4.2",
 }
 
 # TODO: This will be deprecated in favor of call to list tables by source/species/assay
