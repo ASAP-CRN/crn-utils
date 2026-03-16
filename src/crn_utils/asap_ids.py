@@ -92,12 +92,12 @@ def normalize_source_for_ids(
         Note: organism and source must be values valid in the CDE ValidCategories tab
         """
 
-        if organism == "Human":
+        if source in ["Cell lines", "EPSC", "iPSC"]:
+            source_for_ids = "invitro"
+        elif organism == "Human":
             source_for_ids = "pmdbs"
         elif organism == "Mouse":
             source_for_ids = "mouse"
-        elif source in ["Cell lines", "EPSC", "iPSC"]:
-            source_for_ids = "invitro"
         else:
             print(f"organism: {organism}")
             print(f"source: {source}")
@@ -984,9 +984,6 @@ def update_mouse_id_mappers(
 
     # add ASAP_subject_id to the SUBJECT tables
     mouseid_mapper = generate_mouse_subject_ids(mouseid_mapper, subject_ids_df)
-
-    print(f"mouseid_mapper: {mouseid_mapper}")
-
     sample_ids_df = sample_df[["sample_id", "subject_id"]]
     sampleid_mapper = generate_mouse_sample_ids(
         mouseid_mapper, sampleid_mapper, sample_ids_df
@@ -1256,10 +1253,10 @@ def generate_cell_ids(
             max([int(id.split("_")[-1]) for id in existing_ids]) if existing_ids else 0
         )
         next_num = max_num + 1
-        print(f"found {len(existing_ids)} existing IDs. starting from {next_num}")
+        print(f"found {len(existing_ids)} existing cell IDs. starting from {next_num}")
     else:
         next_num = 1
-        print(f"no existing IDs found. starting from {next_num}")
+        print(f"no existing cell IDs found. starting from {next_num}")
 
     # subject_id is the alias for cell_id
     if "subject_id" not in cell_df.columns:
