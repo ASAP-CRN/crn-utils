@@ -1,23 +1,7 @@
 """CRN-UTILS"""
 
-from __future__ import annotations
+__version__ = "0.3.0"
 
-__version__ = "0.2.2"
-
-from .asap_ids import *
-from .bucket_util import *
-from .checksums import *
-from .util import *
-from .validate import *
-from .update_schema import *
-from .zenodo_util import *
-
-from .constants import *
-
-from .validate import *
-from .file_metadata import *
-from .proteomics import *
-from .release_util import *
-from .doi import *
-
-# from .resource_tools import *
+# All consumers use explicit submodule imports (e.g. from crn_utils.util import X).
+# Star-imports removed to prevent eager loading of heavy/env-specific dependencies
+# (doi, file_metadata) as a side effect of importing any crn_utils submodule.
