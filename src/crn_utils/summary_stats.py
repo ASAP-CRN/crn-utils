@@ -1,6 +1,5 @@
 import pandas as pd
 from numpy import nan as np_nan
-from asap_ids import normalize_source_for_ids
 
 _brain_region_coder = {
     "Anterior_Cingulate_Gyrus": "ACG",
