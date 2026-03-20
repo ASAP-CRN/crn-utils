@@ -486,27 +486,29 @@ def get_stats_human_non_brain(df: pd.DataFrame) -> dict:
 
 
 def make_stats_df_cell(dfs: dict[pd.DataFrame]) -> pd.DataFrame:
-    """ """
+    """
+    Build a flat stats DataFrame for cell line / in-vitro datasets.
+    
+    dfs should be the dict of release metadata
+    """
     sample_cols = [
         "ASAP_sample_id",
-        "ASAP_cell_id",
+        "ASAP_subject_id",
         "ASAP_team_id",
         "ASAP_dataset_id",
         "replicate",
-        "replicate_count",
         "repeated_sample",
         "batch",
         "organism",
         "tissue",
-        "assay_type",
         "condition_id",
     ]
 
     subject_cols = [
-        "ASAP_cell_id",
-        "cell_line",
+        "ASAP_subject_id",
+        "cell_line"
     ]
-
+    
     condition_cols = [
         "condition_id",
         "intervention_name",
@@ -516,15 +518,12 @@ def make_stats_df_cell(dfs: dict[pd.DataFrame]) -> pd.DataFrame:
     ]
 
     SAMPLE_ = dfs["SAMPLE"][sample_cols]
-
-    SUBJECT_ = dfs["CELL"][subject_cols]
+    SUBJECT_ = dfs["SUBJECT"][subject_cols]
     CONDITION_ = dfs["CONDITION"][condition_cols]
 
     df = pd.merge(SAMPLE_, CONDITION_, on="condition_id", how="left")
-
-    # then JOIN the result with SUBJECT on "ASAP_subject_id" how=left to get "age_at_collection", "sex", "primary_diagnosis"
     df = (
-        pd.merge(df, SUBJECT_, on="ASAP_cell_id", how="left")
+        pd.merge(df, SUBJECT_, on="ASAP_subject_id", how="left")
         .drop_duplicates()
         .reset_index(drop=True)
     )
