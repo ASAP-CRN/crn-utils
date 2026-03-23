@@ -590,9 +590,7 @@ def update_pmdbs_id_mappers(
     return updated id_mappers
     """
 
-    if dataset_id.startswith("team-"):
-        pass
-    else:
+    if not dataset_id.startswith("team-"):
         raise ValueError(f"Dataset ID [{dataset_id}] does not start with expected 'team-' prefix.")
     
     _, datasetid_mapper = generate_asap_dataset_id(datasetid_mapper, dataset_id, source_for_ids)
@@ -974,9 +972,7 @@ def update_mouse_id_mappers(
     return updated id_mappers
     """
 
-    if dataset_id.startswith("team-"):
-        pass
-    else:
+    if not dataset_id.startswith("team-"):
         raise ValueError(f"Dataset ID [{dataset_id}] does not start with expected 'team-' prefix.")
 
     _, datasetid_mapper = generate_asap_dataset_id(datasetid_mapper, dataset_id, source_for_ids)
@@ -1195,9 +1191,7 @@ def update_cell_id_mappers(
          updated id_mappers
     """
 
-    if dataset_id.startswith("team-"):
-        pass
-    else:
+    if not dataset_id.startswith("team-"):
         raise ValueError(f"Dataset ID [{dataset_id}] does not start with expected 'team-' prefix.")
 
     _, datasetid_mapper = generate_asap_dataset_id(datasetid_mapper, dataset_id, source_for_ids)
