@@ -41,6 +41,7 @@ SUPPORTED_CDE_VERSIONS = {
     "v3.2-beta": "v3.2",
     "v3.3": "v3.3",
     "v4.1": "v4.1",
+    "v4.2": "v4.2",
 }
 
 # TODO: This will be deprecated in favor of call to list tables by source/species/assay
@@ -373,20 +374,6 @@ def remove_special_characters_ascii_printable(value: object) -> object:
     )
     return value_str.strip()
 
-def remove_ending_dot(field: object) -> object:
-    """
-    For URL/DOI-like fields, remove ending dots, which cause hyperlinking issues.
-    """
-    if field is None or field is pd.NA:
-        return field
-
-    field_str = str(field)
-
-    # Remove ending dot if it exists
-    if field_str.endswith("."):
-        field_str = field_str[:-1]
-    return field_str.strip()
-
 def read_meta_table(
     table_path: str | Path,
     columns_remove_special_characters_and_ending_dots: list[str] | None = None
@@ -415,7 +402,7 @@ def read_meta_table(
         for col in columns_remove_special_characters_and_ending_dots:
             if col in table_df.columns:
                 table_df[col] = table_df[col].apply(remove_special_characters_ascii_printable)
-                table_df[col] = table_df[col].apply(remove_ending_dot)
+                table_df[col] = table_df[col].str.rstrip(".")
 
     # drop the first column if it is just the index incase it was saved with index = True
     if table_df.columns[0] == "Unnamed: 0":

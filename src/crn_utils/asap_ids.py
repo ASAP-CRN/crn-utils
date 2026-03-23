@@ -1,54 +1,61 @@
 import os
+import sys
 import pandas as pd
 import json
 import logging
-import argparse
 import shutil
 from pathlib import Path
 
-
-from .util import (
-    read_CDE,
-    read_meta_table,
-    read_CDE_asap_ids,
-    load_tables,
-    export_meta_tables,
-)
-
+from .util import load_tables
 
 from .constants import *
 
+repo_root = Path(__file__).resolve().parents[1]
+wf_common_path = repo_root.parent / "wf-common" / "util"
+sys.path.insert(0, str(wf_common_path))
+
+# from wf-common
+from common import strip_team_prefix
+
 __all__ = [
-    "load_id_mapper",
+    # Generic ID mapping functions used by all sources
+    "normalize_source_for_ids",
+    "export_all_id_mappers",
     "load_all_id_mappers",
     "update_meta_tables_with_asap_ids",
-    "export_all_id_mappers",
     "update_all_id_mappers",
+    "load_id_mapper",
     "write_id_mapper",
+    "generate_asap_dataset_id",
+    "generate_asap_team_id",
     "get_sampr",
     "get_id",
-    "generate_asap_team_id",
-    "generate_asap_dataset_id",
-    "generate_human_subject_ids",
-    "generate_human_sample_ids",
-    "generate_mouse_subject_ids",
-    "generate_mouse_sample_ids",
-    "load_pmdbs_id_mappers",
+    
+    # PMDBS specific functions
     "export_pmdbs_id_mappers",
     "update_pmdbs_id_mappers",
-    "update_pmdbs_meta_tables_with_asap_ids",
-    "load_tables",
-    "export_meta_tables",
-    "load_mouse_id_mappers",
+    "generate_human_subject_ids",
+    "generate_human_sample_ids",
+    
+    # MOUSE specific functions
     "export_mouse_id_mappers",
     "update_mouse_id_mappers",
-    "update_mouse_meta_tables_with_asap_ids",
-    "load_cell_id_mappers",
+    "generate_mouse_subject_ids",
+    "generate_mouse_sample_ids",
+    
+    # INVITRO specific functions
     "export_cell_id_mappers",
     "update_cell_id_mappers",
     "generate_cell_ids",
+    "generate_cell_sample_ids",
+    
+    # Used by crn-utils/release_util.py only
+    "load_pmdbs_id_mappers",
+    "update_pmdbs_meta_tables_with_asap_ids",
+    "update_mouse_meta_tables_with_asap_ids",
+    "load_mouse_id_mappers",
+    "load_cell_id_mappers",
     "update_cell_meta_tables_with_asap_ids",
-    # "process_meta_files"
 ]
 
 
@@ -57,62 +64,142 @@ __all__ = [
 # ID generation and mapping functionality currently wraps existing source-specific
 # functions and leaves these intact for backwards compatibility.
 # !!!NOTE!!:
-# FEB2026 release uses CDE v4.1, which has SUBJECT instead of CELL and MOUSE, 
+# FEB2026 release used CDE v4.1, which has SUBJECT instead of CELL and MOUSE, 
 # meaning subject_id must be uniform. Further, this release included 
 # schapira-fecal-metagenome-human-baseline and liddle-human-colon-spatial-cosmx*,
 # the first non-PMDBS human datasets.
-# For this urgent release we are using the PMDBS ID mappers (exceptions_handle_as_pmdbs),
+# For the FEB2026 release release we are using the PMDBS ID mappers (exceptions_handle_as_pmdbs)
 # but future PRs will:
 # 1) Replace the single-source calls with species/source/assay from a universal look up
 # 2) Implement an ID system that best captures non-PMDBS human samples
 # ----
 
-# TODO: This is a temporary hack for the Feb2026 release and will be replaced in future PRs that look 
-# to implement a more robust ID mapping system and universal look up for species/source/assay 
-exceptions_handle_as_pmdbs = ["pmdbs", "fecal", "human-colon"]
+#TODO: Here functions normalize_source_for_ids and export_all_id_mappers
+#      work together to normalize source_for_ids.
+#      It's STILL one of ["pmdbs", "mouse", "invitro"].
+#      but now it's based on CDE ValidCategories (organism and sample_source).
+#      This is a temporary hack for the Feb2026/March2026 releases which use PMDBS/MOUSE/CELL ASAP IDs
+#      A fututre implementation will fully transition to general SUBJECT ASAP IDs.
+def normalize_source_for_ids(
+        organism: str, 
+        source: str) -> str:
+        """
+        Normalize source for the purposes of ID mapping, which is currently based on PMDBS/MOUSE/CELL but will be updated in the future.
+
+        Required fields:
+        - organism: organism type of the dataset (e.g., "Human", "Mouse")
+        - source: source type of the dataset (e.g., "Brain", "Fecal", "Cell lines", "iPSC")
+        Note: organism and source must be values valid in the CDE ValidCategories tab
+        """
+
+        if source in ["Cell lines", "EPSC", "iPSC"]:
+            source_for_ids = "invitro"
+        elif organism == "Human":
+            source_for_ids = "pmdbs"
+        elif organism == "Mouse":
+            source_for_ids = "mouse"
+        else:
+            print(f"organism: {organism}")
+            print(f"source: {source}")
+            raise ValueError(f"ERROR!!! normalize_source_for_ids: Couldn't determine which ID mappers to use.")
+        return source_for_ids
+
+
+def export_all_id_mappers(
+    map_path: Path,
+    source_for_ids: str,
+    id_mappers: dict[str, dict],
+    suffix: str = "ids"  # Default to "ids" suffix for the master file names, like ASAP_PMDBS_subj_ids.json
+    ) -> None:
+    """
+    This function wraps source-specific export calls to give a unified interface.
+
+    Required fields:
+        - map_path: path to the ID mappers
+        - source_for_ids: normalized source for ID mappers. One of ["pmdbs", "mouse", "invitro"],
+                          which is currently determined by organism/source but will be updated in the future
+        - id_mappers: dict of ID mappers
+
+        Note: organism and source must be values valid in the CDE ValidCategories tab
+    
+    Returns:
+        - None
+
+    """
+    map_path = Path(map_path)
+    
+    if source_for_ids == "pmdbs":
+        export_pmdbs_id_mappers(
+            map_path=map_path,
+            suffix=suffix,
+            datasetid_mapper=id_mappers["dataset"],
+            subjectid_mapper=id_mappers["subject"],
+            sampleid_mapper=id_mappers["sample"],
+            gp2id_mapper=id_mappers["gp2"],
+            sourceid_mapper=id_mappers["source_subject"]
+        )
+    elif source_for_ids == "mouse":
+        export_mouse_id_mappers(
+            map_path=map_path,
+            suffix=suffix,
+            datasetid_mapper=id_mappers["dataset"],
+            mouseid_mapper=id_mappers["subject"],
+            sampleid_mapper=id_mappers["sample"]
+        )
+    elif source_for_ids == "invitro":
+        export_cell_id_mappers(
+            map_path=map_path,
+            suffix=suffix,
+            datasetid_mapper=id_mappers["dataset"],
+            cellid_mapper=id_mappers["subject"],
+            sampleid_mapper=id_mappers["sample"]
+        )
+    else:
+        raise ValueError(f"Unknown source: {source_for_ids}")
+
 
 def load_all_id_mappers(map_path: Path, 
-                        source: str) -> dict[str, dict]:
+                        source_for_ids: str
+                        ) -> dict[str, dict]:
     """
     Load the ID mappers for the given source type.
 
+    Requires:
+        - map_path: path to the directory containing the ID mapper files
+        - source_for_ids: normalized source for ID mappers. One of ["pmdbs", "mouse", "invitro"],
+                          which is currently determined by organism/source but will be updated in the future
+
     Returns a dict with standardized keys:
-      - "dataset": dataset ID mapper (always present)
-      - "subject": subject/mouse/cell ID mapper (always present)
-      - "sample": sample ID mapper (always present)
-      - "gp2": GP2 ID mapper (PMDBS only, optional)
-      - "source_subject": source subject ID mapper (PMDBS only, optional)
+        - "dataset": dataset ID mapper (always present)
+        - "subject": subject/mouse/cell ID mapper (always present)
+        - "sample": sample ID mapper (always present)
+        - "gp2": GP2 ID mapper (PMDBS only, optional)
+        - "source_subject": source subject ID mapper (PMDBS only, optional)
+
     """
     map_path = Path(map_path)
     id_mappers = {}
-    
-    # Normalize source
-    if source in ["ipsc", "cell"]:
-        source = "invitro"
-        
-    if source in exceptions_handle_as_pmdbs:
-        source = "pmdbs"
-        
+
     # Dataset is common to all sources
     dataset_mapper_path = map_path / "ASAP_dataset_ids.json"
     id_mappers["dataset"] = load_id_mapper(dataset_mapper_path)
     
-    if source == "pmdbs":
+    if source_for_ids == "pmdbs":
         id_mappers["subject"] = load_id_mapper(map_path / "ASAP_PMDBS_subj_ids.json")
         id_mappers["sample"] = load_id_mapper(map_path / "ASAP_PMDBS_samp_ids.json")
         id_mappers["gp2"] = load_id_mapper(map_path / "ASAP_PMDBS_gp2_ids.json")
         id_mappers["source_subject"] = load_id_mapper(map_path / "ASAP_PMDBS_sourcesubj_ids.json")
     
-    elif source == "mouse":
+    elif source_for_ids == "mouse":
         id_mappers["subject"] = load_id_mapper(map_path / "ASAP_MOUSE_ids.json")
         id_mappers["sample"] = load_id_mapper(map_path / "ASAP_MOUSE_samp_ids.json")
     
-    elif source == "invitro":
+    elif source_for_ids == "invitro":
         id_mappers["subject"] = load_id_mapper(map_path / "ASAP_INVITRO_ids.json")
         id_mappers["sample"] = load_id_mapper(map_path / "ASAP_INVITRO_samp_ids.json")
     
     else:
-        raise ValueError(f"Unknown source: {source}.")
+        raise ValueError(f"Unknown source: {source_for_ids}.")
 
     return id_mappers
 
@@ -120,25 +207,31 @@ def load_all_id_mappers(map_path: Path,
 def update_meta_tables_with_asap_ids(
     meta_tables: dict[str, pd.DataFrame],
     dataset_id: str,
-    source: str,
-    team: str,
     id_mappers: dict[str, dict],
     asap_ids_schema: pd.DataFrame) -> dict[str, pd.DataFrame]:
     """
     Inject ASAP IDs into the metadata tables based on the provided ID mappers.
     Assumes that the ID mappers have already been populated for the given dataset.
-    
-    Returns a dict of the updated metadata tables with ASAP IDs injected.
+
+    Required fields:
+        - meta_tables: dict of metadata tables to update, keyed by table name
+        - dataset_id (e.g., "team-smith-pmdbs-sn-rnaseq")
+        - id_mappers: dict of ID mappers
+        - asap_ids_schema: schema defining which tables need which ASAP IDs
+
+    Returns:
+        - a dict of the updated metadata tables with ASAP IDs injected.
+
     """
-    # Normalize source
-    if source in ["ipsc", "cell"]:
-        source = "invitro"
-        
-    if source in exceptions_handle_as_pmdbs:
-        source = "pmdbs"
-    
+
+    if dataset_id.startswith("team-"):
+        team = dataset_id.split("-")[1]
+        dataset_name = strip_team_prefix(dataset_id)
+    else:
+        raise ValueError(f"Dataset ID [{dataset_id}] does not start with expected 'team-' prefix.")
+
     # Getting the individual mappers
-    asap_dataset_id = id_mappers["dataset"].get(dataset_id)
+    asap_dataset_id = id_mappers["dataset"].get(dataset_name)
     subject_mapper = id_mappers["subject"]
     sample_mapper = id_mappers["sample"]
     
@@ -177,60 +270,11 @@ def update_meta_tables_with_asap_ids(
         meta_table.insert(0, "ASAP_team_id", f"TEAM_{team.upper()}")
 
     return meta_tables
-
-
-def export_all_id_mappers(
-    map_path: Path,
-    source: str,
-    id_mappers: dict[str, dict],
-    suffix: str = "ids"  # unclear if this ever changes
-    ) -> None:
-    """
-    This function wraps source-specific export calls to give a unified interface.
-    """
-    map_path = Path(map_path)
-    
-    # Normalize source
-    if source in ["ipsc", "cell"]:
-        source = "invitro"
-        
-    if source in exceptions_handle_as_pmdbs:
-        source = "pmdbs"
-        
-    # Source-specific exports
-    if source == "pmdbs":
-        export_pmdbs_id_mappers(
-            map_path=map_path,
-            suffix=suffix,
-            datasetid_mapper=id_mappers["dataset"],
-            subjectid_mapper=id_mappers["subject"],
-            sampleid_mapper=id_mappers["sample"],
-            gp2id_mapper=id_mappers["gp2"],
-            sourceid_mapper=id_mappers["source_subject"]
-        )
-    elif source == "mouse":
-        export_mouse_id_mappers(
-            map_path=map_path,
-            suffix=suffix,
-            datasetid_mapper=id_mappers["dataset"],
-            mouseid_mapper=id_mappers["subject"],
-            sampleid_mapper=id_mappers["sample"]
-        )
-    elif source == "invitro":
-        export_cell_id_mappers(
-            map_path=map_path,
-            suffix=suffix,
-            datasetid_mapper=id_mappers["dataset"],
-            cellid_mapper=id_mappers["subject"],
-            sampleid_mapper=id_mappers["sample"]
-        )
-    else:
-        raise ValueError(f"Unknown source: {source}")
-    
-
+  
 
 def update_all_id_mappers(
     dataset_id: str,
+    organism: str,
     source: str,
     metadata_dir: Path,
     map_path: Path,
@@ -243,25 +287,40 @@ def update_all_id_mappers(
     On a dry run no files are written, otherwise the updated mappers are saved 
     but a backup of existing files is made first. The updated mappers are always
     returned as a dict.
+
+    Required fields:
+        - dataset_id: (e.g., "team-smith-pmdbs-sn-rnaseq")
+        - organism: organism type of the dataset (e.g., "Human", "Mouse")
+        - source: source type of the dataset (e.g., "Brain", "Fecal", "Cell lines", "iPSC")
+        - metadata_dir: directory containing the metadata tables
+        - map_path: path to the ID mappers
+        - dry_run: if True, no files are written, only a dry run is performed
+        Note: organism and source must be values valid in the CDE ValidCategories tab
+
+    Returns:
+        - updated ID mappers as a dict of dicts
+
     """
+
+    if dataset_id.startswith("team-"):
+        dataset_name = strip_team_prefix(dataset_id)
+    else:
+        raise ValueError(f"Dataset ID [{dataset_id}] does not start with expected 'team-' prefix.")
+
     metadata_dir = Path(metadata_dir)
     map_path = Path(map_path)
     
-    # Normalize source
-    if source in ["ipsc", "cell"]:
-        source = "invitro"
-        
-    if source in exceptions_handle_as_pmdbs:
-        source = "pmdbs"
-        
-    logging.info(f"Updating ID mappers for dataset: {dataset_id} of source: {source}")
+    source_for_ids = normalize_source_for_ids(organism, source)
+
+    logging.info(f"Updating ID mappers for dataset: {dataset_name} of source_for_ids: {source_for_ids}")
     
     # Load existing ID mappers which will be updated
-    id_mappers = load_all_id_mappers(map_path=map_path, source=source)
+    id_mappers = load_all_id_mappers(map_path=map_path, source_for_ids=source_for_ids)
     
+    # TODO: Implement getting expected_tables based on CDE OSA rules
     # Each source updates SAMPLE and SUBJECT, with PMDBS having further IDs
     expected_tables = ["SAMPLE", "SUBJECT"]
-    if source == "pmdbs":
+    if source_for_ids == "pmdbs":
         expected_tables.extend(["CLINPATH"])
 
     meta_tables = load_tables(metadata_dir, expected_tables)
@@ -273,7 +332,7 @@ def update_all_id_mappers(
             )
     
     # Call source-specific update functions, which return tuples of updated mappers
-    if source == "pmdbs":
+    if source_for_ids == "pmdbs":
         (
             id_mappers["dataset"],
             id_mappers["subject"],
@@ -283,14 +342,15 @@ def update_all_id_mappers(
         ) = update_pmdbs_id_mappers(
             clinpath_df=meta_tables["CLINPATH"],
             sample_df=meta_tables["SAMPLE"],
-            long_dataset_name=dataset_id,
+            dataset_id=dataset_id,
+            source_for_ids=source_for_ids,
             datasetid_mapper=id_mappers["dataset"],
             subjectid_mapper=id_mappers["subject"],
             sampleid_mapper=id_mappers["sample"],
             gp2id_mapper=id_mappers["gp2"],
             sourceid_mapper=id_mappers["source_subject"],
         )
-    elif source == "mouse":
+    elif source_for_ids == "mouse":
         (
             id_mappers["dataset"],
             id_mappers["subject"],
@@ -298,12 +358,13 @@ def update_all_id_mappers(
         ) = update_mouse_id_mappers(
             subject_df=meta_tables["SUBJECT"],
             sample_df=meta_tables["SAMPLE"],
-            long_dataset_name=dataset_id,
+            dataset_id=dataset_id,
+            source_for_ids=source_for_ids,
             datasetid_mapper=id_mappers["dataset"],
             mouseid_mapper=id_mappers["subject"],
             sampleid_mapper=id_mappers["sample"],
         )
-    elif source == "invitro":
+    elif source_for_ids == "invitro":
         (
             id_mappers["dataset"],
             id_mappers["subject"],
@@ -311,36 +372,39 @@ def update_all_id_mappers(
         ) = update_cell_id_mappers(
             cell_df=meta_tables["SUBJECT"],
             sample_df=meta_tables["SAMPLE"],
-            long_dataset_name=dataset_id,
+            dataset_id=dataset_id,
+            source_for_ids=source_for_ids,
             datasetid_mapper=id_mappers["dataset"],
             cellid_mapper=id_mappers["subject"],
             sampleid_mapper=id_mappers["sample"],
         )
     else:
-        raise ValueError(f"Unknown source: {source}")
+        raise ValueError(f"Unknown source_for_ids: {source_for_ids}")
     
     # Export (note that even if dry_run is True, we still return the updated
     # mappers; if dry_run is False, we write to disk but a backup is made first)
     if not dry_run:
         logging.info(f"Writing updated ID mappers to: {map_path}")
-        export_all_id_mappers(map_path=map_path, source=source, id_mappers=id_mappers)
+        export_all_id_mappers(map_path=map_path, source_for_ids=source_for_ids, id_mappers=id_mappers)
     else:
         logging.info(f"Dry run: would write updated ID mappers to: {map_path}")
         
     return id_mappers
-    
-
-# The following code is from the original workflow to generate/map IDs in a
-# source-specific manner. It is kept for backwards compatibility and reference
-# but is currently being deprecated in favor of the unified functions above.
-# ----
 
 
-#####################
-# general id utils
-#####################
-def load_id_mapper(id_mapper_path: Path) -> dict:
-    """load the id mapper from the json file"""
+def load_id_mapper(
+        id_mapper_path: Path
+        ) -> dict:
+    """
+    Load the id mapper from the json file
+
+    Required fields:
+        - id_mapper_path: path to the id mapper json file
+
+    Returns:
+        - id_mapper: dict of existing ID mappings, or empty dict if file not found
+    """
+
     id_mapper_path = Path(id_mapper_path)
     if os.path.exists(id_mapper_path):
         with open(id_mapper_path, "r") as f:
@@ -352,24 +416,19 @@ def load_id_mapper(id_mapper_path: Path) -> dict:
     return id_mapper
 
 
-# # don't need the ijson version for now
-# def load_big_id_mapper(id_mapper_path:Path, ids:list) -> dict:
-#     """ load the id mapper from the json file"""
-#     id_mapper = {}
+def write_id_mapper(
+        id_mapper: dict, 
+        id_mapper_path: str | Path):
+    """
+    Write the id mapper to the json file
 
-#     if os.path.exists(id_mapper_path):
-#         with open(id_mapper_path, 'r') as f:
-#             for k, v in ijson.kvitems(f, ''):
-#                 if k in ids:
-#                     id_mapper.update({k:v})
-#         print(f"id_mapper loaded from {id_mapper_path}")
-#     else:
-#         print(f"id_mapper not found at {id_mapper_path}")
+    Required fields:
+        - id_mapper: dict of ID mappings to write
+        - id_mapper_path: path to the id mapper json file
 
-#     return id_mapper
-
-def write_id_mapper(id_mapper: dict, id_mapper_path: str | Path):
-    """write the id mapper to the json file"""
+    Returns:
+        - 0 if successful, 1 if error
+    """
     id_mapper_path = Path(id_mapper_path)
 
     if os.path.exists(id_mapper_path):
@@ -395,59 +454,200 @@ def write_id_mapper(id_mapper: dict, id_mapper_path: str | Path):
         print(f"saved id_mapper to {id_mapper_path}")
     return 0
 
+
+#TODO: Here passing one of the three normalized sourcce values ["pmdbs", "mouse", "invitro"].
+#      but now it's based on CDE ValidCategories (organism and sample_source).
+#      This is a temporary hack for the Feb2026/March2026 releases which use PMDBS/MOUSE/CELL ASAP IDs
+#      A fututre implementation will fully transition to general SUBJECT ASAP IDs.
+def generate_asap_dataset_id(
+        dataset_id_mapper: dict,
+        dataset_id: str,
+        source_for_ids: str
+
+) -> tuple[str, dict]:
+    """
+    Generate new ASAP dataset ids from the dataset_id.  Format will be "DS_xxxx"
+
+    Required fields:
+        - dataset_id_mapper: dict of existing dataset_id mappings
+        - dataset_id: (e.g., "team-smith-pmdbs-sn-rnaseq")
+        - source_for_ids: normalized source for ID mappers. One of ["pmdbs", "mouse", "invitro"],
+                          which is currently determined by organism/source but will be updated in the future
+
+    Returns:
+        - asap_dataset_id: the generated ASAP dataset ID (e.g., "DS_BRAIN_0001")
+        - updated dataset_id_mapper dict with the new mapping included
+    """
+
+    if dataset_id.startswith("team-"):
+        dataset_name = strip_team_prefix(dataset_id)
+    else:
+        raise ValueError(f"Dataset ID [{dataset_id}] does not start with expected 'team-' prefix.")
+    
+    # Note: the ASAP_dataset_ids.json has strings with dataset_name format (e.g., "smith-pmdbs-sn-rnaseq", stripped of the "team-" prefix).
+    #       hence, here we map using dataset_name not dataset_id
+    if dataset_name in dataset_id_mapper.keys():
+        print(
+            f"{dataset_name} already has a dataset_name: {dataset_id_mapper[dataset_name]}"
+        )
+        print(f"beware of potential dataset_name collision")
+        asap_dataset_id = dataset_id_mapper[dataset_name]
+        return asap_dataset_id, dataset_id_mapper
+    else:
+        n = len(dataset_id_mapper) + 1
+        asap_dataset_id = f"DS_{source_for_ids.upper()}_{n:04}"
+        dataset_id_mapper[dataset_name] = asap_dataset_id
+        return asap_dataset_id, dataset_id_mapper
+
+def generate_asap_team_id(team: str) -> str:
+    """
+    Input: team name and output: team_id
+
+    Required fields:
+    - team: team name (e.g., "smith")
+
+    """
+    return f"TEAM_{team.upper()}"
+
+
 def get_sampr(v):
     return int(v.split("_")[3].replace("s", ""))
-
 
 def get_id(v):
     return v[:17]
 
 
-def generate_asap_team_id(team: str) -> str:
-    """input: team name and output: team_id"""
-    return f"TEAM_{team.upper()}"
-
-
-def generate_asap_dataset_id(
-    dataset_id_mapper: dict, long_dataset_name: str
-) -> tuple[str, dict]:
-    """
-    generate new dataset_ids from the long_dataset_name.  Format will be "DS_xxxx"
-
-    long_dataset_name: <team_name>_<source>_<dataset_name> i.e. the folder name in 'asap-crn-metadata'
-    (do we actually need to use underscores?)
-    """
-    source = long_dataset_name.split("-")[1]
-
-    if long_dataset_name in dataset_id_mapper.keys():
-        print(
-            f"{long_dataset_name} already has a dataset_id: {dataset_id_mapper[long_dataset_name]}"
-        )
-        print(f"beware of potential long_dataset_name collision")
-
-        return dataset_id_mapper[long_dataset_name], dataset_id_mapper
-    else:
-        n = len(dataset_id_mapper) + 1
-        dataset_id = f"DS_{source.upper()}_{n:04}"
-        dataset_id_mapper[long_dataset_name] = dataset_id
-        return dataset_id, dataset_id_mapper
-
-
 #####################
-# source typed id utils
+# PMDBS specific functions
 #####################
+
+def export_pmdbs_id_mappers(
+    map_path: str | Path,
+    suffix: str,
+    datasetid_mapper: dict,
+    subjectid_mapper: dict,
+    sampleid_mapper: dict,
+    gp2id_mapper: dict,
+    sourceid_mapper: dict,
+):
+    """
+    Export the id mappers to json files
+
+    Required fields:
+    - map_path: path to the directory where the id mappers will be saved
+    - suffix: suffix to add to the file names (e.g., "ids")
+    - datasetid_mapper: dict of dataset_id mappings
+    - subjectid_mapper: dict of subject_id mappings
+    - sampleid_mapper: dict of sample_id mappings
+    - gp2id_mapper: dict of gp2_id mappings
+    - sourceid_mapper: dict of source_subject_id mappings
+    """
+    map_path = Path(map_path)
+
+    source = "PMDBS"
+
+    subject_mapper_path = os.path.join(map_path, f"ASAP_{source}_subj_{suffix}.json")
+    sample_mapper_path = os.path.join(map_path, f"ASAP_{source}_samp_{suffix}.json")
+    gp2_mapper_path = os.path.join(map_path, f"ASAP_{source}_gp2_{suffix}.json")
+    source_mapper_path = os.path.join(
+        map_path, f"ASAP_{source}_sourcesubj_{suffix}.json"
+    )
+    dataset_mapper_path = os.path.join(map_path, f"ASAP_dataset_{suffix}.json")
+    # update the dataset_id_mapper
+    write_id_mapper(datasetid_mapper, dataset_mapper_path)
+    write_id_mapper(subjectid_mapper, subject_mapper_path)
+    write_id_mapper(sampleid_mapper, sample_mapper_path)
+    write_id_mapper(gp2id_mapper, gp2_mapper_path)
+    write_id_mapper(sourceid_mapper, source_mapper_path)
+
+
+def update_pmdbs_id_mappers(
+    clinpath_df,
+    sample_df,
+    dataset_id,
+    source_for_ids,
+    datasetid_mapper,
+    subjectid_mapper,
+    sampleid_mapper,
+    gp2id_mapper,
+    sourceid_mapper,
+):
+    """
+    Read in the CLINPATH and SAMPLE data tables, generate new ids, update the id_mappers
+
+    Required fields:
+        - clinpath_df: CLINPATH metadata table as a dataframe
+        - sample_df: SAMPLE metadata table as a dataframe
+        - dataset_id: dataset_id (e.g., "team-smith-pmdbs-sn-rnaseq")
+        - source_for_ids: normalized source for ID mappers. One of ["pmdbs", "mouse", "invitro"],
+                          which is currently determined by organism/source but will be updated in the future
+        - datasetid_mapper: dict of existing dataset_id mappings
+        - subjectid_mapper: dict of existing subject_id mappings
+        - sampleid_mapper: dict of existing sample_id mappings
+        - gp2id_mapper: dict of existing gp2_id mappings
+        - sourceid_mapper: dict of existing source_subject_id mappings
+    
+    return updated id_mappers
+    """
+
+    if not dataset_id.startswith("team-"):
+        raise ValueError(f"Dataset ID [{dataset_id}] does not start with expected 'team-' prefix.")
+    
+    _, datasetid_mapper = generate_asap_dataset_id(datasetid_mapper, dataset_id, source_for_ids)
+
+    subjec_ids_df = clinpath_df[["subject_id", "source_subject_id", "GP2_id"]]
+
+    # add ASAP_subject_id to the SUBJECT tables
+    output = generate_human_subject_ids(
+        subjectid_mapper, gp2id_mapper, sourceid_mapper, subjec_ids_df, source_for_ids
+    )
+    subjectid_mapper, gp2id_mapper, sourceid_mapper = output
+
+    sample_ids_df = sample_df[["sample_id", "subject_id", "source_sample_id"]]
+    sampleid_mapper = generate_human_sample_ids(
+        subjectid_mapper, sampleid_mapper, sample_ids_df
+    )
+
+    return (
+        datasetid_mapper,
+        subjectid_mapper,
+        sampleid_mapper,
+        gp2id_mapper,
+        sourceid_mapper,
+    )
+
+
+# TODO: this function needs refactoring to be more modular and readable, but the general logic is:
+# For each unique subject_id in the clinpath table, we check if we know the corresponding GP2_id or source_subject_id.
+# If we do, we use the existing ASAP_subject_id. If not, we generate a new ASAP_subject_id and update the mappers accordingly.
+# Issues to resolve
+# 1) We need to decide how to handle cases where the same subject_id has multiple GP2_ids or source_subject_ids
+#    (this should not happen and may indicate a data quality issue that needs to be logged).
+# 2) We need to decide how to handle cases where we have no GP2_id or source_subject_id for a subject_id 
+#    (this also may indicate a data quality issue that needs to be logged).
+# 3) Using subject_id as the primary key across teams shouldn't be used, we should use source_subject_id but restricted to actual Biobank ID formats.
+
 def generate_human_subject_ids(
     subjectid_mapper: dict,
     gp2id_mapper: dict,
     sourceid_mapper: dict,
     subject_df: pd.DataFrame,
-    source: str = "pmdbs",
+    source_for_ids: str,
 ) -> tuple[dict, dict, dict]:
     """
-    generate new unique_ids for new subject_ids in subject_df table,
+    Generate new unique_ids for new subject_ids in subject_df table,
     update the id_mapper with the new ids from the data table
 
-    return updated id_mappers
+    Required fields:
+        - subjectid_mapper: dict of existing subject_id mappings
+        - gp2id_mapper: dict of existing gp2_id mappings
+        - sourceid_mapper: dict of existing source_subject_id mappings
+        - subject_df: subject metadata table as a dataframe, must contain columns "subject_id", "source_subject_id", and "GP2_id"
+        - source_for_ids: normalized source for ID mappers. One of ["pmdbs", "mouse", "invitro"],
+                          which is currently determined by organism/source but will be updated in the future
+
+    Returns:
+        - Updated id_mappers
     """
 
     # force NA to be Nan
@@ -560,7 +760,7 @@ def generate_human_subject_ids(
 
         if len(testset) == 0:  # generate a new asap_subj_id
             # print(samp_n)
-            asap_subject_id = f"ASAP_{source.upper()}_{samp_n:06}"
+            asap_subject_id = f"ASAP_{source_for_ids.upper()}_{samp_n:06}"
             # df_dups_subset.insert(0, 'ASAP_subject_id', asap_subject_id, inplace=True)
         else:  # testset should have the asap_subj_id
             asap_subject_id = testset.pop()  # but where did it come from?
@@ -594,19 +794,25 @@ def generate_human_subject_ids(
     print(f"added {n_gp2_id_add} new gp2_ids")
     print(f"added {n_source_id_add} new source_ids")
 
-    # print(id_source)
-
     return subjectid_mapper, gp2id_mapper, sourceid_mapper
 
 
 def generate_human_sample_ids(
-    subjectid_mapper: dict, sampleid_mapper: dict, sample_df: pd.DataFrame
+    subjectid_mapper: dict, 
+    sampleid_mapper: dict, 
+    sample_df: pd.DataFrame
 ) -> dict:
     """
-    generate new unique_ids for new sample_ids in sample_df table,
+    Generate new unique_ids for new sample_ids in sample_df table,
     update the id_mapper with the new ids from the data table
 
-    return the updated id_mapper and updated sample_df
+    Required fields:
+        - subjectid_mapper: dict of existing subject_id mappings
+        - sampleid_mapper: dict of existing sample_id mappings
+        - sample_df: sample metadata table as a dataframe, must contain columns "sample_id" and "subject_id"
+
+    Returns:
+        - Updated sampleid_mapper with new mappings from sample_df
     """
 
     ud_sampleid_mapper = sampleid_mapper.copy()
@@ -699,294 +905,132 @@ def generate_human_sample_ids(
     id_mapper = dict(zip(df_wids["sample_id"], df_wids["ASAP_sample_id"]))
 
     ud_sampleid_mapper.update(id_mapper)
-    # print(ud_sampleid_mapper)
-
-    # assert df_wids.sort_index().equals(sample_df)
-    # print(f"{df_wids.shape=}, {sample_df.shape=}")
-    # print(f"{df_wids.columns=}, {sample_df.columns=}")
 
     # the n_add is NOT correct...
     n_add = len(ud_sampleid_mapper.keys()) - len(id_mapper.keys())
 
     print(f"added {n_add} new sample_ids")
 
-    # print(id_source)
-
     return ud_sampleid_mapper
 
 
-###############################################
-### PMDBS specific functions
-###############################################
-def load_pmdbs_id_mappers(map_path, suffix):
-    source = "PMDBS"
+#####################
+# MOUSE specific functions
+#####################
 
-    prototypes = ["dataset", "subj", "samp", "gp2", "sourcesubj"]
-
-    outputs = ()
-    for prot in prototypes:
-        if prot == "dataset":
-            fname = f"ASAP_{prot}_{suffix}.json"
-        else:
-            fname = f"ASAP_{source}_{prot}_{suffix}.json"
-
-        try:
-            id_mapper = load_id_mapper(os.path.join(map_path, fname))
-        except FileNotFoundError:
-            id_mapper = {}
-            print(f"{os.path.join(map_path, fname)} not found... starting from scratch")
-        outputs += (id_mapper,)
-
-    return outputs
-
-
-def export_pmdbs_id_mappers(
-    map_path: str | Path,
+def export_mouse_id_mappers(
+    map_path: Path | str,
     suffix: str,
-    datasetid_mapper: dict,
-    subjectid_mapper: dict,
-    sampleid_mapper: dict,
-    gp2id_mapper: dict,
-    sourceid_mapper: dict,
-):
-    """
-    export the id mappers to json files
-    """
-    map_path = Path(map_path)
-
-    source = "PMDBS"
-
-    subject_mapper_path = os.path.join(map_path, f"ASAP_{source}_subj_{suffix}.json")
-    sample_mapper_path = os.path.join(map_path, f"ASAP_{source}_samp_{suffix}.json")
-    gp2_mapper_path = os.path.join(map_path, f"ASAP_{source}_gp2_{suffix}.json")
-    source_mapper_path = os.path.join(
-        map_path, f"ASAP_{source}_sourcesubj_{suffix}.json"
-    )
-    dataset_mapper_path = os.path.join(map_path, f"ASAP_dataset_{suffix}.json")
-    # update the dataset_id_mapper
-    write_id_mapper(datasetid_mapper, dataset_mapper_path)
-    write_id_mapper(subjectid_mapper, subject_mapper_path)
-    write_id_mapper(sampleid_mapper, sample_mapper_path)
-    write_id_mapper(gp2id_mapper, gp2_mapper_path)
-    write_id_mapper(sourceid_mapper, source_mapper_path)
-    # print(f"wrote updated PMDBS ID mappers")
-
-
-# isolate generation of the IDs and adding to mappers from updating the tables.
-def update_pmdbs_id_mappers(
-    clinpath_df,
-    sample_df,
-    long_dataset_name,
-    datasetid_mapper,
-    subjectid_mapper,
-    sampleid_mapper,
-    gp2id_mapper,
-    sourceid_mapper,
-):
-    """
-    read in the CLINPATH and SAMPLE data tables, generate new ids, update the id_mappers
-
-    return updated id_mappers
-    """
-
-    _, datasetid_mapper = generate_asap_dataset_id(datasetid_mapper, long_dataset_name)
-
-    subjec_ids_df = clinpath_df[["subject_id", "source_subject_id", "GP2_id"]]
-
-    # add ASAP_subject_id to the SUBJECT tables
-    output = generate_human_subject_ids(
-        subjectid_mapper, gp2id_mapper, sourceid_mapper, subjec_ids_df
-    )
-    subjectid_mapper, gp2id_mapper, sourceid_mapper = output
-
-    sample_ids_df = sample_df[["sample_id", "subject_id", "source_sample_id"]]
-    sampleid_mapper = generate_human_sample_ids(
-        subjectid_mapper, sampleid_mapper, sample_ids_df
-    )
-
-    return (
-        datasetid_mapper,
-        subjectid_mapper,
-        sampleid_mapper,
-        gp2id_mapper,
-        sourceid_mapper,
-    )
-
-
-#
-def update_pmdbs_meta_tables_with_asap_ids(
-    dfs: dict,
-    long_dataset_name: str,
-    asap_ids_schema: pd.DataFrame,
-    datasetid_mapper: dict,
-    subjectid_mapper: dict,
-    sampleid_mapper: dict,
-    gp2id_mapper: dict,
-    sourceid_mapper: dict,
-    pmdbs_tables: list | None = None,
-) -> dict:
-    """
-    process the metadata tables to add ASAP_IDs to the tables with the mappers
-
-    PMDBS tables:
-        ['PMDBS', 'CONDITION', 'CLINPATH', 'SUBJECT', 'ASSAY_RNAseq', 'SAMPLE', 'DATA', 'STUDY', 'PROTOCOL']
-    """
-
-    if pmdbs_tables is None:
-        pmdbs_tables = PMDBS_TABLES.copy() + ["SPATIAL"]
-        print(f"default {pmdbs_tables=}")
-    # pmdbs_tables = ['STUDY', 'PROTOCOL','SUBJECT', 'ASSAY_RNAseq', 'SAMPLE', 'PMDBS', 'CONDITION', 'CLINPATH', 'DATA']
-    # pmdbs_tables = asap_ids_schema['Table'].to_list()
-
-    ASAP_sample_id_tables = asap_ids_schema[
-        asap_ids_schema["Field"] == "ASAP_sample_id"
-    ]["Table"].to_list()
-    ASAP_subject_id_tables = asap_ids_schema[
-        asap_ids_schema["Field"] == "ASAP_subject_id"
-    ]["Table"].to_list()
-
-    # print(f"{ASAP_sample_id_tables=}")
-    # print(f"{ASAP_subject_id_tables=}")
-    DATASET_ID = datasetid_mapper[long_dataset_name]
-
-    if "STUDY" in dfs.keys():  # un-necessary check
-        TEAM_ID = dfs["STUDY"]["ASAP_team_name"].str.upper().str.replace("-", "_")[0]
-    else:  # this should NEVER happen
-        print(f"STUDY table not found in dataset {long_dataset_name}")
-        TEAM_ID = "TEAM_" + long_dataset_name.split("-")[0].upper()
-
-    # now we add the IDs
-    for tab in pmdbs_tables:
-        if tab not in dfs:
-            print(f"Table {tab} not found in dataset {long_dataset_name}")
-            continue
-
-        if tab in ASAP_subject_id_tables:
-            # first do the ASAP_subject_id
-            ASAP_subject_id = dfs[tab]["subject_id"].map(subjectid_mapper)
-            dfs[tab].insert(0, "ASAP_subject_id", ASAP_subject_id)
-
-        if tab in ASAP_sample_id_tables:
-            # second do the ASAP_sample_id
-            ASAP_sample_id = dfs[tab]["sample_id"].map(sampleid_mapper)
-            dfs[tab].insert(0, "ASAP_sample_id", ASAP_sample_id)
-
-        # insert the DATASET_ID at the beginning of the dataframe
-        dfs[tab].insert(0, "ASAP_dataset_id", DATASET_ID)
-        # insert the TEAM_ID at the beginning of the dataframe
-        dfs[tab].insert(0, "ASAP_team_id", TEAM_ID)
-
-    return dfs
-
-
-###############################################
-### MOUSE specific functions
-###############################################
-#####################
-# source typed id utils
-#####################
-
-
-def update_mouse_meta_tables_with_asap_ids(
-    dfs: dict,
-    long_dataset_name: str,
-    asap_ids_schema: pd.DataFrame,
     datasetid_mapper: dict,
     mouseid_mapper: dict,
     sampleid_mapper: dict,
-    mouse_tables: list | None = None,
-) -> dict:
+):
     """
-    process the metadata tables to add ASAP_IDs to the tables with the mappers
+    Export the ID mappers to JSON files for the MOUSE source type.
 
-    MOUSE_TABLES = [
-        "STUDY",
-        "PROTOCOL",
-        "ASSAY_RNAseq",  # this is missing... try to construct...
-        "SAMPLE",
-        "MOUSE",
-        "CONDITION",
-        "DATA",
-        ]
+    Required fields:
+        - map_path: path to the directory where the ID mapper files will be saved
+        - suffix: a string suffix to append to the filenames (e.g., "ids")
+        - datasetid_mapper: dict of dataset ID mappings to export
+        - mouseid_mapper: dict of mouse subject ID mappings to export
+        - sampleid_mapper: dict of sample ID mappings to export
+    
     """
-    # default to mouse scPMDBS / bulkPMDBS
-    if mouse_tables is None:
-        mouse_tables = MOUSE_TABLES.copy() + ["SPATIAL"]
-
-    ASAP_sample_id_tables = asap_ids_schema[
-        asap_ids_schema["Field"] == "ASAP_sample_id"
-    ]["Table"].to_list()
-    ASAP_subject_id_tables = asap_ids_schema[
-        (asap_ids_schema["Field"] == "ASAP_subject_id")
-        | (asap_ids_schema["Field"] == "ASAP_mouse_id")
-    ]["Table"].to_list()
-
-    DATASET_ID = datasetid_mapper[long_dataset_name]
-
-    if "STUDY" in dfs.keys():  # un-necessary check
-        TEAM_ID = dfs["STUDY"]["ASAP_team_name"].str.upper().str.replace("-", "_")[0]
-    else:  # this should NEVER happen
-        print(f"STUDY table not found in dataset {long_dataset_name}")
-        TEAM_ID = "TEAM_" + long_dataset_name.split("-")[0].upper()
-
-    # now we add the IDs
-    for tab in mouse_tables:
-        if tab not in dfs:
-            print(f"Table {tab} not found in dataset {long_dataset_name}")
-            continue
-
-        if tab in ASAP_subject_id_tables:
-            # first do the ASAP_subject_id
-            if "subject_id" in dfs[tab].columns:
-                ASAP_subject_id = dfs[tab]["subject_id"].map(mouseid_mapper)
-            elif "mouse_id" in dfs[tab].columns:
-                ASAP_subject_id = dfs[tab]["mouse_id"].map(mouseid_mapper)
-            else:
-                print(f"subject_id or mouse_id not found in {tab}")
-                continue
-            dfs[tab].insert(0, "ASAP_mouse_id", ASAP_subject_id)
-
-        if tab in ASAP_sample_id_tables:
-            # second do the ASAP_sample_id
-            ASAP_sample_id = dfs[tab]["sample_id"].map(sampleid_mapper)
-            dfs[tab].insert(0, "ASAP_sample_id", ASAP_sample_id)
-
-        # insert the DATASET_ID at the beginning of the dataframe
-        dfs[tab].insert(0, "ASAP_dataset_id", DATASET_ID)
-        # insert the TEAM_ID at the beginning of the dataframe
-        dfs[tab].insert(0, "ASAP_team_id", TEAM_ID)
-
-    return dfs
+    map_path = Path(map_path)
+    source = "MOUSE"
+    sample_mapper_path = os.path.join(map_path, f"ASAP_{source}_samp_{suffix}.json")
+    mouse_mapper_path = os.path.join(map_path, f"ASAP_{source}_{suffix}.json")
+    dataset_mapper_path = os.path.join(map_path, f"ASAP_dataset_{suffix}.json")
+    # update the dataset_id_mapper
+    write_id_mapper(datasetid_mapper, dataset_mapper_path)
+    write_id_mapper(mouseid_mapper, mouse_mapper_path)
+    write_id_mapper(sampleid_mapper, sample_mapper_path)
 
 
 def update_mouse_id_mappers(
     subject_df: pd.DataFrame,
     sample_df: pd.DataFrame,
-    long_dataset_name: str,
+    dataset_id: str,
+    source_for_ids: str,
     datasetid_mapper: dict,
     mouseid_mapper: dict,
     sampleid_mapper: dict,
 ):
     """
-    read in the MOUSE (subject_df) and SAMPLE (sample_df) data tables, generate new ids, update the id_mappers
+    Read in the SUBJECT and SAMPLE data tables, generate new IDs, update the ID mappers
+
+    Required fields:
+        - subject_df: SUBJECT metadata table as a dataframe
+        - sample_df: SAMPLE metadata table as a dataframe
+        - dataset_id: dataset ID (e.g., "team-smith-pmdbs-sn-rnaseq")
+        - source_for_ids: normalized source for ID mappers. One of ["pmdbs", "mouse", "invitro"],
+                          which is currently determined by organism/source but will be updated in the future
+        - datasetid_mapper: dict of existing dataset ID mappings
+        - mouseid_mapper: dict of existing mouse subject ID mappings
+        - sampleid_mapper: dict of existing sample ID mappings
 
     return updated id_mappers
     """
-    _, datasetid_mapper = generate_asap_dataset_id(datasetid_mapper, long_dataset_name)
+
+    if not dataset_id.startswith("team-"):
+        raise ValueError(f"Dataset ID [{dataset_id}] does not start with expected 'team-' prefix.")
+
+    _, datasetid_mapper = generate_asap_dataset_id(datasetid_mapper, dataset_id, source_for_ids)
 
     subject_ids_df = subject_df[["subject_id"]]
 
     # add ASAP_subject_id to the SUBJECT tables
     mouseid_mapper = generate_mouse_subject_ids(mouseid_mapper, subject_ids_df)
-
-    print(f"mouseid_mapper: {mouseid_mapper}")
-
     sample_ids_df = sample_df[["sample_id", "subject_id"]]
     sampleid_mapper = generate_mouse_sample_ids(
         mouseid_mapper, sampleid_mapper, sample_ids_df
     )
 
     return datasetid_mapper, mouseid_mapper, sampleid_mapper
+
+
+def generate_mouse_subject_ids(mouseid_mapper: dict, subject_df: pd.DataFrame) -> dict:
+    """
+    generate new unique_ids for new subject_ids in subject_df table,
+    update the id_mapper with the new ids from the data table
+
+    Args:
+        mouseid_mapper (dict): Existing subject ID mapper
+        subject_df (pd.DataFrame): DataFrame containing subject information
+
+    Returns:
+        dict: Updated subject ID mapper"""
+    # Initialize the mapper if it's None
+    if mouseid_mapper is None:
+        mouseid_mapper = {}
+
+    source = "mouse"
+    # Make a copy to avoid modifying the original
+    mapper = mouseid_mapper.copy()
+
+    # Get the next available ID number
+    existing_ids = [
+        id for id in mapper.values() if id.startswith(f"ASAP_{source.upper()}_")
+    ]
+    if existing_ids:
+        # Extract numbers from existing IDs and find the max
+        max_num = (
+            max([int(id.split("_")[-1]) for id in existing_ids]) if existing_ids else 0
+        )
+        next_num = max_num + 1
+    else:
+        next_num = 1
+
+    # Process each subject
+    for _, row in subject_df.iterrows():
+        subject_id = row.get("subject_id")
+        if subject_id and subject_id not in mapper:
+            # Generate new ID
+            asap_id = f"ASAP_{source.upper()}_{next_num:06d}"
+            mapper[subject_id] = asap_id
+            next_num += 1
+
+    return mapper
 
 
 def generate_mouse_sample_ids(
@@ -1099,266 +1143,10 @@ def generate_mouse_sample_ids(
     # print(ud_sampleid_mapper)
     return ud_sampleid_mapper
 
+#####################
+# INVITRO specific functions
+#####################
 
-def generate_mouse_subject_ids(mouseid_mapper: dict, subject_df: pd.DataFrame) -> dict:
-    """
-    generate new unique_ids for new subject_ids in subject_df table,
-    update the id_mapper with the new ids from the data table
-
-    Args:
-        mouseid_mapper (dict): Existing subject ID mapper
-        subject_df (pd.DataFrame): DataFrame containing subject information
-        source (str): Source identifier for the IDs
-
-    Returns:
-        dict: Updated subject ID mapper"""
-    # Initialize the mapper if it's None
-    if mouseid_mapper is None:
-        mouseid_mapper = {}
-
-    source = "mouse"
-    # Make a copy to avoid modifying the original
-    mapper = mouseid_mapper.copy()
-
-    # Get the next available ID number
-    existing_ids = [
-        id for id in mapper.values() if id.startswith(f"ASAP_{source.upper()}_")
-    ]
-    if existing_ids:
-        # Extract numbers from existing IDs and find the max
-        max_num = (
-            max([int(id.split("_")[-1]) for id in existing_ids]) if existing_ids else 0
-        )
-        next_num = max_num + 1
-    else:
-        next_num = 1
-
-    # Process each subject
-    for _, row in subject_df.iterrows():
-        subject_id = row.get("subject_id")
-        if subject_id and subject_id not in mapper:
-            # Generate new ID
-            asap_id = f"ASAP_{source.upper()}_{next_num:06d}"
-            mapper[subject_id] = asap_id
-            next_num += 1
-
-    return mapper
-
-
-def load_mouse_id_mappers(map_path, suffix):
-    source = "MOUSE"
-    prototypes = ["dataset", "subj", "samp"]
-
-    outputs = ()
-    for prot in prototypes:
-        if prot == "dataset":
-            fname = f"ASAP_{prot}_{suffix}.json"
-        elif prot == "subj":
-            fname = f"ASAP_{source}_{suffix}.json"
-        else:
-            fname = f"ASAP_{source}_{prot}_{suffix}.json"
-
-        try:
-            id_mapper = load_id_mapper(os.path.join(map_path, fname))
-        except FileNotFoundError:
-            id_mapper = {}
-            print(f"{os.path.join(map_path, fname)} not found... starting from scratch")
-
-        print(f"loaded {fname}")
-        outputs += (id_mapper,)
-
-    return outputs
-
-
-def export_mouse_id_mappers(
-    map_path: Path | str,
-    suffix: str,
-    datasetid_mapper: dict,
-    mouseid_mapper: dict,
-    sampleid_mapper: dict,
-):
-    map_path = Path(map_path)
-    source = "MOUSE"
-    sample_mapper_path = os.path.join(map_path, f"ASAP_{source}_samp_{suffix}.json")
-    mouse_mapper_path = os.path.join(map_path, f"ASAP_{source}_{suffix}.json")
-    dataset_mapper_path = os.path.join(map_path, f"ASAP_dataset_{suffix}.json")
-    # update the dataset_id_mapper
-    write_id_mapper(datasetid_mapper, dataset_mapper_path)
-    write_id_mapper(mouseid_mapper, mouse_mapper_path)
-    write_id_mapper(sampleid_mapper, sample_mapper_path)
-
-
-def generate_sample_ids(
-    subjectid_mapper: dict,
-    sampleid_mapper: dict,
-    sample_df: pd.DataFrame,
-    source: str = "mouse",
-) -> dict:
-    """
-    Generate new unique sample IDs for new samples in sample_df table,
-    update the sampleid_mapper with the new ids from the data table.
-
-    Args:
-        subjectid_mapper: Dict mapping subject IDs to ASAP subject IDs
-        sample_df: DataFrame containing sample data
-        source: Source identifier string (default "mouse")
-
-    Returns:
-        Updated sampleid_mapper dict
-    """
-
-    # Force NA to be NaN
-    sample_df = sample_df.replace("NA", pd.NA)
-
-    # Get starting n value from existing mapper
-    if bool(sampleid_mapper):
-        all_samp_ns = [
-            int(v.split("_")[3].replace("s", "")) for v in sampleid_mapper.values()
-        ]
-        n = max(all_samp_ns) + 1
-    else:
-        n = 1
-    nstart = n
-
-    # Get unique samples
-    uniq_samp = sample_df["sample_id"].unique()
-    sampids_mapper = dict(
-        zip(uniq_samp, [num + nstart for num in range(len(uniq_samp))])
-    )
-
-    n_sample_id_add = 0
-
-    df_dup_chunks = []
-    for samp_id, samp_n in sampids_mapper.items():
-        df_samp_subset = sample_df[sample_df.sample_id == samp_id].copy()
-        # Get subject ID for this sample
-        subj_id = df_samp_subset["subject_id"].values[0]
-        # Look up ASAP subject ID
-        if subj_id in subjectid_mapper:
-            asap_subj_id = subjectid_mapper[subj_id]
-        else:
-            print(f"Warning: subject_id {subj_id} not found in subjectid_mapper")
-            continue
-
-        # Generate sample ID if not already mapped
-        if samp_id not in sampleid_mapper:
-            asap_sample_id = f"{asap_subj_id}_s{samp_n:03}"
-            sampleid_mapper[samp_id] = asap_sample_id
-            n_sample_id_add += 1
-
-        df_dup_chunks.append(df_samp_subset)
-
-    df_samp_wids = pd.concat(df_dup_chunks)
-
-    assert df_samp_wids.sort_index().equals(sample_df)
-    print(f"Added {n_sample_id_add} new sample IDs")
-
-    return sampleid_mapper
-
-
-###############################################
-### CELL specific functions
-###############################################
-### CELLs
-def load_cell_id_mappers(
-    map_path: Path | str,
-    suffix: str,
-) -> tuple[dict, dict, dict]:
-
-    map_path = Path(map_path)
-    source = "INVITRO"
-    prototypes = ["dataset", "cell", "samp"]
-    outputs = ()
-    for prot in prototypes:
-        if prot == "dataset":
-            fname = f"ASAP_{prot}_{suffix}.json"
-        elif prot == "cell":
-            fname = f"ASAP_{source}_{suffix}.json"
-        else:
-            fname = f"ASAP_{source}_{prot}_{suffix}.json"
-
-        try:
-            id_mapper = load_id_mapper(os.path.join(map_path, fname))
-        except FileNotFoundError:
-            id_mapper = {}
-            print(f"{os.path.join(map_path, fname)} not found... starting from scratch")
-        outputs += (id_mapper,)
-
-    return outputs
-
-
-# isolate generation of the IDs and adding to mappers from updating the tables.
-def update_cell_id_mappers(
-    cell_df: pd.DataFrame,
-    sample_df: pd.DataFrame,
-    long_dataset_name: str,
-    datasetid_mapper: dict,
-    cellid_mapper: dict,
-    sampleid_mapper: dict,
-):
-    """
-    read in the CELL (cell_df) and SAMPLE (sample_df) data tables, generate new ids, update the id_mappers
-
-    return updated id_mappers
-    """
-    _, datasetid_mapper = generate_asap_dataset_id(datasetid_mapper, long_dataset_name)
-
-    # subject_id is the alias for cell_id
-    if "subject_id" not in cell_df.columns:
-        cell_col = "cell_id"
-    else:
-        cell_col = "subject_id"
-
-    cell_ids_df = cell_df[[cell_col]]
-
-    # add ASAP_subject_id to the SUBJECT tables
-    cellid_mapper = generate_cell_ids(cellid_mapper, cell_ids_df)
-
-    sample_ids_df = sample_df[["sample_id", cell_col]]
-    sampleid_mapper = generate_cell_sample_ids(
-        cellid_mapper, sampleid_mapper, sample_ids_df
-    )
-
-    return datasetid_mapper, cellid_mapper, sampleid_mapper
-
-
-# isolate generation of the IDs and adding to mappers from updating the tables.
-def update_cell_id_mappers(
-    cell_df: pd.DataFrame,
-    sample_df: pd.DataFrame,
-    long_dataset_name: str,
-    datasetid_mapper: dict,
-    cellid_mapper: dict,
-    sampleid_mapper: dict,
-):
-    """
-    read in the CELL (cell_df) and SAMPLE (sample_df) data tables, generate new ids, update the id_mappers
-
-    return updated id_mappers
-    """
-    _, datasetid_mapper = generate_asap_dataset_id(datasetid_mapper, long_dataset_name)
-
-    # subject_id is the alias for cell_id
-    if "subject_id" not in cell_df.columns:
-        cell_col = "cell_id"
-    else:
-        cell_col = "subject_id"
-
-    cell_ids_df = cell_df[[cell_col]]
-
-    # add ASAP_subject_id to the SUBJECT tables
-    cellid_mapper = generate_cell_ids(cellid_mapper, cell_ids_df)
-
-    sample_ids_df = sample_df[["sample_id", cell_col]]
-    sampleid_mapper = generate_cell_sample_ids(
-        cellid_mapper, sampleid_mapper, sample_ids_df
-    )
-
-    return datasetid_mapper, cellid_mapper, sampleid_mapper
-
-
-# TODO: refactor.  the abstraction is set up so a single function toggled on source should work for
-# .  cell or mouse.
 def export_cell_id_mappers(
     map_path: Path | str,
     suffix: str,
@@ -1375,6 +1163,113 @@ def export_cell_id_mappers(
     write_id_mapper(datasetid_mapper, dataset_mapper_path)
     write_id_mapper(cellid_mapper, cell_mapper_path)
     write_id_mapper(sampleid_mapper, sample_mapper_path)
+
+
+def update_cell_id_mappers(
+    cell_df: pd.DataFrame,
+    sample_df: pd.DataFrame,
+    dataset_id: str,
+    source_for_ids: str,
+    datasetid_mapper: dict,
+    cellid_mapper: dict,
+    sampleid_mapper: dict,
+):
+    """
+    Read in the CELL (cell_df) and SAMPLE (sample_df) data tables, generate new ids, update the id_mappers
+
+    Required fields:
+        - cell_df: CELL metadata table as a dataframe
+        - sample_df: SAMPLE metadata table as a dataframe
+        - dataset_id: dataset_id (e.g., "team-smith-pmdbs-sn-rnaseq")
+        - source_for_ids: normalized source for ID mappers. One of ["pmdbs", "mouse", "invitro"],
+                          which is currently determined by organism/source but will be updated in the future
+        - datasetid_mapper: dict of existing dataset_id mappings
+        - cellid_mapper: dict of existing cell_id mappings
+        - sampleid_mapper: dict of existing sample_id mappings
+
+    Returns:
+         updated id_mappers
+    """
+
+    if not dataset_id.startswith("team-"):
+        raise ValueError(f"Dataset ID [{dataset_id}] does not start with expected 'team-' prefix.")
+
+    _, datasetid_mapper = generate_asap_dataset_id(datasetid_mapper, dataset_id, source_for_ids)
+
+    # subject_id is the alias for cell_id
+    if "subject_id" not in cell_df.columns:
+        cell_col = "cell_id"
+    else:
+        cell_col = "subject_id"
+
+    cell_ids_df = cell_df[[cell_col]]
+
+    # add ASAP_subject_id to the SUBJECT tables
+    cellid_mapper = generate_cell_ids(cellid_mapper, cell_ids_df)
+
+    sample_ids_df = sample_df[["sample_id", cell_col]]
+    sampleid_mapper = generate_cell_sample_ids(
+        cellid_mapper, sampleid_mapper, sample_ids_df
+    )
+
+    return datasetid_mapper, cellid_mapper, sampleid_mapper
+
+
+def generate_cell_ids(
+        cellid_mapper: dict, 
+        cell_df: pd.DataFrame) -> dict:
+    """
+    Generate new unique_ids for new cell_ids (subject_id) in cell_df table,
+    update the id_mapper with the new ids from the data table
+
+    Required fields:
+        - cellid_mapper: dict of existing cell ID mappings
+        - cell_df: cell metadata table as a dataframe, must contain a column "cell_id" or "subject_id" (which is the alias for cell_id)
+    
+    Returns:
+        dict: Updated cell ID mapper
+    """
+    # Initialize the mapper if it's None
+    if cellid_mapper is None:
+        cellid_mapper = {}
+
+    # FORCE "cell" as the generic term
+    source_for_outfile = "cell"
+    # Make a copy to avoid modifying the original
+    mapper = cellid_mapper.copy()
+
+    # Get the next available ID number
+    existing_ids = [
+        id for id in mapper.values() if id.startswith(f"ASAP_{source_for_outfile.upper()}_")
+    ]
+    if existing_ids:
+        # Extract numbers from existing IDs and find the max
+        max_num = (
+            max([int(id.split("_")[-1]) for id in existing_ids]) if existing_ids else 0
+        )
+        next_num = max_num + 1
+        print(f"found {len(existing_ids)} existing cell IDs. starting from {next_num}")
+    else:
+        next_num = 1
+        print(f"no existing cell IDs found. starting from {next_num}")
+
+    # subject_id is the alias for cell_id
+    if "subject_id" not in cell_df.columns:
+        cell_col = "cell_id"
+    else:
+        cell_col = "subject_id"
+
+    # Process each subject
+    for _, row in cell_df.iterrows():
+
+        cell_id = row.get(cell_col)
+        if cell_id and cell_id not in mapper:
+            # Generate new ID
+            asap_id = f"ASAP_{source_for_outfile.upper()}_{next_num:06d}"
+            mapper[cell_id] = asap_id
+            next_num += 1
+
+    return mapper
 
 
 def generate_cell_sample_ids(
@@ -1485,68 +1380,254 @@ def generate_cell_sample_ids(
     id_mapper = dict(zip(df_wids["sample_id"], df_wids["ASAP_sample_id"]))
 
     ud_sampleid_mapper.update(id_mapper)
-    # print(ud_sampleid_mapper)
     return ud_sampleid_mapper
 
 
-# TODO: consider using cellsaurus ids as the taxonomy for CELL_id encoding.
-def generate_cell_ids(cellid_mapper: dict, cell_df: pd.DataFrame) -> dict:
+#####################
+# Functions used by crn-utils/release_util.py only
+#####################
+
+def load_pmdbs_id_mappers(map_path, suffix):
+    source = "PMDBS"
+
+    prototypes = ["dataset", "subj", "samp", "gp2", "sourcesubj"]
+
+    outputs = ()
+    for prot in prototypes:
+        if prot == "dataset":
+            fname = f"ASAP_{prot}_{suffix}.json"
+        else:
+            fname = f"ASAP_{source}_{prot}_{suffix}.json"
+
+        try:
+            id_mapper = load_id_mapper(os.path.join(map_path, fname))
+        except FileNotFoundError:
+            id_mapper = {}
+            print(f"{os.path.join(map_path, fname)} not found... starting from scratch")
+        outputs += (id_mapper,)
+
+    return outputs
+
+
+def update_pmdbs_meta_tables_with_asap_ids(
+    dfs: dict,
+    dataset_id: str,
+    asap_ids_schema: pd.DataFrame,
+    datasetid_mapper: dict,
+    subjectid_mapper: dict,
+    sampleid_mapper: dict,
+    gp2id_mapper: dict,
+    sourceid_mapper: dict,
+    pmdbs_tables: list | None = None,
+) -> dict:
     """
-    generate new unique_ids for new cell_ids (subject_id) in cell_df table,
-    update the id_mapper with the new ids from the data table
+    Process the metadata tables to add ASAP_IDs to the tables with the mappers
 
-    Args:
-        cellid_mapper (dict): Existing cell ID mapper
-        cell_df (pd.DataFrame): DataFrame containing cell information
+    Required fields:
+        - dfs: dict of dataframes for each table in the dataset
+        - dataset_id: dataset ID (e.g., "team-smith-pmdbs-sn-rnaseq")
+        - asap_ids_schema: DataFrame containing the schema for ASAP IDs, with columns "Table" and "Field" indicating which tables should have which ASAP IDs
+        - datasetid_mapper: dict mapping long dataset names to ASAP dataset IDs
+        - subjectid_mapper: dict mapping subject_ids to ASAP_subject_ids
+        - sampleid_mapper: dict mapping sample_ids to ASAP_sample_ids
+        - gp2id_mapper: dict mapping GP2_ids to ASAP_subject_ids
+        - sourceid_mapper: dict mapping source_subject_ids to ASAP_subject_ids
+        - pmdbs_tables: list of table names to process for adding ASAP IDs (defaults to all PMDBS tables plus "SPATIAL")
 
-    Returns:
-        dict: Updated cell ID mapper"""
-    # Initialize the mapper if it's None
-    if cellid_mapper is None:
-        cellid_mapper = {}
+    PMDBS tables:
+        ['PMDBS', 'CONDITION', 'CLINPATH', 'SUBJECT', 'ASSAY_RNAseq', 'SAMPLE', 'DATA', 'STUDY', 'PROTOCOL']
+    """
 
-    # FORCE "cell" as the generic term
-    source = "cell"
-    # Make a copy to avoid modifying the original
-    mapper = cellid_mapper.copy()
-
-    # Get the next available ID number
-    existing_ids = [
-        id for id in mapper.values() if id.startswith(f"ASAP_{source.upper()}_")
-    ]
-    if existing_ids:
-        # Extract numbers from existing IDs and find the max
-        max_num = (
-            max([int(id.split("_")[-1]) for id in existing_ids]) if existing_ids else 0
-        )
-        next_num = max_num + 1
-        print(f"found {len(existing_ids)} existing IDs. starting from {next_num}")
+    if dataset_id.startswith("team-"):
+        dataset_name = strip_team_prefix(dataset_id)
     else:
-        next_num = 1
-        print(f"no existing IDs found. starting from {next_num}")
+        raise ValueError(f"Dataset ID [{dataset_id}] does not start with expected 'team-' prefix.")
 
-    # subject_id is the alias for cell_id
-    if "subject_id" not in cell_df.columns:
-        cell_col = "cell_id"
+
+    if pmdbs_tables is None:
+        pmdbs_tables = PMDBS_TABLES.copy() + ["SPATIAL"]
+        print(f"default {pmdbs_tables=}")
+
+    ASAP_sample_id_tables = asap_ids_schema[
+        asap_ids_schema["Field"] == "ASAP_sample_id"
+    ]["Table"].to_list()
+    ASAP_subject_id_tables = asap_ids_schema[
+        asap_ids_schema["Field"] == "ASAP_subject_id"
+    ]["Table"].to_list()
+
+    DATASET_ID = datasetid_mapper[dataset_name]
+
+    if "STUDY" in dfs.keys():  # un-necessary check
+        TEAM_ID = dfs["STUDY"]["ASAP_team_name"].str.upper().str.replace("-", "_")[0]
+    else:  # this should NEVER happen
+        print(f"STUDY table not found in dataset {dataset_name}")
+        TEAM_ID = "TEAM_" + dataset_name.split("-")[0].upper()
+
+    # now we add the IDs
+    for tab in pmdbs_tables:
+        if tab not in dfs:
+            print(f"Table {tab} not found in dataset {dataset_name}")
+            continue
+
+        if tab in ASAP_subject_id_tables:
+            # first do the ASAP_subject_id
+            ASAP_subject_id = dfs[tab]["subject_id"].map(subjectid_mapper)
+            dfs[tab].insert(0, "ASAP_subject_id", ASAP_subject_id)
+
+        if tab in ASAP_sample_id_tables:
+            # second do the ASAP_sample_id
+            ASAP_sample_id = dfs[tab]["sample_id"].map(sampleid_mapper)
+            dfs[tab].insert(0, "ASAP_sample_id", ASAP_sample_id)
+
+        # insert the DATASET_ID at the beginning of the dataframe
+        dfs[tab].insert(0, "ASAP_dataset_id", DATASET_ID)
+        # insert the TEAM_ID at the beginning of the dataframe
+        dfs[tab].insert(0, "ASAP_team_id", TEAM_ID)
+    return dfs
+
+
+def update_mouse_meta_tables_with_asap_ids(
+    dfs: dict,
+    dataset_id: str,
+    asap_ids_schema: pd.DataFrame,
+    datasetid_mapper: dict,
+    mouseid_mapper: dict,
+    sampleid_mapper: dict,
+    mouse_tables: list | None = None,
+) -> dict:
+    """
+    Process the metadata tables to add ASAP_IDs to the tables with the mappers
+
+    Required fields:
+        - dfs: dict of dataframes for each table in the dataset
+        - dataset_id: dataset ID (e.g., "team-smith-pmdbs-sn-rnaseq")
+        - asap_ids_schema: DataFrame containing the schema for ASAP IDs, with columns "Table" and "Field" indicating which tables should have which ASAP IDs
+        - datasetid_mapper: dict mapping long dataset names to ASAP dataset IDs
+        - mouseid_mapper: dict mapping mouse_ids to ASAP_mouse_ids
+        - sampleid_mapper: dict mapping sample_ids to ASAP_sample_ids
+        - mouse_tables: list of table names to process for adding ASAP IDs (defaults to all MOUSE_TABLES plus "SPATIAL")
+
+    MOUSE_TABLES = [
+        "STUDY",
+        "PROTOCOL",
+        "ASSAY_RNAseq",  # this is missing... try to construct...
+        "SAMPLE",
+        "MOUSE",
+        "CONDITION",
+        "DATA",
+        ]
+    """
+
+    if dataset_id.startswith("team-"):
+        dataset_name = strip_team_prefix(dataset_id)
     else:
-        cell_col = "subject_id"
+        raise ValueError(f"Dataset ID [{dataset_id}] does not start with expected 'team-' prefix.")
 
-    # Process each subject
-    for _, row in cell_df.iterrows():
+    # default to mouse scPMDBS / bulkPMDBS
+    if mouse_tables is None:
+        mouse_tables = MOUSE_TABLES.copy() + ["SPATIAL"]
 
-        cell_id = row.get(cell_col)
-        if cell_id and cell_id not in mapper:
-            # Generate new ID
-            asap_id = f"ASAP_{source.upper()}_{next_num:06d}"
-            mapper[cell_id] = asap_id
-            next_num += 1
+    ASAP_sample_id_tables = asap_ids_schema[
+        asap_ids_schema["Field"] == "ASAP_sample_id"
+    ]["Table"].to_list()
+    ASAP_subject_id_tables = asap_ids_schema[
+        (asap_ids_schema["Field"] == "ASAP_subject_id")
+        | (asap_ids_schema["Field"] == "ASAP_mouse_id")
+    ]["Table"].to_list()
 
-    return mapper
+    DATASET_ID = datasetid_mapper[dataset_name]
+
+    if "STUDY" in dfs.keys():  # un-necessary check
+        TEAM_ID = dfs["STUDY"]["ASAP_team_name"].str.upper().str.replace("-", "_")[0]
+    else:  # this should NEVER happen
+        print(f"STUDY table not found in dataset {dataset_name}")
+        TEAM_ID = "TEAM_" + dataset_name.split("-")[0].upper()
+
+    # now we add the IDs
+    for tab in mouse_tables:
+        if tab not in dfs:
+            print(f"Table {tab} not found in dataset {dataset_name}")
+            continue
+
+        if tab in ASAP_subject_id_tables:
+            # first do the ASAP_subject_id
+            if "subject_id" in dfs[tab].columns:
+                ASAP_subject_id = dfs[tab]["subject_id"].map(mouseid_mapper)
+            elif "mouse_id" in dfs[tab].columns:
+                ASAP_subject_id = dfs[tab]["mouse_id"].map(mouseid_mapper)
+            else:
+                print(f"subject_id or mouse_id not found in {tab}")
+                continue
+            dfs[tab].insert(0, "ASAP_mouse_id", ASAP_subject_id)
+
+        if tab in ASAP_sample_id_tables:
+            # second do the ASAP_sample_id
+            ASAP_sample_id = dfs[tab]["sample_id"].map(sampleid_mapper)
+            dfs[tab].insert(0, "ASAP_sample_id", ASAP_sample_id)
+
+        # insert the DATASET_ID at the beginning of the dataframe
+        dfs[tab].insert(0, "ASAP_dataset_id", DATASET_ID)
+        # insert the TEAM_ID at the beginning of the dataframe
+        dfs[tab].insert(0, "ASAP_team_id", TEAM_ID)
+
+    return dfs
+
+
+def load_mouse_id_mappers(map_path, suffix):
+    source = "MOUSE"
+    prototypes = ["dataset", "subj", "samp"]
+
+    outputs = ()
+    for prot in prototypes:
+        if prot == "dataset":
+            fname = f"ASAP_{prot}_{suffix}.json"
+        elif prot == "subj":
+            fname = f"ASAP_{source}_{suffix}.json"
+        else:
+            fname = f"ASAP_{source}_{prot}_{suffix}.json"
+
+        try:
+            id_mapper = load_id_mapper(os.path.join(map_path, fname))
+        except FileNotFoundError:
+            id_mapper = {}
+            print(f"{os.path.join(map_path, fname)} not found... starting from scratch")
+
+        print(f"loaded {fname}")
+        outputs += (id_mapper,)
+
+    return outputs
+
+
+def load_cell_id_mappers(
+    map_path: Path | str,
+    suffix: str,
+) -> tuple[dict, dict, dict]:
+
+    map_path = Path(map_path)
+    source = "INVITRO"
+    prototypes = ["dataset", "cell", "samp"]
+    outputs = ()
+    for prot in prototypes:
+        if prot == "dataset":
+            fname = f"ASAP_{prot}_{suffix}.json"
+        elif prot == "cell":
+            fname = f"ASAP_{source}_{suffix}.json"
+        else:
+            fname = f"ASAP_{source}_{prot}_{suffix}.json"
+
+        try:
+            id_mapper = load_id_mapper(os.path.join(map_path, fname))
+        except FileNotFoundError:
+            id_mapper = {}
+            print(f"{os.path.join(map_path, fname)} not found... starting from scratch")
+        outputs += (id_mapper,)
+
+    return outputs
 
 
 def update_cell_meta_tables_with_asap_ids(
     dfs: dict,
-    long_dataset_name: str,
+    dataset_id: str,
     asap_ids_schema: pd.DataFrame,
     datasetid_mapper: dict,
     cellid_mapper: dict,
@@ -1554,7 +1635,17 @@ def update_cell_meta_tables_with_asap_ids(
     cell_tables: list | None = None,
 ) -> dict:
     """
-    process the metadata tables to add ASAP_IDs to the tables with the mappers
+    Process the metadata tables to add ASAP_IDs to the tables with the mappers
+
+    Required fields:
+        - dfs: dict of dataframes for each table in the dataset
+        - dataset_id: dataset ID (e.g., "team-smith-pmdbs-sn-rnaseq")
+        - asap_ids_schema: DataFrame containing the schema for ASAP IDs, with   columns "Table" and "Field" indicating which tables should have which ASAP IDs
+        - datasetid_mapper: dict mapping long dataset names to ASAP dataset IDs
+        - cellid_mapper: dict mapping cell_ids to ASAP_cell_ids
+        - sampleid_mapper: dict mapping sample_ids to ASAP_sample_ids
+        - cell_tables: list of table names to process for adding ASAP IDs (defaults to all CELL_TABLES)
+
 
     CELL_TABLES = [
         "STUDY",
@@ -1566,9 +1657,11 @@ def update_cell_meta_tables_with_asap_ids(
         "DATA",
         ]
     """
-    # # default to mouse scPMDBS / bulkPMDBS
-    # if cell_tables is None:
-    #     cell_tables = CELL_TABLES
+
+    if dataset_id.startswith("team-"):
+        dataset_name = strip_team_prefix(dataset_id)
+    else:
+        raise ValueError(f"Dataset ID [{dataset_id}] does not start with expected 'team-' prefix.")
 
     cell_tables = list(set(dfs.keys()))
     print(f"{cell_tables=}")
@@ -1581,18 +1674,18 @@ def update_cell_meta_tables_with_asap_ids(
         | (asap_ids_schema["Field"] == "ASAP_cell_id")
     ]["Table"].to_list()
 
-    DATASET_ID = datasetid_mapper[long_dataset_name]
+    DATASET_ID = datasetid_mapper[dataset_name]
 
     if "STUDY" in dfs.keys():  # un-necessary check
         TEAM_ID = dfs["STUDY"]["ASAP_team_name"].str.upper().str.replace("-", "_")[0]
     else:  # this should NEVER happen
-        print(f"STUDY table not found in dataset {long_dataset_name}")
-        TEAM_ID = "TEAM_" + long_dataset_name.split("-")[0].upper()
+        print(f"STUDY table not found in dataset {dataset_name}")
+        TEAM_ID = "TEAM_" + dataset_name.split("-")[0].upper()
 
     # now we add the IDs
     for tab in cell_tables:
         if tab not in dfs:
-            print(f"Table {tab} not found in dataset {long_dataset_name}")
+            print(f"Table {tab} not found in dataset {dataset_name}")
             continue
 
         if tab in ASAP_subject_id_tables:
@@ -1620,287 +1713,3 @@ def update_cell_meta_tables_with_asap_ids(
         dfs[tab].insert(0, "ASAP_team_id", TEAM_ID)
 
     return dfs
-
-
-###############################################
-### MULTIPLEX specific functions
-###############################################
-# should we map the subject_id to PMDBS or create temporary MULTIPLEX?
-
-
-### MULTIPLEX
-def load_multiplex_id_mappers(map_path, suffix):
-    source = "MULTIPLEX"
-
-    prototypes = ["dataset", "multiplex" "subj", "gp2", "sourcesubj"]
-    outputs = ()
-    for prot in prototypes:
-        if prot == "dataset":
-            fname = f"ASAP_{prot}_{suffix}.json"
-        else:
-            fname = f"ASAP_{source}_{prot}_{suffix}.json"
-
-        try:
-            id_mapper = load_id_mapper(os.path.join(map_path, fname))
-        except FileNotFoundError:
-            id_mapper = {}
-            print(f"{os.path.join(map_path, fname)} not found... starting from scratch")
-        outputs += (id_mapper,)
-
-    return outputs
-
-
-def export_multiplex_id_mappers(
-    map_path: str | Path,
-    suffix: str,
-    datasetid_mapper: dict,
-    subjectid_mapper: dict,
-    multiplexid_mapper: dict,
-    gp2id_mapper: dict,
-    sourceid_mapper: dict,
-):
-    """
-    export the id mappers to json files
-    """
-
-    map_path = Path(map_path)
-
-    multiplex_mapper_path = os.path.join(map_path, f"ASAP_MULTIPLEX_samp_{suffix}.json")
-    write_id_mapper(multiplexid_mapper, multiplex_mapper_path)
-
-    source = "PMDBS"
-    subject_mapper_path = os.path.join(map_path, f"ASAP_{source}_subj_{suffix}.json")
-    gp2_mapper_path = os.path.join(map_path, f"ASAP_{source}_gp2_{suffix}.json")
-    source_mapper_path = os.path.join(
-        map_path, f"ASAP_{source}_sourcesubj_{suffix}.json"
-    )
-    dataset_mapper_path = os.path.join(map_path, f"ASAP_dataset_{suffix}.json")
-    # update the dataset_id_mapper
-    write_id_mapper(datasetid_mapper, dataset_mapper_path)
-    write_id_mapper(subjectid_mapper, subject_mapper_path)
-    write_id_mapper(gp2id_mapper, gp2_mapper_path)
-    write_id_mapper(sourceid_mapper, source_mapper_path)
-    # print(f"wrote updated PMDBS ID mappers")
-
-
-# isolate generation of the IDs and adding to mappers from updating the tables.
-def update_multiplex_id_mappers(
-    clinpath_df,
-    sample_df,
-    long_dataset_name,
-    datasetid_mapper,
-    subjectid_mapper,
-    multiplexid_mapper,
-    gp2id_mapper,
-    sourceid_mapper,
-):
-    """
-    read in the CLINPATH and SAMPLE data tables, generate new ids, update the id_mappers
-
-    return updated id_mappers
-    """
-
-    _, datasetid_mapper = generate_asap_dataset_id(datasetid_mapper, long_dataset_name)
-
-    subjec_ids_df = clinpath_df[["subject_id", "source_subject_id", "GP2_id"]]
-
-    # add ASAP_subject_id to the SUBJECT tables
-    output = generate_human_subject_ids(
-        subjectid_mapper, gp2id_mapper, sourceid_mapper, subjec_ids_df
-    )
-    subjectid_mapper, gp2id_mapper, sourceid_mapper = output
-
-    sample_ids_df = sample_df[["sample_id", "subject_id", "source_sample_id"]]
-    sampleid_mapper = generate_human_sample_ids(
-        subjectid_mapper, sampleid_mapper, sample_ids_df
-    )
-
-    return (
-        datasetid_mapper,
-        subjectid_mapper,
-        sampleid_mapper,
-        gp2id_mapper,
-        sourceid_mapper,
-    )
-
-
-# TODO: refactor.  the abstraction is set up so a single function toggled on source should work for
-# .  cell or mouse.
-def export_multiplex_id_mappers(
-    map_path: str | Path,
-    suffix: str,
-    datasetid_mapper: dict,
-    cellid_mapper: dict,
-    sampleid_mapper: dict,
-):
-    """
-    export the id mappers to json files
-    """
-    map_path = Path(map_path)
-    source = "PMDBS"
-    sample_mapper_path = os.path.join(map_path, f"ASAP_{source}_samp_{suffix}.json")
-    cell_mapper_path = os.path.join(map_path, f"ASAP_{source}_{suffix}.json")
-    dataset_mapper_path = os.path.join(map_path, f"ASAP_dataset_{suffix}.json")
-    # update the dataset_id_mapper
-    write_id_mapper(datasetid_mapper, dataset_mapper_path)
-    write_id_mapper(cellid_mapper, cell_mapper_path)
-    write_id_mapper(sampleid_mapper, sample_mapper_path)
-
-
-# REDACT API for now...
-# ###############################################
-# ### multi-source wrapper functions WIP
-# ###############################################
-# def process_meta_files(
-#     long_dataset_name, table_path, asap_ids_schema, map_path, suffix, export_path=None
-# ):
-
-#     print("unimplimented>...  returning 0")
-
-#     # infer source from dataset name
-#     source = long_dataset_name.split("-")[1]
-
-#     if source.upper() == "PMDBS":
-#         # define tables to process
-#         pmdbs_tables = [
-#             "STUDY",
-#             "PROTOCOL",
-#             "SUBJECT",
-#             "ASSAY_RNAseq",
-#             "SAMPLE",
-#             "PMDBS",
-#             "CONDITION",
-#             "CLINPATH",
-#             "DATA",
-#         ]
-
-#         # load the tables
-#         dfs = load_tables(table_path, pmdbs_tables)
-
-#         # load the id mappers
-#         table1 = "CLINPATH"
-#         table2 = "SAMPLE"
-
-#         load_id_mappers = load_pmdbs_id_mappers
-#         (
-#             datasetid_mapper,
-#             subjectid_mapper,
-#             sampleid_mapper,
-#             gp2id_mapper,
-#             sourceid_mapper,
-#         ) = load_id_mappers(map_path, suffix)
-
-#         # update the id mappers
-#         update_id_mappers = update_pmdbs_id_mappers
-#         (
-#             datasetid_mapper,
-#             subjectid_mapper,
-#             sampleid_mapper,
-#             gp2id_mapper,
-#             sourceid_mapper,
-#         ) = update_id_mappers(
-#             dfs[table1],
-#             dfs[table2],
-#             long_dataset_name,
-#             datasetid_mapper,
-#             subjectid_mapper,
-#             sampleid_mapper,
-#             gp2id_mapper,
-#             sourceid_mapper,
-#         )
-#         # update the tables
-#         update_meta_tables = update_pmdbs_meta_tables_with_asap_ids
-#         dfs = update_meta_tables(
-#             dfs,
-#             long_dataset_name,
-#             asap_ids_schema,
-#             datasetid_mapper,
-#             subjectid_mapper,
-#             sampleid_mapper,
-#             gp2id_mapper,
-#             sourceid_mapper,
-#         )
-
-#         # export the tables
-#         if export_path is not None:
-#             export_meta_tables(dfs, export_path)
-
-#         # export the id mappers
-#         export_id_mappers = export_pmdbs_id_mappers
-#         export_id_mappers(
-#             map_path,
-#             suffix,
-#             datasetid_mapper,
-#             subjectid_mapper,
-#             sampleid_mapper,
-#             gp2id_mapper,
-#             sourceid_mapper,
-#         )
-
-#     elif source.upper() == "MOUSE":
-#         pass
-
-#     elif source.upper() == "IPSC":
-#         pass
-#     else:
-#         print(f"source: {source} not recognized assuing human/pmdbs")
-#         pass
-
-#     return 1
-
-
-# #########  script to generate the asap_ids.json file #####################
-# if __name__ == "__main__":
-
-#     # Set up the argument parser
-#     parser = argparse.ArgumentParser(
-#         description="A command-line tool to update tables from ASAP_CDEv1 to ASAP_CDEv2."
-#     )
-
-#     # Add arguments
-#     parser.add_argument(
-#         "--dataset",
-#         default=".",
-#         help="long_dataset_name: <team_name>_<source>_<dataset_name> i.e. the folder name in 'asap-crn-metadata'. Defaults to the current working directory.",
-#     )
-#     parser.add_argument(
-#         "--tables",
-#         default=Path.cwd(),
-#         help="Path to the directory containing meta TABLES. Defaults to the current working directory.",
-#     )
-#     parser.add_argument(
-#         "--schema",
-#         default=Path.cwd(),
-#         help="Path to the directory containing ASAP_ID schema.csv. Defaults to the current working directory.",
-#     )
-#     parser.add_argument(
-#         "--map",
-#         default=Path.cwd(),
-#         help="Path to the directory containing path to mapper.json files. Defaults to the current working directory.",
-#     )
-#     parser.add_argument(
-#         "--suf",
-#         default="test",
-#         help="suffix to mapper.json. Defaults to 'map' i.e. ASAP_{samp,subj}_map.json",
-#     )
-#     parser.add_argument(
-#         "--outdir",
-#         default="v2",
-#         help="Path to the directory containing CSD.csv. Defaults to the current working directory.",
-#     )
-
-#     # Parse the arguments
-#     args = parser.parse_args()
-
-#     asap_ids_schema = read_CDE_asap_ids(local_path=args.cde)
-#     table_root = Path(args.tables)
-#     export_root = Path(args.outdir)
-
-#     process_meta_files(
-#         args.dataset,
-#         table_root,
-#         asap_ids_schema,
-#         args.map,
-#         args.suf,
-#         export_path=export_root,
-#     )
