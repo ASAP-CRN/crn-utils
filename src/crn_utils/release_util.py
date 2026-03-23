@@ -38,13 +38,7 @@ from .constants import *  # List of tables expected (CDE <= v4.0)
 from .doi import update_study_table_with_doi
 from .google_spreadsheets import read_google_sheet
 from .validate import ReportCollector, process_table
-
-repo_root = Path(__file__).resolve().parents[1]
-crn_utils_root = Path(repo_root).parents[0] / "crn-utils"
-sys.path.insert(0, str(crn_utils_root / "src"))
-
-from crn_utils.asap_ids import normalize_source_for_ids
-
+from .asap_ids import normalize_source_for_ids
 
 __all__ = [
     # Release metadata preparation
