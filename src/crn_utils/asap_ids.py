@@ -475,7 +475,7 @@ def generate_asap_dataset_id(
                           which is currently determined by organism/source but will be updated in the future
 
     Returns:
-        - asap_dataset_name: the generated ASAP dataset name (e.g., "DS_BRAIN_0001")
+        - asap_dataset_id: the generated ASAP dataset ID (e.g., "DS_BRAIN_0001")
         - updated dataset_id_mapper dict with the new mapping included
     """
 
@@ -484,19 +484,20 @@ def generate_asap_dataset_id(
     else:
         raise ValueError(f"Dataset ID [{dataset_id}] does not start with expected 'team-' prefix.")
     
+    # Note: the ASAP_dataset_ids.json has strings with dataset_name format (e.g., "smith-pmdbs-sn-rnaseq", stripped of the "team-" prefix).
+    #       hence, here we map using dataset_name not dataset_id
     if dataset_name in dataset_id_mapper.keys():
         print(
             f"{dataset_name} already has a dataset_name: {dataset_id_mapper[dataset_name]}"
         )
         print(f"beware of potential dataset_name collision")
-        asap_dataset_name = dataset_id_mapper[dataset_name]
-        return asap_dataset_name, dataset_id_mapper
+        asap_dataset_id = dataset_id_mapper[dataset_name]
+        return asap_dataset_id, dataset_id_mapper
     else:
         n = len(dataset_id_mapper) + 1
-        asap_dataset_name = f"DS_{source_for_ids.upper()}_{n:04}"
-        dataset_id_mapper[dataset_name] = asap_dataset_name
-        return asap_dataset_name, dataset_id_mapper
-
+        asap_dataset_id = f"DS_{source_for_ids.upper()}_{n:04}"
+        dataset_id_mapper[dataset_name] = asap_dataset_id
+        return asap_dataset_id, dataset_id_mapper
 
 def generate_asap_team_id(team: str) -> str:
     """
