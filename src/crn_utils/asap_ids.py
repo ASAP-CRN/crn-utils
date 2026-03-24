@@ -92,7 +92,7 @@ def normalize_source_for_ids(
         Note: organism and source must be values valid in the CDE ValidCategories tab
         """
 
-        if source in ["Cell lines", "EPSC", "iPSC"]:
+        if source in ["Cell lines", "EPSC", "iPSC", "hESC", "hPSC"]:
             source_for_ids = "invitro"
         elif organism == "Human":
             source_for_ids = "pmdbs"
