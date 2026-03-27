@@ -12,10 +12,15 @@ from .constants import *
 
 repo_root = Path(__file__).resolve().parents[1]
 wf_common_path = repo_root.parent / "wf-common" / "util"
+crn_utils_root = Path(repo_root).parents[0] / "crn-utils"
 sys.path.insert(0, str(wf_common_path))
+sys.path.insert(0, str(crn_utils_root / "src"))
 
 # from wf-common
 from common import strip_team_prefix
+
+# from crn-utils
+from crn_utils.google_spreadsheets import read_google_sheet
 
 __all__ = [
     # Generic ID mapping functions used by all sources
@@ -81,18 +86,38 @@ __all__ = [
 #      This is a temporary hack for the Feb2026/March2026 releases which use PMDBS/MOUSE/CELL ASAP IDs
 #      A fututre implementation will fully transition to general SUBJECT ASAP IDs.
 def normalize_source_for_ids(
+        dataset_id: str,
         organism: str, 
-        source: str) -> str:
+        source: str,
+        release_version: str = None
+        ) -> str:
         """
         Normalize source for the purposes of ID mapping, which is currently based on PMDBS/MOUSE/CELL but will be updated in the future.
 
         Required fields:
+        - dataset_id: dataset identifier (e.g., "team-smith-pmdbs-sn-rnaseq")
         - organism: organism type of the dataset (e.g., "Human", "Mouse")
         - source: source type of the dataset (e.g., "Brain", "Fecal", "Cell lines", "iPSC")
         Note: organism and source must be values valid in the CDE ValidCategories tab
         """
 
-        if source in ["Cell lines", "EPSC", "iPSC"]:
+        # Get invitro_source: ["Yes", "No"] from dataset release Google Spreadsheet to handle edge cases like  MEFS, 
+        # that can be either immortalized (invitro ASAP ID mappers) or primary cells (mouse ASAP ID mappers)
+        # TODO: replace by user config with gspread CLI
+        #       IF we end up using a "latest" release version in the google sheet, then we don't need to pass the release_version here
+        #       but for now using the release_version to pull the correct tab
+        #       ELSE if we decide to have a spreadsheet with all release versions, then we need to pass the release_version to pull the correct row
+        google_datasets_release_sheet_id = "13ma58D_TbW8eHbzWDb0hwXD1daNk8HWZ7_4Z0gnCETw"
+        if release_version is None:
+            release_version = "v4.0.2"
+            datasets_table = read_google_sheet(
+                spreadsheet_id=google_datasets_release_sheet_id,
+                tab_name=release_version
+            )
+            datasets_table.set_index('dataset_id', inplace=True, drop=False)
+        invitro_source = datasets_table.loc[dataset_id, "invitro_source"]
+
+        if invitro_source.lower() == "yes":
             source_for_ids = "invitro"
         elif organism == "Human":
             source_for_ids = "pmdbs"
@@ -101,6 +126,7 @@ def normalize_source_for_ids(
         else:
             print(f"organism: {organism}")
             print(f"source: {source}")
+            print(f"invitro_source: {invitro_source}")
             raise ValueError(f"ERROR!!! normalize_source_for_ids: Couldn't determine which ID mappers to use.")
         return source_for_ids
 
@@ -278,7 +304,7 @@ def update_all_id_mappers(
     source: str,
     metadata_dir: Path,
     map_path: Path,
-    dry_run: bool = False
+    dry_run: bool = False,
 ) -> dict[str, dict]:
     """
     This is a source-agnostic orchestrator that wraps source-specific calls to
@@ -310,7 +336,7 @@ def update_all_id_mappers(
     metadata_dir = Path(metadata_dir)
     map_path = Path(map_path)
     
-    source_for_ids = normalize_source_for_ids(organism, source)
+    source_for_ids = normalize_source_for_ids(dataset_id=dataset_id, organism=organism, source=source)
 
     logging.info(f"Updating ID mappers for dataset: {dataset_name} of source_for_ids: {source_for_ids}")
     
