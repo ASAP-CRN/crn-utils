@@ -2,61 +2,38 @@
 
 Set of utility python functions and scripts for managing metadata and relase documents for the ASAP CRN cloud. 
 
-Should unify the business logic for the following resources and tools:
-- [asap-crn-cloud-dataset-metadata] (https://github.com/ASAP-CRN/asap-crn-cloud-dataset-metadata)
-- [asap-crn-cloud-release-resources ] (https://github.com/ASAP-CRN/asap-crn-cloud-release-resources) which generates unique asap_ids for the submitted datasets.
-- [crn-meta-validate] (https://github.com/ASAP-CRN/crn-meta-validate )which defines the metadata validation [streamlit app] (https://asap-meta-qc.streamlit.app/)
-- etc
+The following ASAP repos have crn-utils dependencies:
+- [asap-crn-cloud-dataset-metadata](https://github.com/ASAP-CRN/asap-crn-cloud-dataset-metadata)
+- [asap-crn-cloud-release-resources, deprecated in release v4.0.1](https://github.com/ASAP-CRN/asap-crn-cloud-release-resources)
 
-## metadata versioning and validation
-`validate.py`
-`checksums.py`
-`update_schema.py`
+## Repo Structure
 
-## ASAP ID generation / management
-`asap_ids.py`
-
-## release automation and archiving
-`resource_tools.py`
-
-## general utilities
-`util.py`
-
-## bucket file utilities
-`bucket_util.py`
-
-# TODO: make this pip-installable with versioned updates... (currently relying on commit to document provenance)
-
--------------------------------
-
-## REORG 
-> TODO:  full refactor... lots of dead code and bad naming / organization
-
-- dataset utils
-    - doi
-    - asap_ids
-
-
-- release utils
-    - file metadata
-    - manifest
-    - zenodo
-    - asap_ids
-    - release 
-
-- metadata
-    - validate
-    - update_schema
-
-
-- etc
-    - bucket_util
-    - resource_tools
-    - checksums
-    - zenodo_util
-    
-- util
-- constants
+```
+.
+├── src/
+│   ├── deprecating/                 # Legacy code
+│   └── crn_utils/
+│       ├── regression_test/         # Code for regression tests between releases
+│       ├── asap_ids.py              # ASAP ID generation and management
+│       ├── bucket_util.py           # GCP bucket file utilities
+│       ├── checksums.py             # File checksum utilities
+│       ├── constants.py             # Shared constants
+│       ├── doi.py                   # DOI handling
+│       ├── file_metadata.py         # File metadata utilities
+│       ├── google_spreadsheets.py   # Google Sheets access helpers
+│       ├── orphans.py               # Orphaned resource detection
+│       ├── proteomics.py            # Proteomics-specific utilities
+│       ├── release_util.py          # Release automation and archiving
+│       ├── summary_stats.py         # Summary statistics helpers
+│       ├── update_schema.py         # CDE schema update helpers
+│       ├── util.py                  # General-purpose utilities
+│       ├── validate.py              # Metadata validation logic
+│       └── zenodo_util.py           # Zenodo integration utilities
+├── resource/
+│   └── CDE/                         # Local copy of CDE versions
+└── .github/
+    └── pull_request_template.md
+```
 
 ## Pull requests
 - Template available at: [.github/pull_request_template.md](https://github.com/ASAP-CRN/crn-utils/blob/main/.github/pull_request_template.md)
