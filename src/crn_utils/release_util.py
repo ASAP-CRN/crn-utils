@@ -109,7 +109,7 @@ def prep_release_metadata(dataset_id: str,
     """
 
     # normalize source
-    source_for_ids = normalize_source_for_ids(organism, source)
+    source_for_ids = normalize_source_for_ids(dataset_id=dataset_id, organism=organism, source=source)
 
     # ---- Load metadata tables ----
     logging.info(f"Loading metadata tables from {metadata_dir}...")
