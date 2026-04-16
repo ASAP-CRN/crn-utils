@@ -89,7 +89,7 @@ def normalize_source_for_ids(
         dataset_id: str,
         organism: str, 
         source: str,
-        release_version: str = None
+        release_version: str,
         ) -> str:
         """
         Normalize source for the purposes of ID mapping, which is currently based on PMDBS/MOUSE/CELL but will be updated in the future.
@@ -98,8 +98,14 @@ def normalize_source_for_ids(
         - dataset_id: dataset identifier (e.g., "team-smith-pmdbs-sn-rnaseq")
         - organism: organism type of the dataset (e.g., "Human", "Mouse")
         - source: source type of the dataset (e.g., "Brain", "Fecal", "Cell lines", "iPSC")
+        - release_version: CRN Cloud release version (e.g., v4.1.0)
         Note: organism and source must be values valid in the CDE ValidCategories tab
         """
+        
+        if release_version is None:
+            raise ValueError(
+                "release_version is required to pull the correct tab from the release sheet"
+            )
 
         # Get invitro_source: ["Yes", "No"] from dataset release Google Spreadsheet to handle edge cases like  MEFS, 
         # that can be either immortalized (invitro ASAP ID mappers) or primary cells (mouse ASAP ID mappers)
@@ -108,13 +114,12 @@ def normalize_source_for_ids(
         #       but for now using the release_version to pull the correct tab
         #       ELSE if we decide to have a spreadsheet with all release versions, then we need to pass the release_version to pull the correct row
         google_datasets_release_sheet_id = "13ma58D_TbW8eHbzWDb0hwXD1daNk8HWZ7_4Z0gnCETw"
-        if release_version is None:
-            release_version = "v4.0.2"
-            datasets_table = read_google_sheet(
-                spreadsheet_id=google_datasets_release_sheet_id,
-                tab_name=release_version
-            )
-            datasets_table.set_index('dataset_id', inplace=True, drop=False)
+        
+        datasets_table = read_google_sheet(
+            spreadsheet_id=google_datasets_release_sheet_id,
+            tab_name=release_version
+        )
+        datasets_table.set_index('dataset_id', inplace=True, drop=False)
         invitro_source = datasets_table.loc[dataset_id, "invitro_source"]
 
         if invitro_source.lower() == "yes":
@@ -302,6 +307,7 @@ def update_all_id_mappers(
     dataset_id: str,
     organism: str,
     source: str,
+    release_version: str,
     metadata_dir: Path,
     map_path: Path,
     dry_run: bool = False,
@@ -336,7 +342,11 @@ def update_all_id_mappers(
     metadata_dir = Path(metadata_dir)
     map_path = Path(map_path)
     
-    source_for_ids = normalize_source_for_ids(dataset_id=dataset_id, organism=organism, source=source)
+    source_for_ids = normalize_source_for_ids(
+        dataset_id=dataset_id, 
+        organism=organism, source=source,
+        release_version=release_version
+    )
 
     logging.info(f"Updating ID mappers for dataset: {dataset_name} of source_for_ids: {source_for_ids}")
     
