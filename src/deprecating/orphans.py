@@ -12,7 +12,7 @@ from .bucket_util import (
 )
 
 ##  HARD CODED VARIABLES
-COLLECTION_ID = "ASAP_PMBDS"
+COLLECTION_ID = "ASAP_PMDBS" ## This had typo 'PMBDS' for releases <= v4.0.0
 STUDY_PREFIX = f"{COLLECTION_ID}_"
 
 __all__ = ["dump_CDE", "dump_file_manifest", "dump_data_dictionary", "dump_readme"]
