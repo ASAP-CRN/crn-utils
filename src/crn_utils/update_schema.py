@@ -78,13 +78,28 @@ def get_field_transfer_map() -> pd.DataFrame:
         # Format: [Old_Table, New_Table, Old_Field, New_Field, Join_key]
         # Join_key is required for cross-table moves, None for same-table renames
         
-        # Cross-table move
+        # -- Cross-table moves --
+        
+        # Moved in CDE v3.1
         ["SUBJECT", "SAMPLE", "age_at_collection", "age_at_collection", "subject_id"],
         
-        # Same-table renames
+        # --- Same-table renames---
+        
+        # Changed in CDE v3.1
         ["STUDY", "STUDY", "project_dataset", "dataset_name", None],
+        # Historical typo
         ["CLINPATH", "CLINPATH", "path_infarcs", "path_infarcts", None],
+        # CDE v4.0+ standardization of instrument field across assays
         ["ASSAY", "ASSAY", "sequencing_instrument", "instrument", None],
+        # condition was only used in v4.0.X, replaced by extending intervention_id
+        ["SAMPLE", "SAMPLE", "condition", "intervention_id", None],
+        # CDE v4.3 standardization of MS field across proteomics/metabolomics/lipidomics
+        ["ASSAY", "ASSAY", "ms_proteomics_data_acquisition_method", "ms_data_acquisition_method", None],
+        ["ASSAY", "ASSAY", "ms_proteomics_database", "ms_annotation_database", None],
+        ["ASSAY", "ASSAY", "ms_proteomics_dissociation_method", "ms_dissociation_method", None],
+        ["ASSAY", "ASSAY", "ms_proteomics_ms1_scan_range", "ms_ms1_scan_range", None],
+        ["ASSAY", "ASSAY", "ms_proteomics_precursor_mass_tolerance", "ms_precursor_mass_tolerance", None],
+        ["ASSAY", "ASSAY", "ms_proteomics_fragment_mass_tolerance", "ms_fragment_mass_tolerance", None],
         
         # Add more as needed
     ]
