@@ -10,7 +10,7 @@ from .util import read_CDE, read_meta_table
 
 ##  HARD CODED VARIABLES
 
-COLLECTION_ID = "ASAP_PMBDS"
+COLLECTION_ID = "ASAP_PMDBS" ## This had typo 'PMBDS' for releases <= v4.0.0
 STUDY_PREFIX = f"{COLLECTION_ID}_"
 
 
