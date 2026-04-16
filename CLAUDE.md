@@ -107,6 +107,9 @@ Claude is used in this repo primarily for:
   Always confirm the impact on dependent repos before suggesting modifications.
 - **Dead code is present.** The refactor is incomplete. Do not assume all functions
   in a module are actively used — verify call sites before modifying or removing anything.
+- **Redundant code.** There are redundant functions between ASAP repos. For example, between
+  crn-utils/src/crn_utils/validate.py and crn-meta-validate/utils/validate.py
+  When Claude is in doubt, suggest solutions to the user and let the user decidde how to proceed.
 - **No versioned releases yet.** Dependent repos pin to a specific commit. Any
   suggested changes should include a note that dependent repos will need to update
   their pinned commit.
