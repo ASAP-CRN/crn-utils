@@ -25,10 +25,8 @@ Claude operates in **strict read-only mode** for this repository.
 
 This repo is a shared Python utility library for the ASAP CRN Cloud platform. It
 centralises code utilities related to metadata management, ASAP ID generation,
-release automation, and GCP bucket operations — logic that is reused in the
-following sibling repos:
+release automation, and GCP bucket operations — logic that is reused in this sibling repo:
 - [`asap-crn-cloud-dataset-metadata`](https://github.com/ASAP-CRN/asap-crn-cloud-dataset-metadata) — dataset metadata QC and release
-- [`asap-crn-cloud-release-resources`](https://github.com/ASAP-CRN/asap-crn-cloud-release-resources) - deprecated in release v4.0.1 as it was merged into `asap-crn-cloud-dataset-metadata`
 
 > **Note:** This repo is not yet pip-installable. Provenance is currently tracked via
 > commit SHA. A versioned pip-installable package is a planned future improvement.
