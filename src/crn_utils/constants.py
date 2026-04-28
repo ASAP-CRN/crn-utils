@@ -49,8 +49,7 @@ PROTEOMICS_TABLES = [
     "CELL",  # optional, could be SUBJECT, or MOUSE
     "PROTEOMICS",
     "CONDITION",
-    "DATA",
-    "SDRF",
+    "DATA"
 ]
 
 

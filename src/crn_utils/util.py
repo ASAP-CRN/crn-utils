@@ -63,8 +63,7 @@ def list_expected_metadata_tables() -> list[str]:
         "MOUSE",
         "SPATIAL",
         "CELL",
-        "PROTEOMICS",
-        "SDRF"
+        "PROTEOMICS"
     ]
         
     return tables
