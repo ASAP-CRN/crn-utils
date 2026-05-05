@@ -26,6 +26,8 @@ __all__ = [
     "write_version",
     "archive_CDE",
     "list_expected_metadata_tables",
+    "detect_encoding_artefacts",
+    "fix_encoding_artefacts",
 ]
 
 SUPPORTED_CDE_VERSIONS = {
@@ -43,6 +45,34 @@ SUPPORTED_CDE_VERSIONS = {
     "v4.1": "v4.1",
     "v4.2": "v4.2",
 }
+
+# Bytes 0x80–0x9F in Windows-1252 carry typographic characters that are undefined
+# in ISO-8859-1/latin-1. pandas read_csv (UTF-8 default) or a latin1→utf-8
+# re-encode pass will leave these as raw byte escapes rather than their intended
+# Unicode equivalents.
+_WIN1252_ARTEFACTS: dict[str, str] = {
+    "\x91": "\u2018",  # '  left single quotation mark
+    "\x92": "\u2019",  # '  right single quotation mark / apostrophe
+    "\x93": "\u201c",  # "  left double quotation mark
+    "\x94": "\u201d",  # "  right double quotation mark
+    "\x96": "\u2013",  # –  en dash
+    "\x97": "\u2014",  # —  em dash
+}
+
+# Mac OS Roman uses a different byte range (0xD0–0xD5) for the same typographic
+# characters. Rare in practice since OS X and modern Mac Excel default to UTF-8,
+# but included for completeness.
+_MACROMAN_ARTEFACTS: dict[str, str] = {
+    "\xd4": "\u2018",  # '  left single quotation mark
+    "\xd5": "\u2019",  # '  right single quotation mark / apostrophe
+    "\xd2": "\u201c",  # "  left double quotation mark
+    "\xd3": "\u201d",  # "  right double quotation mark
+    "\xd0": "\u2013",  # –  en dash
+    "\xd1": "\u2014",  # —  em dash
+}
+
+_ALL_ENCODING_ARTEFACTS: dict[str, str] = {**_WIN1252_ARTEFACTS, **_MACROMAN_ARTEFACTS}
+
 
 # TODO: This will be deprecated in favor of call to list tables by source/species/assay
 def list_expected_metadata_tables() -> list[str]:
@@ -65,9 +95,74 @@ def list_expected_metadata_tables() -> list[str]:
         "CELL",
         "PROTEOMICS"
     ]
-        
+
     return tables
 
+
+def detect_encoding_artefacts(df: pd.DataFrame) -> list[tuple[str, str, str]]:
+    """
+    Return cells in object columns that contain known encoding artefacts.
+
+    Covers two source encodings:
+
+    - **Windows-1252** (bytes 0x91–0x94, 0x96, 0x97): arises when a CSV is
+      authored in Microsoft Excel on Windows and saved without a UTF-8 BOM.
+    - **Mac OS Roman** (bytes 0xD0–0xD5): arises from older Mac software; rare
+      since OS X and modern Mac Excel default to UTF-8.
+
+    In both cases a UTF-8 or latin1 reader leaves the bytes as raw escape
+    sequences instead of the intended typographic characters.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame to scan. Only object-dtype columns are checked.
+
+    Returns
+    -------
+    list of tuple
+        Each element is ``(column, row_index, cell_value)`` for every cell that
+        contains at least one known artefact byte.
+    """
+    hits = []
+    for col in df.select_dtypes("object").columns:
+        for idx, val in df[col].dropna().items():
+            if any(b in str(val) for b in _ALL_ENCODING_ARTEFACTS):
+                hits.append((col, str(idx), str(val)))
+    return hits
+
+
+def fix_encoding_artefacts(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Replace known encoding artefacts in all object columns with their correct
+    UTF-8 equivalents.
+
+    Covers curly single quotes, curly double quotes, en dash, and em dash as
+    encoded by both Windows-1252 (\\x91–\\x94, \\x96, \\x97) and Mac OS Roman
+    (\\xd2–\\xd5, \\xd0, \\xd1).
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame to clean. Only object-dtype columns are modified.
+
+    Returns
+    -------
+    pd.DataFrame
+        Copy of ``df`` with artefact bytes replaced throughout all string columns.
+
+    Notes
+    -----
+    Complementary to the latin1→UTF-8 re-encode pass in ``read_meta_table``.
+    That pass resolves bytes above 0x9F correctly for true latin1 content; this
+    function handles the Windows-1252 private range (0x80–0x9F) that latin1
+    leaves undefined, and the overlapping Mac OS Roman range (0xD0–0xD5).
+    """
+    df = df.copy()
+    for col in df.select_dtypes("object").columns:
+        for artefact, replacement in _ALL_ENCODING_ARTEFACTS.items():
+            df[col] = df[col].str.replace(artefact, replacement, regex=False)
+    return df
 
 
 def sanitize_validation_string(validation_str):
@@ -77,7 +172,7 @@ def sanitize_validation_string(validation_str):
     return (
         validation_str.replace('"', '"')
         .replace('"', '"')
-        .replace(""", "'").replace(""", "'")
+        .replace("\u201c", "'").replace("\u201d", "'")
         .replace("…", "...")
     )
 
@@ -197,8 +292,8 @@ def sanitize_string(s):
         s.replace('"', '"')
         .replace('"', '"')
         .replace(
-            """, "'")
-             .replace(""",
+            "\u201c", "'")
+             .replace("\u201d",
             "'",
         )
         .replace("…", "...")
@@ -353,7 +448,7 @@ def remove_special_characters_ascii_printable(value: object) -> object:
     For URL/DOI-like fields, keep only ASCII printable characters (0x20..0x7E),
     drop control chars, and drop U+FFFD.
 
-    Note: even after .str.encode("latin1", errors="replace").str.decode("utf-8", errors="replace") 
+    Note: even after .str.encode("latin1", errors="replace").str.decode("utf-8", errors="replace")
     some non-ASCII characters can remain as "�" (U+FFFD) which can cause hyperlinking issues.
     """
     if value is None or value is pd.NA:
@@ -396,7 +491,7 @@ def read_meta_table(
 
     # Special treatment for URL/DOI-like fields to
     # remove non-ASCII characters and ending dots which cause hyperlinking issues
-    # (e.g., github_url, protocols_io_DOI, other_reference, publication_DOI) 
+    # (e.g., github_url, protocols_io_DOI, other_reference, publication_DOI)
     if columns_remove_special_characters_and_ending_dots is not None:
         for col in columns_remove_special_characters_and_ending_dots:
             if col in table_df.columns:
@@ -469,7 +564,7 @@ def load_tables(table_dir: Path, table_names: list[str]) -> dict[str, pd.DataFra
         # TODO: read_meta_table() was propagating latin1 encoding errors
         # tables[tab] = read_meta_table(table_path)
         tables[tab] = pd.read_csv(table_path, encoding="utf-8")
-    
+
     return tables
 
 
@@ -480,7 +575,7 @@ def export_meta_tables(dfs: dict[str, pd.DataFrame], export_path: Path) -> None:
     export_path = Path(export_path)
     if not export_path.exists():
         raise ValueError(f"export_path {export_path} does not exist")
-    
+
     for tab in dfs.keys():
         table_path = export_path / f"{tab}.csv"
         dfs[tab].to_csv(table_path, index=False)
