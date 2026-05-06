@@ -31,9 +31,12 @@ Use examples:
     brain_code   = sw_df["brain_region"].map(get_region_code).value_counts().to_dict()
     brain_region = sw_df["brain_region"].map(get_region_title).value_counts().to_dict()
 """
-import re
-
-from crn_utils.cde_vocab import BRAIN_L2_UBERON, BRAIN_REGION_CODES, BRAIN_REGION_TITLES
+from crn_utils.cde_vocab import (
+    BRAIN_L2_UBERON,
+    BRAIN_REGION_CODES,
+    BRAIN_REGION_TITLES,
+    normalize_vocab_key,
+)
 
 __all__ = [
     "normalize_brain_region_key",
@@ -49,6 +52,7 @@ def normalize_brain_region_key(raw: str) -> str:
 
     Strips surrounding whitespace, lowercases, replaces `_` and `-` with
     spaces, then collapses runs of spaces to a single space.
+    Delegates to `normalize_vocab_key` from `crn_utils.cde_vocab`.
 
     Parameters
     ----------
@@ -60,10 +64,7 @@ def normalize_brain_region_key(raw: str) -> str:
     str
         Normalized string (e.g. "frontal cortex").
     """
-    brain_region = raw.strip().lower()
-    brain_region = re.sub(r"[_\-]", " ", brain_region)
-    brain_region = re.sub(r" +", " ", brain_region)
-    return brain_region
+    return normalize_vocab_key(raw)
 
 
 def get_region_code(raw: str) -> str | None:
@@ -103,7 +104,7 @@ def get_region_title(raw: str) -> str | None:
     code = get_region_code(raw)
     if code is None:
         return None
-    return BRAIN_REGION_TITLES.get(code)
+    return BRAIN_REGION_TITLES.get(normalize_vocab_key(code))
 
 
 def get_region_level2(raw: str) -> str | None:
@@ -125,4 +126,4 @@ def get_region_level2(raw: str) -> str | None:
     code = get_region_code(raw)
     if code is None:
         return None
-    return BRAIN_L2_UBERON.get(code)
+    return BRAIN_L2_UBERON.get(normalize_vocab_key(code))

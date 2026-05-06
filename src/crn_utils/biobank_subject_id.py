@@ -4,7 +4,7 @@ Biobank source_subject_id pattern detection and correction.
 Provides BiobankSubjectIdFixer to detect and fix source_subject_id values
 in SUBJECT tables that don't match the expected pattern for a given biobank,
 using algorithmic derivation rules or sibling-dataset cross-references.
-Sibling-datasets mean datasets from the same team (e.g. "scherzer-*/")
+Sibling-datasets mean datasets from the same team (e.g. "smith-*/")
 that have already been QC'd and contain metadata/latest/SUBJECT.csv files.
 
 The BIOBANK_NAME_NORMALIZATION, BIOBANK_PATTERNS, and BIOBANK_DERIVATION_RULES
@@ -29,6 +29,7 @@ from crn_utils.cde_vocab import (
     BIOBANK_DERIVATION_RULES,
     BIOBANK_NAME_NORMALIZATION,
     BIOBANK_PATTERNS,
+    normalize_vocab_key,
 )
 
 __all__ = ["BiobankSubjectIdFixer"]
@@ -71,7 +72,7 @@ class BiobankSubjectIdFixer:
     ----------
     dataset_name : str
         Hyphenated dataset name without the `team-` prefix
-        (e.g. `"scherzer-pmdbs-lr-wgs"`).
+        (e.g. `"smith-pmdbs-lr-wgs"`).
         The first token is used to glob sibling datasets for cross-reference.
     repo_root : Path, optional
         Root of the asap-crn-cloud-dataset-metadata repository.
@@ -115,7 +116,7 @@ class BiobankSubjectIdFixer:
 
     def normalize_biobank_name(self, subject_df: pd.DataFrame) -> pd.DataFrame:
         """
-        Normalise biobank_name to its CDE Enum value.
+        Normalize biobank_name to its CDE Enum value.
 
         Parameters
         ----------
@@ -130,7 +131,7 @@ class BiobankSubjectIdFixer:
         """
         df = subject_df.copy()
         df["biobank_name"] = df["biobank_name"].map(
-            lambda v: BIOBANK_NAME_NORMALIZATION.get(str(v), v)
+            lambda v: BIOBANK_NAME_NORMALIZATION.get(normalize_vocab_key(str(v)), v)
         )
         return df
 
@@ -142,7 +143,7 @@ class BiobankSubjectIdFixer:
         ----------
         subject_df : pd.DataFrame
             SUBJECT table with `biobank_name` and `source_subject_id` columns.
-            Normalise biobank_name first with `normalize_biobank_name`.
+            Normalize biobank_name first with `normalize_biobank_name`.
 
         Returns
         -------
@@ -156,7 +157,7 @@ class BiobankSubjectIdFixer:
             biobank = row.get("biobank_name")
             if pd.isna(biobank) or str(biobank).strip() in ("", "NA"):
                 continue
-            pattern = BIOBANK_PATTERNS.get(str(biobank))
+            pattern = BIOBANK_PATTERNS.get(normalize_vocab_key(str(biobank)))
             if pattern is None:
                 bad_rows.append(row)  # unknown biobank — flag for review
                 continue
@@ -166,7 +167,7 @@ class BiobankSubjectIdFixer:
 
     def fix(self, subject_df: pd.DataFrame) -> pd.DataFrame:
         """
-        Normalise biobank_name and fix any source_subject_id values that fail
+        Normalize biobank_name and fix any source_subject_id values that fail
         the expected pattern.
 
         Parameters
@@ -235,7 +236,7 @@ class BiobankSubjectIdFixer:
         pd.DataFrame or None
             Fixed DataFrame if derivation succeeded and validated; None otherwise.
         """
-        rule = BIOBANK_DERIVATION_RULES.get(biobank_name)
+        rule = BIOBANK_DERIVATION_RULES.get(normalize_vocab_key(biobank_name))
         if rule is None:
             return None
 
@@ -320,7 +321,7 @@ class BiobankSubjectIdFixer:
             Deduplicated reference with columns [subject_id, source_subject_id].
             Empty if no usable sibling data found.
         """
-        pattern = BIOBANK_PATTERNS.get(biobank_name)
+        pattern = BIOBANK_PATTERNS.get(normalize_vocab_key(biobank_name))
         frames: list[pd.DataFrame] = []
 
         for path in sorted(

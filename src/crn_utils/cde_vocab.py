@@ -2,15 +2,16 @@
 CDE controlled-vocabulary tables for the ASAP CRN metadata pipeline.
 
 Centralizes fixed mappings between submitted/raw values and CDE-compliant
-Enum values for fields that appear across multiple datasets.  Import these
+Enum values for fields that appear across multiple datasets. Import these
 tables in qc_hook scripts or auxiliary modules like biobank_subject_id.py
 to apply consistent normalization logic.
 
-Keys   = submitted / raw values (exactly as they appear in metadata/original files).
+Keys   = normalized submitted values (strip, lowercase, `_`/`-` → space,
+         collapse spaces; see `normalize_vocab_key`).
 Values = CDE-compliant Enum values (exactly as they appear in ValidCategories).
 
-The main goal is to avoid hardcoding the same mappings in multiple places,
-and eventually normalize values for Publisher summary statistics and plots.
+Callers must apply `normalize_vocab_key(raw)` to the raw string before a
+dict lookup, so that case and separator variants resolve to the correct entry.
 
 Use examples:
 
@@ -29,9 +30,13 @@ Use examples:
       # BiobankSubjectIdFixer picks them up automatically.
 
 """
+import re
 from typing import Callable
 
 __all__ = [
+
+    # Generic normalization
+    "normalize_vocab_key",
 
     # Biobank
     "BIOBANK_NAME_NORMALIZATION",
@@ -59,11 +64,39 @@ __all__ = [
     "PATH_AUTOPSY_DX_MAIN_NORMALIZATION",
 ]
 
+
+def normalize_vocab_key(raw: str) -> str:
+    """
+    Normalize a raw string for case- and separator-insensitive dict lookup.
+
+    Strips surrounding whitespace, lowercases, replaces underscores and
+    hyphens with spaces, then collapses runs of spaces to a single space.
+
+    All dict keys in this module that represent free-text submitted values
+    are pre-normalized using this transformation.  Callers must apply the
+    same normalization to the raw string before a dict lookup.
+
+    Parameters
+    ----------
+    raw : str
+        Raw submitted string.
+
+    Returns
+    -------
+    str
+        Normalized string ready for dict lookup.
+    """
+    s = raw.strip().lower()
+    s = re.sub(r"[_\-]", " ", s)
+    s = re.sub(r" +", " ", s)
+    return s
+
+
 # ==============================================================================
 # MAINTENANCE — update these tables when new datasets are onboarded or CDE
 # ValidCategories change.
 #
-# Keys   = submitted / raw values (exactly as they appear in metadata/original files).
+# Keys   = normalized submitted values (see normalize_vocab_key above).
 # Values = CDE-compliant Enum values (exactly as they appear in ValidCategories).
 #
 # Initial sources:
@@ -80,36 +113,39 @@ __all__ = [
 # ------------------------------------------------------------------------------
 
 # Non-CDE submitted value → CDE Enum value.
+# Keys are pre-normalized (lowercase, spaces). Use normalize_vocab_key() to
+# normalize the raw biobank_name before lookup.
 # Add an entry whenever a contributor uses a non-standard biobank_name spelling.
 
 BIOBANK_NAME_NORMALIZATION: dict[str, str] = {
-    "Banner_Sun_Health_USA": "Banner Sun Health Research Institute",
-    "QSBB_UK":               "QSBB UK",
-    "Imperial_UK":           "Imperial UK",
-    "Edinburgh_UK":          "Edinburgh UK",
+    "banner sun health usa": "Banner Sun Health Research Institute",
+    "qsbb uk":               "QSBB UK",
+    "imperial uk":           "Imperial UK",
+    "edinburgh uk":          "Edinburgh UK",
 }
 
 # CDE Enum value → expected regex for source_subject_id.
-# Keys must exactly match SUBJECT.biobank_name ValidCategories.
+# Keys are pre-normalized (lowercase, spaces). Use normalize_vocab_key() before lookup.
 
 BIOBANK_PATTERNS: dict[str, str] = {
-    "Banner Sun Health Research Institute": r"^\d{2}-\d{2}$",
-    "QSBB UK":                             r"^P\d+/\d+$",
-    "Cambridge Brain Bank":                r"^(BB\d{2}\.\d{4}|NP\d{2}-\d{5})$",
-    "New York Brain Bank":                 r"^T-\d+$",
-    "Imperial UK":                         r"^(C\d+|PD\d+|PDC\d+)$",
-    "SBB":                                 r"^SBB_Case_\d+$",
-    "NKI/NYUGSOM":                         r"^hSDG\d+$",
-    "BMC":                                 r"^BMC_Case_\d+$",
-    "Edinburgh UK":                        r"^SD\d+/\d+$",
+    "banner sun health research institute": r"^\d{2}-\d{2}$",
+    "qsbb uk":                              r"^P\d+/\d+$",
+    "cambridge brain bank":                 r"^(BB\d{2}\.\d{4}|NP\d{2}-\d{5})$",
+    "new york brain bank":                  r"^T-\d+$",
+    "imperial uk":                          r"^(C\d+|PD\d+|PDC\d+)$",
+    "sbb":                                  r"^SBB_Case_\d+$",
+    "nki/nyugsom":                          r"^hSDG\d+$",
+    "bmc":                                  r"^BMC_Case_\d+$",
+    "edinburgh uk":                         r"^SD\d+/\d+$",
 }
 
 # CDE biobank name → callable(subject_id str) → source_subject_id str.
 # Add a rule when a deterministic derivation exists (preferred over sibling lookup).
 # Banner Sun: BN<MMDD> → MM-DD; Excel reformats month prefixes (MM ≤ 12) as dates.
+# Keys are pre-normalized (lowercase, spaces). Use normalize_vocab_key() before lookup.
 
 BIOBANK_DERIVATION_RULES: dict[str, Callable[[str], str]] = {
-    "Banner Sun Health Research Institute": lambda sid: f"{sid[2:4]}-{sid[4:6]}",
+    "banner sun health research institute": lambda sid: f"{sid[2:4]}-{sid[4:6]}",
 }
 
 
@@ -171,47 +207,51 @@ BRAIN_REGION_CODES: dict[str, str] = {
 
 # Maps short code → canonical display name (inverse of BRAIN_REGION_CODES).
 # Used to label plots and reports with human-readable region names.
+# Keys are pre-normalized (lowercase, spaces). Use normalize_vocab_key() before lookup.
+# Note: BRAIN_REGION_TITLES is kept for legacy purposes (releases <= v4.0.0).
+#       Releases > v4.0.0 should use the BRAIN_L2_UBERON mapping
 
 BRAIN_REGION_TITLES: dict[str, str] = {
-    "ACG":   "Anterior Cingulate Gyrus",
-    "ACC":   "Anterior Cingulate Cortex",
-    "AMY":   "Amygdala",
-    "CAU":   "Caudate",
-    "C_CTX": "Cingulate Cortex",
-    "F_CTX": "Frontal Cortex",
-    "HC":    "Hippocampus",
-    "IPL":   "Inferior Parietal Lobe",
-    "MFG":   "Middle Frontal Gyrus",
-    "MTG":   "Middle Temporal Gyrus",
-    "PARA":  "Para-Hippocampal Gyrus",
-    "PFC":   "Prefrontal Cortex",
-    "PUT":   "Putamen",
-    "P_CTX": "Parietal Cortex",
-    "SN":    "Substantia Nigra",
-    "T_CTX": "Temporal Cortex",
+    "acg":   "Anterior Cingulate Gyrus",
+    "acc":   "Anterior Cingulate Cortex",
+    "amy":   "Amygdala",
+    "cau":   "Caudate",
+    "c ctx": "Cingulate Cortex",
+    "f ctx": "Frontal Cortex",
+    "hc":    "Hippocampus",
+    "ipl":   "Inferior Parietal Lobe",
+    "mfg":   "Middle Frontal Gyrus",
+    "mtg":   "Middle Temporal Gyrus",
+    "para":  "Para-Hippocampal Gyrus",
+    "pfc":   "Prefrontal Cortex",
+    "put":   "Putamen",
+    "p ctx": "Parietal Cortex",
+    "sn":    "Substantia Nigra",
+    "t ctx": "Temporal Cortex",
 }
 
 # Maps short code → full CDE >= v4.4 region_level_2 ValidCategory string.
 # Used by qc_hooks to populate SAMPLE.region_level_2 from a normalized short code.
 # Chain with BRAIN_REGION_CODES: raw value → short code → region_level_2 string.
+# Keys are pre-normalized (lowercase, spaces). Use normalize_vocab_key() before lookup.
 
 BRAIN_L2_UBERON: dict[str, str] = {
-    "ACC":   "Anterior cingulate cortex (ACC, UBERON:0009835)",
-    "ACG":   "Anterior cingulate gyrus (ACG, UBERON:0009838)",
-    "AMY":   "Amygdala (AMY, UBERON:0001876)",
-    "CAU":   "Caudate nucleus (CAU, UBERON:0001873)",
-    "C_CTX": "Cingulate cortex (C_CTX, UBERON:0009836)",
-    "F_CTX": "Frontal cortex (F_CTX, UBERON:0001870)",
-    "HC":    "Hippocampus (HC, UBERON:0001954)",
-    "IPL":   "Inferior parietal lobule (IPL, UBERON:0002810)",
-    "MFG":   "Middle frontal gyrus (MFG, UBERON:0002770)",
-    "MTG":   "Middle temporal gyrus (MTG, UBERON:0002771)",
-    "PARA":  "Parahippocampal area (PARA, UBERON:0002728)",
-    "PFC":   "Prefrontal cortex (PFC, UBERON:0001870)",
-    "PUT":   "Putamen (PUT, UBERON:0001874)",
-    "P_CTX": "Parietal cortex (P_CTX, UBERON:0006091)",
-    "SN":    "Substantia nigra (SN, UBERON:0002038)",
-    "T_CTX": "Temporal cortex (T_CTX, UBERON:0001875)",
+    "acc":   "Anterior cingulate cortex (ACC, UBERON:0009835)",
+    "acg":   "Anterior cingulate gyrus (ACG, UBERON:0009838)",
+    "amy":   "Amygdala (AMY, UBERON:0001876)",
+    "cau":   "Caudate nucleus (CAU, UBERON:0001873)",
+    "c ctx": "Cingulate cortex (C_CTX, UBERON:0009836)",
+    "f ctx": "Frontal cortex (F_CTX, UBERON:0001870)",
+    "hc":    "Hippocampus (HC, UBERON:0001954)",
+    "ipl":   "Inferior parietal lobule (IPL, UBERON:0002810)",
+    "mfg":   "Middle frontal gyrus (MFG, UBERON:0002770)",
+    "mtg":   "Middle temporal gyrus (MTG, UBERON:0002771)",
+    "para":  "Parahippocampal area (PARA, UBERON:0002728)",
+    "pfc":   "Prefrontal cortex (PFC, UBERON:0001870)",
+    "put":   "Putamen (PUT, UBERON:0001874)",
+    "p ctx": "Parietal cortex (P_CTX, UBERON:0006091)",
+    "sn":    "Substantia nigra (SN, UBERON:0002038)",
+    "t ctx": "Temporal cortex (T_CTX, UBERON:0001875)",
 }
 
 
@@ -220,11 +260,12 @@ BRAIN_L2_UBERON: dict[str, str] = {
 # ------------------------------------------------------------------------------
 
 # Maps plain-text sex value → CDE sex_ontology_term_id.
+# Keys are pre-normalized. Use normalize_vocab_key() before lookup.
 # Source: QC_biederer_pmdbs_spatial_geomx_lamda.py
 
 SEX_ONTOLOGY: dict[str, str] = {
-    "Male":   "PATO:0000384 (male)",
-    "Female": "PATO:0000383 (female)",
+    "male":   "PATO:0000384 (male)",
+    "female": "PATO:0000383 (female)",
 }
 
 
@@ -232,30 +273,22 @@ SEX_ONTOLOGY: dict[str, str] = {
 # Neuropathology / CLINPATH field normalization
 # All tables below were extracted from legacy QC scripts (lee and hardy datasets)
 # for re-use in future updated releases.
+# Keys are pre-normalized (lowercase, spaces). Use normalize_vocab_key() before lookup.
 # Sources: QC_lee_sn_rnaseq.py, hardy_sn_rnaseq.py
 # ------------------------------------------------------------------------------
 
 # path_mckeith — Lewy body pathology staging → CDE ValidCategory.
-# Merges entries from both lee (capitalization variants) and hardy (full label
-# variants) into a single table.
+# Case variants (e.g. "L." vs "l.") collapsed after key normalization.
 
 MCKEITH_LB_NORMALIZATION: dict[str, str] = {
-    # Lee dataset variants (mixed capitalization of Roman numeral prefixes)
-    "L. Olfactory Bulb-Only":    "Olfactory bulb only",
-    "l. Olfactory Bulb-Only":    "Olfactory bulb only",
-    "Lla. Brainstem Predominant": "Brainstem",
-    "lla. Brainstem Predominant": "Brainstem",
-    "Llb. Limbic Predominant":   "Limbic (transitional)",
-    "llb. Limbic Predominant":   "Limbic (transitional)",
-    "LV. Neocortical":           "Neocortical",
-    "lV. Neocortical":           "Neocortical",
-    "Lll. Brainstem/Limbic":     "Amygdala Predominant",
-    "lll. Brainstem/Limbic":     "Amygdala Predominant",
-    "0. No Lewy bodies":         "Absent",
-    # Hardy dataset variants (descriptive labels)
-    "Diffuse neocortical":       "Diffuse, neocortical (brainstem, limbic and neocortical involvement)",
-    "Diffuse Neocortical":       "Diffuse, neocortical (brainstem, limbic and neocortical involvement)",
-    "Limbic transitional":       "Limbic (transitional)",
+    "l. olfactory bulb only":     "Olfactory bulb only",
+    "lla. brainstem predominant": "Brainstem",
+    "llb. limbic predominant":    "Limbic (transitional)",
+    "lv. neocortical":            "Neocortical",
+    "lll. brainstem/limbic":      "Amygdala Predominant",
+    "0. no lewy bodies":          "Absent",
+    "diffuse neocortical":        "Diffuse, neocortical (brainstem, limbic and neocortical involvement)",
+    "limbic transitional":        "Limbic (transitional)",
 }
 
 # path_braak_nft — Braak neurofibrillary tangle stage.
@@ -276,7 +309,7 @@ BRAAK_NFT_NORMALIZATION: dict[str, str] = {
 # Source: hardy_sn_rnaseq.py
 
 PATH_THAL_NORMALIZATION: dict[str, str] = {
-    "At least 4": "4/5",
+    "at least 4": "4/5",
 }
 
 # path_nia_aa_a/b/c — NIA-AA ABC scoring components.
@@ -305,25 +338,25 @@ NIA_AA_C_NORMALIZATION: dict[str, str] = {
 }
 
 # path_nia_ri — NIA Reagan Institute AD diagnosis criterion.
+# Case variants collapsed after key normalization.
 # Source: QC_lee_sn_rnaseq.py
 
 PATH_NIA_RI_NORMALIZATION: dict[str, str] = {
-    "Criteria not met": "None",
     "criteria not met": "None",
-    "Not AD":           "None",
+    "not ad":           "None",
 }
 
 # path_ad_level — Alzheimer's disease neuropathological change level.
 # Merges entries from lee and hardy.
 
 PATH_AD_LEVEL_NORMALIZATION: dict[str, str] = {
-    "No evidence": (
+    "no evidence": (
         "No evidence of Alzheimer's disease neuropathological change"
     ),
-    "Microscopic changes of Alzheimer's disease, insufficient for diagnosis": (
+    "microscopic changes of alzheimer's disease, insufficient for diagnosis": (
         "Low level Alzheimer's disease neuropathological change"
     ),
-    "Microscopic lesions of Alzheimer's disease, insufficient for diagnosis": (
+    "microscopic lesions of alzheimer's disease, insufficient for diagnosis": (
         "Unknown"
     ),
 }
@@ -332,30 +365,30 @@ PATH_AD_LEVEL_NORMALIZATION: dict[str, str] = {
 # Source: QC_lee_sn_rnaseq.py
 
 AMYLOID_ANGIOPATHY_NORMALIZATION: dict[str, str] = {
-    "Cerebral amyloid angiopathy, temporal and occipital lobe": "Severe",
-    "Cerebral amyloid angiopathy, frontal lobe":                "Severe",
+    "cerebral amyloid angiopathy, temporal and occipital lobe": "Severe",
+    "cerebral amyloid angiopathy, frontal lobe":                "Severe",
 }
 
 # path_autopsy_dx_main — primary autopsy diagnosis → CDE-compliant label.
 # Source: hardy_sn_rnaseq.py
 
 PATH_AUTOPSY_DX_MAIN_NORMALIZATION: dict[str, str] = {
-    "Parkinson's disease with dementia":    "Parkinson's disease with dementia",
-    "Parkinson's disease":                  "Parkinson's disease",
-    "Control brain":                        "Control, no misfolded protein or significant vascular pathology",
-    "Pathological ageing":                  "Control, no misfolded protein or significant vascular pathology",
-    "Control brain / Path ageing":          "Control, no misfolded protein or significant vascular pathology",
-    "Argyrophilic grain disease":           "Control, Argyrophilic grain disease",
-    "Control brain, Cerebrovascular disease (small vessel)": (
+    "parkinson's disease with dementia":    "Parkinson's disease with dementia",
+    "parkinson's disease":                  "Parkinson's disease",
+    "control brain":                        "Control, no misfolded protein or significant vascular pathology",
+    "pathological ageing":                  "Control, no misfolded protein or significant vascular pathology",
+    "control brain / path ageing":          "Control, no misfolded protein or significant vascular pathology",
+    "argyrophilic grain disease":           "Control, Argyrophilic grain disease",
+    "control brain, cerebrovascular disease (small vessel)": (
         "Control, Cerebrovascular disease (atherosclerosis)"
     ),
-    "Cerebrovascular disease (small vessel)": (
+    "cerebrovascular disease (small vessel)": (
         "Control, Cerebrovascular disease (atherosclerosis)"
     ),
-    "Control brain, Alzheimer`s disease (intermediate level AD pathological change)": (
+    "control brain, alzheimer`s disease (intermediate level ad pathological change)": (
         "Alzheimer's disease (intermediate level neuropathological change)"
     ),
-    "Control brain / Path ageing, CAA": (
+    "control brain / path ageing, caa": (
         "Control, Cerebrovascular disease (cerebral amyloid angiopathy)"
     ),
 }
