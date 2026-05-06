@@ -25,7 +25,7 @@ Use examples:
       fixer = BiobankSubjectIdFixer(dataset_name=dataset_name, caller_path=__file__)
       meta_tables["SUBJECT"] = fixer.fix(meta_tables["SUBJECT"])
 
-      # Note: users don't need to import the BIOBANK_* tables in the hook. 
+      # Note: users don't need to import the BIOBANK_* tables in the hook.
       # BiobankSubjectIdFixer picks them up automatically.
 
 """
@@ -42,11 +42,6 @@ __all__ = [
     "BRAIN_REGION_CODES",
     "BRAIN_REGION_TITLES",
     "BRAIN_L2_UBERON",
-
-    # Condition / phenotype
-    "CONDITION_LABEL_TO_ID",
-    "GP2_PHENOTYPE_NORMALIZATION",
-    "PRIMARY_DIAGNOSIS_CORRECTIONS",
 
     # Ontology term IDs
     "SEX_ONTOLOGY",
@@ -74,7 +69,7 @@ __all__ = [
 # Initial sources:
 #   - summary_stats.py (_brain_region_coder, _region_titles) — brain region tables
 #   - biobank_subject_id.py for release v4.1.1+ — biobank name normalization, patterns, derivation rules
-#   - qc_hooks for releases >= v4.0.1 (built by DNAstack curators): gp2_phenotype, sex ontology table
+#   - qc_hooks for releases >= v4.0.1 (built by DNAstack curators): sex ontology table
 #   - QC_hooks for releases <= v4.0.0 (built by DTi): McKeith, NIA-RI, amyloid, AD level tables, Thal, autopsy diagnosis tables
 # ==============================================================================
 
@@ -221,41 +216,6 @@ BRAIN_L2_UBERON: dict[str, str] = {
 
 
 # ------------------------------------------------------------------------------
-# Condition / phenotype
-# ------------------------------------------------------------------------------
-
-# Maps contributor abbreviation → CDE condition_id Enum value.
-# Keys are the raw labels submitted in CONDITION.condition or SAMPLE.condition_id
-# before QC.  Values match CDE ValidCategories for condition_id.
-# Sources: scherzer-pmdbs-lr-wgs, scherzer-pmdbs-sn-rnaseq-midbrain-hybsel.
-
-CONDITION_LABEL_TO_ID: dict[str, str] = {
-    "PD":  "PD",
-    "HC":  "Control",
-    "ILB": "Prodromal",
-}
-
-# Maps raw gp2_phenotype value → CDE Enum.
-# "Other" is not a CDE ValidCategory; ILB subjects use "Prodromal" consistent
-# with their condition_id mapping above.
-# Source: scherzer-pmdbs-sn-rnaseq-midbrain-hybsel; TODO confirm ILB→Prodromal
-# with data contributor.
-
-GP2_PHENOTYPE_NORMALIZATION: dict[str, str] = {
-    "PD":      "PD",
-    "Control": "Control",
-    "Other":   "Prodromal",
-}
-
-# Known contributor typos in primary_diagnosis → corrected CDE-compliant string.
-# Source: scherzer-pmdbs-lr-wgs SUBJECT.csv.
-
-PRIMARY_DIAGNOSIS_CORRECTIONS: dict[str, str] = {
-    "Other nuerological disorder": "Other neurological disorder",
-}
-
-
-# ------------------------------------------------------------------------------
 # Ontology term IDs
 # ------------------------------------------------------------------------------
 
@@ -324,15 +284,24 @@ PATH_THAL_NORMALIZATION: dict[str, str] = {
 # Sources: hardy_sn_rnaseq.py
 
 NIA_AA_A_NORMALIZATION: dict[str, str] = {
-    "0": "A0", "1": "A1", "2": "A2", "3": "A3",
+    "0": "A0",
+    "1": "A1",
+    "2": "A2",
+    "3": "A3",
 }
 
 NIA_AA_B_NORMALIZATION: dict[str, str] = {
-    "0": "B0", "1": "B1", "2": "B2", "3": "B3",
+    "0": "B0",
+    "1": "B1",
+    "2": "B2",
+    "3": "B3",
 }
 
 NIA_AA_C_NORMALIZATION: dict[str, str] = {
-    "0": "C0", "1": "C1", "2": "C2", "3": "C3",
+    "0": "C0",
+    "1": "C1",
+    "2": "C2",
+    "3": "C3",
 }
 
 # path_nia_ri — NIA Reagan Institute AD diagnosis criterion.
