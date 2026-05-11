@@ -173,8 +173,7 @@ def get_table_update_map() -> dict:
         "PMDBS": "SAMPLE",
         "ASSAY_RNAseq": "ASSAY",
         "SPATIAL": "ASSAY",
-        "PROTEOMICS": "ASSAY",
-        # "SDRF": "ASSAY"  # Currently not in CDE 4.1
+        "PROTEOMICS": "ASSAY"
     }
     
     return table_map
