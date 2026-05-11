@@ -14,7 +14,7 @@ biobanks.
 Use example in a qc_hook:
     from crn_utils.biobank_subject_id import BiobankSubjectIdFixer
     def _fix_subject(meta_tables, **_):
-        fixer = BiobankSubjectIdFixer(dataset_name=dataset_name, caller_path=__file__)
+        fixer = BiobankSubjectIdFixer(dataset_id=dataset_id, caller_path=__file__)
         meta_tables["SUBJECT"] = fixer.fix(meta_tables["SUBJECT"])
         return meta_tables
 """
@@ -70,10 +70,10 @@ class BiobankSubjectIdFixer:
 
     Parameters
     ----------
-    dataset_name : str
-        Hyphenated dataset name without the `team-` prefix
-        (e.g. `"smith-pmdbs-lr-wgs"`).
-        The first token is used to glob sibling datasets for cross-reference.
+    dataset_id : str
+        E.g. "team-smith-pmdbs-lr-wgs". Used to derive the team slug
+        for sibling-dataset globbing and to exclude the current dataset
+        from cross-reference lookups.
     repo_root : Path, optional
         Root of the asap-crn-cloud-dataset-metadata repository.
         When omitted, auto-detected via `.git` traversal from caller_path.
@@ -96,12 +96,13 @@ class BiobankSubjectIdFixer:
 
     def __init__(
         self,
-        dataset_name: str,
+        dataset_id: str,
         repo_root: Path | None = None,
         caller_path: Path | None = None,
     ) -> None:
-        self.dataset_name = dataset_name
-        self.team = dataset_name.split("-")[0]
+        self.dataset_id = dataset_id
+        self.team = dataset_id.split("-")[1]  # assumes format "team-smith-sn-rnaseq"
+        self.dataset_name = "-".join(dataset_id.split("-")[1:])  # strips "team-" prefix
         if repo_root is not None:
             self.repo_root = Path(repo_root)
         else:
