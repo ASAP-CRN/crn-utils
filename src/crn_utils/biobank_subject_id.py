@@ -242,12 +242,12 @@ class BiobankSubjectIdFixer:
             return None
 
         df = subject_df.copy()
-        derived = df["subject_id"].map(rule)
+        mask = df["biobank_name"] == biobank_name
 
         reference = self._load_sibling_reference(biobank_name)
         if not reference.empty:
             ref_map = reference.set_index("subject_id")["source_subject_id"]
-            overlap = df[df["subject_id"].isin(reference["subject_id"])]
+            overlap = df[mask & df["subject_id"].isin(reference["subject_id"])]
             conflicts = overlap[
                 overlap["subject_id"].map(ref_map) != overlap["subject_id"].map(rule)
             ]
@@ -260,7 +260,7 @@ class BiobankSubjectIdFixer:
                 )
                 return None
 
-        df["source_subject_id"] = derived
+        df.loc[mask, "source_subject_id"] = df.loc[mask, "subject_id"].map(rule)
         return df
 
     def _apply_sibling_lookup(
@@ -287,9 +287,10 @@ class BiobankSubjectIdFixer:
             return None
 
         df = subject_df.copy()
+        mask = df["biobank_name"] == biobank_name
         lookup = reference.set_index("subject_id")["source_subject_id"]
-        df["source_subject_id"] = (
-            df["subject_id"].map(lookup).fillna(df["source_subject_id"])
+        df.loc[mask, "source_subject_id"] = (
+            df.loc[mask, "subject_id"].map(lookup).fillna(df.loc[mask, "source_subject_id"])
         )
 
         still_bad = self.detect_mismatches(df)
