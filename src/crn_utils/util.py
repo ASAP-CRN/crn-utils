@@ -5,6 +5,11 @@ import datetime
 import shutil
 import numpy as np
 
+from crn_utils.encoding_util import (
+    audit_encoding_columns,
+    remove_special_characters_ascii_printable
+)
+
 NULL = "NA"
 
 crn_utils_root = str(os.path.join(Path(__file__).resolve().parents[2], "crn-utils"))
@@ -26,8 +31,6 @@ __all__ = [
     "write_version",
     "archive_CDE",
     "list_expected_metadata_tables",
-    "detect_encoding_artefacts",
-    "fix_encoding_artefacts",
 ]
 
 SUPPORTED_CDE_VERSIONS = {
@@ -45,33 +48,6 @@ SUPPORTED_CDE_VERSIONS = {
     "v4.1": "v4.1",
     "v4.2": "v4.2",
 }
-
-# Bytes 0x80–0x9F in Windows-1252 carry typographic characters that are undefined
-# in ISO-8859-1/latin-1. pandas read_csv (UTF-8 default) or a latin1→utf-8
-# re-encode pass will leave these as raw byte escapes rather than their intended
-# Unicode equivalents.
-_WIN1252_ARTEFACTS: dict[str, str] = {
-    "\x91": "\u2018",  # '  left single quotation mark
-    "\x92": "\u2019",  # '  right single quotation mark / apostrophe
-    "\x93": "\u201c",  # "  left double quotation mark
-    "\x94": "\u201d",  # "  right double quotation mark
-    "\x96": "\u2013",  # –  en dash
-    "\x97": "\u2014",  # —  em dash
-}
-
-# Mac OS Roman uses a different byte range (0xD0–0xD5) for the same typographic
-# characters. Rare in practice since OS X and modern Mac Excel default to UTF-8,
-# but included for completeness.
-_MACROMAN_ARTEFACTS: dict[str, str] = {
-    "\xd4": "\u2018",  # '  left single quotation mark
-    "\xd5": "\u2019",  # '  right single quotation mark / apostrophe
-    "\xd2": "\u201c",  # "  left double quotation mark
-    "\xd3": "\u201d",  # "  right double quotation mark
-    "\xd0": "\u2013",  # –  en dash
-    "\xd1": "\u2014",  # —  em dash
-}
-
-_ALL_ENCODING_ARTEFACTS: dict[str, str] = {**_WIN1252_ARTEFACTS, **_MACROMAN_ARTEFACTS}
 
 
 # TODO: This will be deprecated in favor of call to list tables by source/species/assay
@@ -99,83 +75,19 @@ def list_expected_metadata_tables() -> list[str]:
     return tables
 
 
-def detect_encoding_artefacts(df: pd.DataFrame) -> list[tuple[str, str, str]]:
-    """
-    Return cells in object columns that contain known encoding artefacts.
-
-    Covers two source encodings:
-
-    - **Windows-1252** (bytes 0x91–0x94, 0x96, 0x97): arises when a CSV is
-      authored in Microsoft Excel on Windows and saved without a UTF-8 BOM.
-    - **Mac OS Roman** (bytes 0xD0–0xD5): arises from older Mac software; rare
-      since OS X and modern Mac Excel default to UTF-8.
-
-    In both cases a UTF-8 or latin1 reader leaves the bytes as raw escape
-    sequences instead of the intended typographic characters.
-
-    Parameters
-    ----------
-    df : pd.DataFrame
-        DataFrame to scan. Only object-dtype columns are checked.
-
-    Returns
-    -------
-    list of tuple
-        Each element is ``(column, row_index, cell_value)`` for every cell that
-        contains at least one known artefact byte.
-    """
-    hits = []
-    for col in df.select_dtypes("object").columns:
-        for idx, val in df[col].dropna().items():
-            if any(b in str(val) for b in _ALL_ENCODING_ARTEFACTS):
-                hits.append((col, str(idx), str(val)))
-    return hits
-
-
-def fix_encoding_artefacts(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Replace known encoding artefacts in all object columns with their correct
-    UTF-8 equivalents.
-
-    Covers curly single quotes, curly double quotes, en dash, and em dash as
-    encoded by both Windows-1252 (\\x91–\\x94, \\x96, \\x97) and Mac OS Roman
-    (\\xd2–\\xd5, \\xd0, \\xd1).
-
-    Parameters
-    ----------
-    df : pd.DataFrame
-        DataFrame to clean. Only object-dtype columns are modified.
-
-    Returns
-    -------
-    pd.DataFrame
-        Copy of ``df`` with artefact bytes replaced throughout all string columns.
-
-    Notes
-    -----
-    Complementary to the latin1→UTF-8 re-encode pass in ``read_meta_table``.
-    That pass resolves bytes above 0x9F correctly for true latin1 content; this
-    function handles the Windows-1252 private range (0x80–0x9F) that latin1
-    leaves undefined, and the overlapping Mac OS Roman range (0xD0–0xD5).
-    """
-    df = df.copy()
-    for col in df.select_dtypes("object").columns:
-        for artefact, replacement in _ALL_ENCODING_ARTEFACTS.items():
-            df[col] = df[col].str.replace(artefact, replacement, regex=False)
-    return df
-
-
+# Replaces sanitize_string function
 def sanitize_validation_string(validation_str):
     """Sanitize validation strings by replacing smart quotes with straight quotes."""
     if not isinstance(validation_str, str):
         return validation_str
     return (
-        validation_str.replace('"', '"')
-        .replace('"', '"')
-        .replace("\u201c", "'").replace("\u201d", "'")
-        .replace("…", "...")
+        validation_str.replace('"', '"') #curly/smart left double quote (U+201C)
+        .replace('"', '"') #curly/smart right double quote (U+201D)
+        .replace(""", "'").replace(""", "'") # replace any remaining curly double quotes with straight single quotes
+        .replace("…", "...") # replace ellipsis with three dots
     )
 
+# TODO: will be deprecated in favor of crn_utils.google_spreadsheets.read_google_sheet
 def read_CDE(
     cde_version: str = "v3.2",
     local_path: str | bool | Path = False,
@@ -284,20 +196,6 @@ def archive_CDE(
     CDE_df.to_csv(export_path, index=False)
     print(f"wrote CDE to: {export_path}")
 
-def sanitize_string(s):
-    """Replace smart quotes with straight quotes and other problematic characters."""
-    if not isinstance(s, str):
-        return s
-    return (
-        s.replace('"', '"')
-        .replace('"', '"')
-        .replace(
-            "\u201c", "'")
-             .replace("\u201d",
-            "'",
-        )
-        .replace("…", "...")
-    )
 
 def clean_cde_schema(cde_schema):
     """
@@ -314,14 +212,12 @@ def clean_cde_schema(cde_schema):
 
     # Sanitize the Validation column
     if "Validation" in cleaned_schema.columns:
-        cleaned_schema["Validation"] = cleaned_schema["Validation"].apply(
-            sanitize_string
-        )
+        cleaned_schema["Validation"] = cleaned_schema["Validation"].apply(sanitize_validation_string)
 
     # Also sanitize any other columns that might contain validation expressions
     for col in ["Description", "Notes", "Example"]:
         if col in cleaned_schema.columns:
-            cleaned_schema[col] = cleaned_schema[col].apply(sanitize_string)
+            cleaned_schema[col] = cleaned_schema[col].apply(sanitize_validation_string)
 
     return cleaned_schema
 
@@ -344,7 +240,7 @@ def read_CDE_asap_ids(
 
     return df
 
-# original function
+# TODO: Confirm if it's dead code, and remove if so.
 def _read_CDE_asap_ids(
     schema_version: str = "v3.3", local_path: str | bool | Path = False
 ) -> pd.DataFrame:
@@ -443,31 +339,6 @@ def export_table(table_name: str, df: pd.DataFrame, out_dir: str):
     })
     df.to_csv(os.path.join(out_dir, f"{table_name}.csv"), index=False)
 
-def remove_special_characters_ascii_printable(value: object) -> object:
-    """
-    For URL/DOI-like fields, keep only ASCII printable characters (0x20..0x7E),
-    drop control chars, and drop U+FFFD.
-
-    Note: even after .str.encode("latin1", errors="replace").str.decode("utf-8", errors="replace")
-    some non-ASCII characters can remain as "�" (U+FFFD) which can cause hyperlinking issues.
-    """
-    if value is None or value is pd.NA:
-        return value
-
-    value_str = str(value)
-
-    # Remove Unicode replacement char explicitly.
-    value_str = value_str.replace("\ufffd", "")
-
-    # Keep only ASCII printable characters (space through ~).
-    # This removes things like Ê (U+00CA) and any other non-ASCII artifacts.
-    value_str = "".join(
-        character
-        for character in value_str
-        if 32 <= ord(character) <= 126
-    )
-    return value_str.strip()
-
 def read_meta_table(
     table_path: str | Path,
     columns_remove_special_characters_and_ending_dots: list[str] | None = None
@@ -479,12 +350,12 @@ def read_meta_table(
         print(f"UnicodeDecodeError: {table_path}")
         table_df = pd.read_csv(table_path, encoding="latin1", dtype=str)
 
-    for col in table_df.select_dtypes(include="object").columns:
-        table_df[col] = (
-            table_df[col]
-            .str.encode("latin1", errors="replace")
-            .str.decode("utf-8", errors="replace")
-        )
+    # Fix Windows-1252/Mac OS Roman byte artefacts without corrupting legitimate
+    # Unicode (μ, –, curly quotes, etc.) that lie outside the Latin-1 range.
+    # The previous encode("latin1", errors="replace") pass was destructive:
+    # any character above U+00FF was silently replaced with "?".
+    print(table_path)
+    table_df = audit_encoding_columns(table_df, promote=True, verbose=True)
 
     for col in table_df.columns:
         table_df[col] = table_df[col].apply(sanitize_validation_string)
