@@ -479,12 +479,18 @@ def read_meta_table(
         print(f"UnicodeDecodeError: {table_path}")
         table_df = pd.read_csv(table_path, encoding="latin1", dtype=str)
 
-    for col in table_df.select_dtypes(include="object").columns:
-        table_df[col] = (
-            table_df[col]
-            .str.encode("latin1", errors="replace")
-            .str.decode("utf-8", errors="replace")
-        )
+
+    # Applying this encode/decode step to all columns is malforming valid UTF-8 characters
+    # For example, in scherzer-pmdbs-lr-wgs the PROTOCOL table, it makes that:
+    # 65°C becomes 65�C
+    # 47 μL becomes 47 ?L
+    # If we need to do use this encode/decode step, it should be done only for specific columns-wise in the qc_hooks.
+    # for col in table_df.select_dtypes(include="object").columns:
+    #     table_df[col] = (
+    #         table_df[col]
+    #         .str.encode("latin1", errors="replace")
+    #         .str.decode("utf-8", errors="replace")
+    #     )
 
     for col in table_df.columns:
         table_df[col] = table_df[col].apply(sanitize_validation_string)
