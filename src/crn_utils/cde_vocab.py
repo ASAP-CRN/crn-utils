@@ -16,9 +16,10 @@ dict lookup, so that case and separator variants resolve to the correct entry.
 Use examples:
 
 1) Map brain_region to region_level_2 in a qc_hook:
-    from crn_utils.brain_regions import get_region_level2
+    from crn_utils.brain_regions import brain_dicts
 
-    df["region_level_2"] = df["brain_region"].map(get_region_level2)
+    df["region_level_2"] = df["brain_region"].map(
+        brain_dicts("legacy_region_name", "remap_cde"))
 
 2) Normalize biobank name and fix source_subject_id in a qc_hook:
       from crn_utils.biobank_subject_id import BiobankSubjectIdFixer
@@ -26,12 +27,14 @@ Use examples:
       fixer = BiobankSubjectIdFixer(dataset_name=dataset_name, caller_path=__file__)
       meta_tables["SUBJECT"] = fixer.fix(meta_tables["SUBJECT"])
 
-      # Note: users don't need to import the BIOBANK_* tables in the hook.
-      # BiobankSubjectIdFixer picks them up automatically.
-
 """
 import re
 from typing import Callable
+
+from crn_utils.google_spreadsheets import read_google_sheet
+_CDE_SPREADSHEET_ID    = "1c0z5KvRELdT2AtQAH2Dus8kwAyyLrR0CROhKOjpU4Vc"
+_BRAIN_REGION_LEVELS_TAB = "brain_region_levels"
+
 
 __all__ = [
 
@@ -44,9 +47,10 @@ __all__ = [
     "BIOBANK_DERIVATION_RULES",
 
     # Brain region
-    "BRAIN_REGION_CODES",
-    "BRAIN_REGION_TITLES",
-    "BRAIN_L2_UBERON",
+    "LEGACY_BRAIN_REGION_NAME_TO_REGION_CODE",
+    "LEGACY_BRAIN_REGION_CODE_TO_REGION_CODE",
+    "BRAIN_REGION_CODE_TO_CDE",
+    "BRAIN_LEVELS_CDE",
 
     # Ontology term IDs
     "SEX_ONTOLOGY",
@@ -63,7 +67,6 @@ __all__ = [
     "AMYLOID_ANGIOPATHY_NORMALIZATION",
     "PATH_AUTOPSY_DX_MAIN_NORMALIZATION",
 ]
-
 
 def normalize_vocab_key(raw: str) -> str:
     """
@@ -152,22 +155,25 @@ BIOBANK_DERIVATION_RULES: dict[str, Callable[[str], str]] = {
 # ------------------------------------------------------------------------------
 # Brain region
 #
-# BRAIN_REGION_CODES keys are normalized: lowercase, spaces (no underscores or
-# hyphens). Do NOT add case or separator variants here — they are handled at
-# lookup time by brain_regions.normalize_brain_region_key().  Only add a new
-# entry when the submitted string maps to a region not covered by normalized keys.
+# LEGACY_BRAIN_REGION_NAME_TO_REGION_CODE keys are normalized: lowercase, spaces
+# (no underscores or hyphens). Do NOT add case or separator variants here — they
+# are handled at lookup time by brain_regions.normalize_brain_region_key(). Only
+# add a new entry when a contributor submits a region name not yet covered.
 #
-# Brain mapping chain for region_level_2 (final CDE >= v4.4 compliant) for qc_hooks output:
-# Step  Transform                    Input                       Output
-# ----  ---------------------------  --------------------------  -----------------------------------------------
-# 1     normalize_brain_region_key   "Frontal_Cortex"            "frontal cortex"
-# 2     BRAIN_REGION_CODES           "frontal cortex"            "F_CTX"
-# 3     BRAIN_L2_UBERON              "F_CTX"                     "Frontal cortex (F_CTX, UBERON:0001870)"
+# Brain mapping chain for region_level_2 (CDE >= v4.5 compliant) for qc_hooks output:
+# Step  Transform                         Input             Output
+# ----  --------------------------------  ----------------  -------------------------------------------
+# 1     normalize_brain_region_key        "Frontal_Cortex"  "frontal cortex"
+# 2     BRAIN_LEGACY_REGION_NAME_TO_...   "frontal cortex"  "F_CTX"
+# 3     BRAIN_LEVELS_CDE               "f ctx"           "Frontal cortex (F_CTX, UBERON:0001870)"
 # Note: different dataset qc_hooks may enter this chain at different steps,
-#       that's why we expose the individual functions.
+#       that's why we expose the individual functions in brain_regions.py.
 # ------------------------------------------------------------------------------
 
-BRAIN_REGION_CODES: dict[str, str] = {
+# Submitted region name → CDE short code.
+# Keys are pre-normalized (lowercase, spaces). Use normalize_vocab_key() before lookup.
+
+LEGACY_BRAIN_REGION_NAME_TO_REGION_CODE: dict[str, str] = {
     # canonical regions (already lowercase after normalization)
     "anterior cingulate gyrus":   "ACG",
     "caudate":                    "CAU",
@@ -193,25 +199,30 @@ BRAIN_REGION_CODES: dict[str, str] = {
     "temporal ctx":               "T_CTX",
     "middle frontal gyrus":       "MFG",
     "middle temporal gyrus":      "MTG",
-    "parahippocampal gyrus":      "PARA",
-
-    # team-specific short codes (already lowercase after normalization)
-    "amy":  "AMY",  # team Jakobsson
-    "snd":  "SN",   # team Edwards: SN sub-nucleus
-    "snv":  "SN",   # team Edwards: SN sub-nucleus
-    "vta":  "SN",   # team Edwards: SN-adjacent
-    "snm":  "SN",   # team Edwards: SN sub-nucleus
-    "snl":  "SN",   # team Edwards: SN sub-nucleus
-
+    "parahippocampal gyrus":      "PHG",
 }
 
-# Maps short code → canonical display name (inverse of BRAIN_REGION_CODES).
-# Used to label plots and reports with human-readable region names.
-# Keys are pre-normalized (lowercase, spaces). Use normalize_vocab_key() before lookup.
-# Note: BRAIN_REGION_TITLES is kept for legacy purposes (releases <= v4.0.0).
-#       Releases > v4.0.0 should use the BRAIN_L2_UBERON mapping
+# Legacy team-specific short code → CDE short code.
+# Used when a contributor submitted their own region abbreviation instead of
+# the CDE short code. Keys are pre-normalized (lowercase, spaces).
+# Use normalize_vocab_key() before lookup.
 
-BRAIN_REGION_TITLES: dict[str, str] = {
+LEGACY_BRAIN_REGION_CODE_TO_REGION_CODE: dict[str, str] = {
+    # team-specific short codes (already lowercase after normalization)
+    # "vta":  "SN", # team Edwards: SN-adjacent was removed as VTA is a separate anatomical structure
+    "amy":  "AMY",  # team Jakobsson, remap to AMY for CDE compliance
+    "snd":  "SN",   # team Edwards: SN sub-nucleus, remap to SN for CDE compliance
+    "snv":  "SN",   # team Edwards: SN sub-nucleus, remap to SN for CDE compliance
+    "snm":  "SN",   # team Edwards: SN sub-nucleus, remap to SN for CDE compliance
+    "snl":  "SN",   # team Edwards: SN sub-nucleus, remap to SN for CDE compliance
+}
+
+# Legacy short code → canonical display name.
+# Used for releases <= v4.0.0 to label plots and reports.
+# Keys are pre-normalized (lowercase, spaces). Use normalize_vocab_key() before lookup.
+# For releases > v4.0.0 use BRAIN_LEVELS_CDE, which includes UBERON IDs.
+
+BRAIN_REGION_CODE_TO_CDE: dict[str, str] = {
     "acg":   "Anterior Cingulate Gyrus",
     "acc":   "Anterior Cingulate Cortex",
     "amy":   "Amygdala",
@@ -222,7 +233,8 @@ BRAIN_REGION_TITLES: dict[str, str] = {
     "ipl":   "Inferior Parietal Lobe",
     "mfg":   "Middle Frontal Gyrus",
     "mtg":   "Middle Temporal Gyrus",
-    "para":  "Para-Hippocampal Gyrus",
+    "phg":   "Para-Hippocampal Gyrus", #Both PHG and PARA have been used for Para-Hippocampal Gyrus
+    "para":  "Para-Hippocampal Gyrus", #Both PHG and PARA have been used for Para-Hippocampal Gyrus
     "pfc":   "Prefrontal Cortex",
     "put":   "Putamen",
     "p ctx": "Parietal Cortex",
@@ -230,30 +242,55 @@ BRAIN_REGION_TITLES: dict[str, str] = {
     "t ctx": "Temporal Cortex",
 }
 
-# Maps short code → full CDE >= v4.4 region_level_2 ValidCategory string.
-# Used by qc_hooks to populate SAMPLE.region_level_2 from a normalized short code.
-# Chain with BRAIN_REGION_CODES: raw value → short code → region_level_2 string.
-# Keys are pre-normalized (lowercase, spaces). Use normalize_vocab_key() before lookup.
 
-BRAIN_L2_UBERON: dict[str, str] = {
-    "acc":   "Anterior cingulate cortex (ACC, UBERON:0009835)",
-    "acg":   "Anterior cingulate gyrus (ACG, UBERON:0009838)",
-    "amy":   "Amygdala (AMY, UBERON:0001876)",
-    "cau":   "Caudate nucleus (CAU, UBERON:0001873)",
-    "c ctx": "Cingulate cortex (C_CTX, UBERON:0009836)",
-    "f ctx": "Frontal cortex (F_CTX, UBERON:0001870)",
-    "hc":    "Hippocampus (HC, UBERON:0001954)",
-    "ipl":   "Inferior parietal lobule (IPL, UBERON:0002810)",
-    "mfg":   "Middle frontal gyrus (MFG, UBERON:0002770)",
-    "mtg":   "Middle temporal gyrus (MTG, UBERON:0002771)",
-    "para":  "Parahippocampal area (PARA, UBERON:0002728)",
-    "pfc":   "Prefrontal cortex (PFC, UBERON:0001870)",
-    "put":   "Putamen (PUT, UBERON:0001874)",
-    "p ctx": "Parietal cortex (P_CTX, UBERON:0006091)",
-    "sn":    "Substantia nigra (SN, UBERON:0002038)",
-    "t ctx": "Temporal cortex (T_CTX, UBERON:0001875)",
-}
+def _build_brain_levels_uberon(
+        short_code_column: str,
+        region_level_column: str,
+        uberon_column: str,
+        display_name_column: str) -> dict[str, dict[str, str]]:
+    """
+    Read the brain_region_levels tab and build a nested dict keyed by region_level.
 
+    Parameters
+    ----------
+    short_code_column : str
+        Column name containing the region short code (e.g. "short_code").
+    region_level_column : str
+        Column name whose values become the outer dict keys
+        (e.g. "region_level", containing values like "region_level_2").
+    uberon_column : str
+        Column name containing the UBERON ID (e.g. "CDE_v4.5_UBERON").
+        Rows where this column equals "DELETE" are excluded.
+    display_name_column : str
+        Column name containing the human-readable region name
+        (e.g. "display_name").
+
+    Returns
+    -------
+    dict[str, dict[str, str]]
+        Nested mapping: region_level → normalized short code → display label.
+        For example: "region_level_2" → "f ctx" → "Frontal cortex (F_CTX, UBERON:0001870)".
+    """
+    df = read_google_sheet(_CDE_SPREADSHEET_ID, _BRAIN_REGION_LEVELS_TAB)
+    df = df[df[uberon_column] != "DELETE"]
+    result: dict[str, dict[str, str]] = {}
+    for _, row in df.iterrows():
+        level = row[region_level_column]
+        key   = normalize_vocab_key(row[short_code_column])
+        value = f"{row[display_name_column]} ({row[short_code_column]}, {row[uberon_column]})"
+        result.setdefault(level, {})[key] = value
+    return result
+
+
+# Maps region_level → normalized short code → CDE Validation string, like:
+# "region_level_2" → "f ctx" → "Frontal cortex (F_CTX, UBERON:0001870)".
+# Inner keys are pre-normalized (lowercase, spaces). Use normalize_vocab_key() before lookup.
+BRAIN_LEVELS_CDE: dict[str, dict[str, str]] = _build_brain_levels_uberon(
+    "short_code",
+    "region_level",
+    "CDE_v4.5_UBERON",
+    "display_name"
+)
 
 # ------------------------------------------------------------------------------
 # Ontology term IDs
@@ -277,7 +314,7 @@ SEX_ONTOLOGY: dict[str, str] = {
 # Sources: QC_lee_sn_rnaseq.py, hardy_sn_rnaseq.py
 # ------------------------------------------------------------------------------
 
-# path_mckeith — Lewy body pathology staging → CDE ValidCategory.
+# path_mckeith — Lewy body pathology staging → CDE Validation.
 # Case variants (e.g. "L." vs "l.") collapsed after key normalization.
 
 MCKEITH_LB_NORMALIZATION: dict[str, str] = {
@@ -292,7 +329,7 @@ MCKEITH_LB_NORMALIZATION: dict[str, str] = {
 }
 
 # path_braak_nft — Braak neurofibrillary tangle stage.
-# Numeric strings → Roman numerals as required by CDE ValidCategories.
+# Numeric strings → Roman numerals as required by CDE Validation.
 # Source: hardy_sn_rnaseq.py
 
 BRAAK_NFT_NORMALIZATION: dict[str, str] = {
