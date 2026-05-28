@@ -1,5 +1,5 @@
 """
-Path utilities for locating repository roots.
+Path utilities for ASAP CRN repositories.
 """
 from pathlib import Path
 
@@ -41,7 +41,7 @@ def get_repo_root(start: Path | None = None) -> Path:
 
     >>> root = get_repo_root()
     """
-    
+
     anchor = (start if start is not None else Path.cwd()).resolve()
     for candidate in [anchor, *anchor.parents]:
         if (candidate / ".git").exists():
