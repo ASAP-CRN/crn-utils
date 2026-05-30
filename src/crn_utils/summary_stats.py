@@ -602,39 +602,45 @@ def get_stats_mouse(df: pd.DataFrame) -> dict:
     return report
 
 
-def get_cohort_stats_table(dfs: dict[pd.DataFrame], source: str = None):
+def get_cohort_stats_table(dfs: dict[pd.DataFrame], organism: str, sample_source: str):
     """ """
-    if source == "pmdbs":
-        # get stats_df by dataset, concatenate and then get stats
-        datasets = dfs["STUDY"]["ASAP_dataset_id"].unique()
-        stat_df = pd.DataFrame()
+    datasets = dfs["STUDY"]["ASAP_dataset_id"].unique()
+    stat_df = pd.DataFrame()
+    
+    if organism == "Human" and sample_source == "Brain":
         for dataset in datasets:
             dfs_ = {k: v[v["ASAP_dataset_id"] == dataset] for k, v in dfs.items()}
             df = make_stats_df_pmdbs(dfs_)
             stat_df = pd.concat([stat_df, df])
-
         report = get_stats_pmdbs(stat_df)
+        
+    elif sample_source in ["Cell lines", "Cell", "iPSC", "InVitro"]:
+        for dataset in datasets:
+            dfs_ = {k: v[v["ASAP_dataset_id"] == dataset] for k, v in dfs.items()}
+            df = make_stats_df_cell(dfs_)
+            stat_df = pd.concat([stat_df, df])
+        report = get_stats_cell(stat_df)
+    
+    elif organism == "Human":  # non-brain
+        for dataset in datasets:
+            dfs_ = {k: v[v["ASAP_dataset_id"] == dataset] for k, v in dfs.items()}
+            df = make_stats_df_human_non_brain(dfs_)
+            stat_df = pd.concat([stat_df, df])
+        report = get_stats_human_non_brain(stat_df)
 
-        N_datasets = stat_df["ASAP_dataset_id"].nunique()
-        N_teams = stat_df["ASAP_team_id"].nunique()
-        report["N_datasets"] = N_datasets
-        report["N_teams"] = N_teams
-
-    elif source == "mouse":
-        datasets = dfs["STUDY"]["ASAP_dataset_id"].unique()
-        stat_df = pd.DataFrame()
+    elif sample_source == "Mouse":
         for dataset in datasets:
             dfs_ = {k: v[v["ASAP_dataset_id"] == dataset] for k, v in dfs.items()}
             df = make_stats_df_mouse(dfs_)
             stat_df = pd.concat([stat_df, df])
-
         report = get_stats_mouse(stat_df)
 
-        N_datasets = stat_df["ASAP_dataset_id"].nunique()
-        N_teams = stat_df["ASAP_team_id"].nunique()
-        report["N_datasets"] = N_datasets
-        report["N_teams"] = N_teams
     else:
-        raise ValueError(f"get_cohort_stats_table: Unknown source {source}")
-
+        raise ValueError(f"get_cohort_stats_table: Unexpected categories: organism {organism}, source {sample_source}")
+    
+    N_datasets = stat_df["ASAP_dataset_id"].nunique()
+    N_teams = stat_df["ASAP_team_id"].nunique()
+    report["N_datasets"] = N_datasets
+    report["N_teams"] = N_teams
+        
     return report, stat_df
