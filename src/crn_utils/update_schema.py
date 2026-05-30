@@ -240,7 +240,7 @@ def apply_table_update_map(
                     updated_tables[new_table], 
                     source_dfs[0], 
                     on=join_key, 
-                    how="outer"
+                    how="left"
                 )
                 log.info(f"Merged '{old_table}' -> '{new_table}' (joined on '{join_key}')")
             
