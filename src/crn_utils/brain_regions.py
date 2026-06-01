@@ -1,298 +1,178 @@
 """
-Brain region string normalization and code lookup for ASAP CRN metadata.
+Brain region string normalization and CDE Validation string lookup for ASAP CRN metadata.
 
-Provides a lightweight normalization step before looking up raw submitted
-brain_region strings against the controlled vocabulary tables in cde_vocab.
+Function `map_brain_region` is a wrapper to use dictionaries and functions from cde_vocab
+to CDE-compliant values as follows:
 
-Normalization collapses the most common surface-form variants — different
-cases, underscores, hyphens, and runs of spaces — so that cde_vocab.py
-only needs one canonical lowercase key per brain region.
+Step  Function / Dict          Input             Intermediate       Output
+----  -----------------------  ----------------  -----------------  -------------------------------------------
+1     normalize_vocab_key      "Frontal_Cortex"  None               "frontal cortex"
+2a    BRAIN_REGION_NAME_TO_CDE "frontal cortex"  None               "Frontal cortex (F_CTX, UBERON:0001870)"
+2b    BRAIN_REGION_NAME_TO_CDE "frontal ctx"     "frontal cortex"   "Frontal cortex (F_CTX, UBERON:0001870)"
+2c    BRAIN_REGION_CODE_TO_CDE "f ctx"           "frontal cortex"   "Frontal cortex (F_CTX, UBERON:0001870)"
+2d    BRAIN_REGION_CODE_TO_CDE "snd"             "sn"               "Substantia nigra (SN, UBERON:0002038)"
 
-Note: releases <= v4.0.0 used `brain_region` values that have been mapped
-      to the CDE v4.4+ `region_level_2` controlled vocabularies as specified in cde_vocab.py
+1  Normalizes common variants — different cases, underscores, hyphens, and runs of spaces.
+2a covers canonical brain region name lookups.
+2b covers legacy brain region name lookups (typos, partial names).
+2c covers canonical brain region short code lookups.
+2d covers legacy brain region short code lookups (team-specific or aliased).
 
-Brain mapping chain for region_level_2 (CDE >= v4.5 compliant) for qc_hooks output:
-Step  Function                              Input             Output
-----  ------------------------------------  ----------------  -------------------------------------------
-1     normalize_brain_region_key            "Frontal_Cortex"  "frontal cortex"
-2     get_region_code                       "frontal cortex"  "F_CTX"
-3     get_region_level                      "F_CTX"           "Frontal cortex (F_CTX, UBERON:0001870)"
-Note: different dataset qc_hooks may enter this chain at different steps,
-      that's why we expose the individual functions.
+Semicolon-separated inputs (AllowMultiEnum fields) are split, each element mapped
+individually, and the results deduplicated before being re-joined with ";".
 
 Use examples:
 
-1) Normalize submitted legacy brain_region strings to SAMPLE.region_level_2:
-    from crn_utils.brain_regions import brain_dicts
+1. Legacy or canonical region names mapped to CDE compliant vocabulary string, like:
+    "frontal ctx" → "Frontal cortex (F_CTX, UBERON:0001870)" or
+    "frontal cortex" → "Frontal cortex (F_CTX, UBERON:0001870)"
 
-    df["region_level_2"] = df["brain_region"].map(
-        brain_dicts("legacy_region_name", "remap_cde"))
+    df["region_level_X"] = df["brain_region"].map(
+        map_brain_region("brain_region_name", "brain_cde_vocab"))
 
-2) Fix wrong UBERON IDs from a prior release (correct display name, wrong UBERON):
-    from crn_utils.brain_regions import brain_dicts
+2. Legacy or canonical region codes mapped to CDE compliant vocabulary string, like:
+    "SND" →  "SN" → "Substantia nigra (SN, UBERON:0002038)" or
+    "SN" → "Substantia nigra (SN, UBERON:0002038)"
 
-    df["region_level_2"] = df["region_level_2"].map(
-        brain_dicts("remap_cde", "remap_cde"))
+    df["region_level_X"] = df["region_level_Y"].map(
+        map_brain_region("brain_short_code", "brain_cde_vocab"))
 
-3) Strip UBERON suffix, keeping only the display name:
-    from crn_utils.brain_regions import brain_dicts
+3. Fix wrong UBERON IDs in a CDE-like string (i.e. use region name as mapping key), like:
+    "Frontal cortex (F_CTX, UBERON:0000000)" → "Frontal cortex (F_CTX, UBERON:0001870)"
 
-    df["region_level_2"] = df["region_level_2"].map(
-        brain_dicts("remap_cde", "legacy_region_name"))
+4. Legacy region names that are split into two regions, like
+    "Grey and white matter" → "Grey matter (GM, UBERON:0002020);White matter (WM, UBERON:0002316)"
 
-4) Normalize fields in aggregation by region for summary_stats:
-    from crn_utils.brain_regions import get_region_code, brain_dicts
-    brain_code   = df["brain_region"].map(get_region_code).value_counts().to_dict()
-    brain_region = df["brain_region"].map(
-        brain_dicts("legacy_region_name", "legacy_region_name")).value_counts().to_dict()
+    df["region_level_X"] = df["region_level_Y"].map(
+        map_brain_region("brain_region_name", "brain_cde_vocab"))
 """
 from typing import Callable
 
 from crn_utils.cde_vocab import (
-    LEGACY_BRAIN_REGION_CODE_TO_REGION_CODE,
-    LEGACY_BRAIN_REGION_NAME_TO_REGION_CODE,
-    BRAIN_LEVELS_CDE,
+    BRAIN_REGION_NAME_TO_CDE,
     BRAIN_REGION_CODE_TO_CDE,
     normalize_vocab_key,
 )
 
 __all__ = [
-    "normalize_brain_region_key",
-    "get_region_code",
-    "get_region_title",
-    "get_region_level",
-    "brain_dicts",
+    "map_brain_region",
 ]
 
-
-def normalize_brain_region_key(raw: str) -> str:
-    """
-    Normalize a raw `brain_region` string for dict lookup.
-
-    Strips surrounding whitespace, lowercases, replaces `_` and `-` with
-    spaces, then collapses runs of spaces to a single space.
-    Delegates to `normalize_vocab_key` from `crn_utils.cde_vocab`.
-
-    Parameters
-    ----------
-    raw : str
-        Raw `brain_region` string (e.g. "Frontal_Cortex").
-
-    Returns
-    -------
-    str
-        Normalized string (e.g. "frontal cortex").
-    """
-    return normalize_vocab_key(raw)
+_UNMAPPED_PLACEHOLDER = "Unmapped_brain_annotation"
 
 
-def get_region_code(raw: str) -> str | None:
-    """
-    Map a raw `brain_region` string to its CDE short code
-    (e.g. "Frontal Cortex" → "F_CTX").
-
-    Checks `LEGACY_BRAIN_REGION_NAME_TO_REGION_CODE` first (submitted region
-    names such as "frontal cortex"), then falls back to
-    `LEGACY_BRAIN_REGION_CODE_TO_REGION_CODE` (legacy team-specific short
-    codes such as "amy" or "snd").
-
-    Parameters
-    ----------
-    raw : str
-        Raw `brain_region` string (e.g. "Frontal_Cortex").
-
-    Returns
-    -------
-    str or None
-        CDE short code (e.g. "F_CTX"), or `None` if not recognized.
-    """
-    key  = normalize_brain_region_key(str(raw))
-    code = LEGACY_BRAIN_REGION_NAME_TO_REGION_CODE.get(key)
-    if code is None:
-        code = LEGACY_BRAIN_REGION_CODE_TO_REGION_CODE.get(key)
-    return code
+def _extract_region_name(full_cde: str) -> str:
+    idx = full_cde.rfind(" (")
+    return full_cde[:idx].strip() if idx != -1 else full_cde.strip()
 
 
-def get_region_title(raw: str) -> str | None:
-    """
-    Map a raw `brain_region` string to its legacy display title
-    (e.g. "Frontal_Cortex" → "Frontal Cortex").
-
-    Uses `BRAIN_REGION_CODE_TO_CDE` for the title lookup. For releases
-    > v4.0.0, prefer `get_region_level` which returns the full CDE
-    `region_level_<N>` Validation string including UBERON ID.
-
-    Parameters
-    ----------
-    raw : str
-        Raw `brain_region` string (e.g. "Frontal_Cortex").
-
-    Returns
-    -------
-    str or None
-        Legacy display title (e.g. "Frontal Cortex"), or `None` if not
-        recognized.
-    """
-    code = get_region_code(raw)
-    if code is None:
-        return None
-    return BRAIN_REGION_CODE_TO_CDE.get(normalize_vocab_key(code))
+def _extract_short_code(full_cde: str) -> str:
+    if " (" not in full_cde:
+        return ""
+    inner = full_cde.split(" (", 1)[1]
+    return inner.split(",")[0].strip()
 
 
-def get_region_level(raw: str, level: int) -> str | None:
-    """
-    Map a raw `brain_region` string to its CDE >= v4.5 `region_level_<level>` string.
-    (e.g. "Frontal_Cortex" → "Frontal cortex (F_CTX, UBERON:0001870)").
-
-    Parameters
-    ----------
-    raw : str
-        Raw `brain_region` string (e.g. "Frontal_Cortex").
-    level : int
-        Level of the region (e.g. 2 for `region_level_2`).
-
-    Returns
-    -------
-    str or None
-        CDE >= v4.5 compliant `region_level_<level>` string (e.g.
-        "Frontal cortex (F_CTX, UBERON:0001870)"), or `None` if not recognized.
-    """
-    code = get_region_code(raw)
-    if code is None:
-        return None
-    return BRAIN_LEVELS_CDE.get(f"region_level_{level}", {}).get(normalize_vocab_key(code))
-
-
-def brain_dicts(
+def map_brain_region(
         type_of_input: str,
-        type_of_output: str,
-        region_level: str = "region_level_2") -> Callable[[str], str | None]:
+        type_of_output: str) -> Callable[[str], str]:
     """
     Build a mapping callable for use with `df[col].map()` in qc_hooks.
 
-    Converts between any two brain-region representations: submitted legacy
-    names, CDE short codes, display names, and CDE Validation strings.
+    Converts between brain region representations including legacy and canonical forms.
+    Raw inputs are normalized internally with normalize_vocab_key before lookup.
+
+    Semicolon-separated values (AllowMultiEnum fields) are split, each element
+    mapped individually, and the results deduplicated before being re-joined
+    with ";". Returns `_UNMAPPED_PLACEHOLDER` if no element resolves successfully.
 
     Parameters
     ----------
     type_of_input : str
         Input representation. One of:
 
-        "region_code"
-            CDE short code, canonical or legacy form (e.g. "F_CTX", "f ctx",
-            "amy", "snd"). Normalized before lookup; legacy codes such as
-            "snd" are resolved via `LEGACY_BRAIN_REGION_CODE_TO_REGION_CODE`.
-        "legacy_region_name"
-            Any plain region name without UBERON annotation. Checks
-            `LEGACY_BRAIN_REGION_NAME_TO_REGION_CODE` first (submitted names
-            such as "frontal lobe"), then falls back to the CDE display-name
-            lookup in `BRAIN_LEVELS_CDE` (e.g. "Frontal cortex").
-        "remap_cde"
-            Full CDE Validation string
-            (e.g. "Frontal cortex (F_CTX, UBERON:0001870)"). The display-name
-            prefix is parsed and matched case-insensitively, so entries with
-            incorrect UBERON IDs still resolve correctly.
+        "brain_region_name"
+            Any plain region name without UBERON annotation. Covers canonical
+            CDE display names (e.g. "Frontal cortex") and legacy submitted
+            names that differ from CDE display names (e.g. "frontal ctx",
+            "caudate").
+        "brain_short_code"
+            CDE short code, canonical or legacy form (e.g. "F_CTX", "SN",
+            "SND", "para"). Canonical codes are resolved directly; non-standard
+            codes are resolved via their mapped CDE display name.
+        "brain_cde_vocab"
+            Full CDE Validation string (e.g. "Frontal cortex (F_CTX,
+            UBERON:0001870)"). The display-name prefix is extracted and looked
+            up, so entries with incorrect UBERON IDs still resolve correctly.
 
     type_of_output : str
-        Output representation. Same values as `type_of_input`.
+        Output representation. One of "brain_region_name", "brain_short_code", "brain_cde_vocab".
+        See type_of_input for examples of each representation.
 
-    region_level : str, optional
-        Key into `BRAIN_LEVELS_CDE` to select the level.
-        Default "region_level_2".
 
     Returns
     -------
-    Callable[[str], str | None]
-        A function suitable for `df[col].map()`. Returns `None` for
-        unrecognized inputs (rendered as NaN by pandas).
+    Callable[[str], str]
+        A function suitable for `df[col].map()`. Returns `_UNMAPPED_PLACEHOLDER`
+        for unrecognized inputs.
 
     Examples
     --------
-    Submitted legacy name → full CDE region_level_2 string:
+    Legacy or canonical region names mapped to CDE compliant vocabulary string:
 
         df["region_level_2"] = df["brain_region"].map(
-            brain_dicts("legacy_region_name", "remap_cde"))
+            map_brain_region("brain_region_name", "brain_cde_vocab"))
 
-    Fix wrong UBERON IDs from a prior release (correct display name preserved):
-
-        df["region_level_2"] = df["region_level_2"].map(
-            brain_dicts("remap_cde", "remap_cde"))
-
-    Strip UBERON suffix, keeping only the display name:
+    Legacy or canonical region codes mapped to CDE compliant vocabulary string:
 
         df["region_level_2"] = df["region_level_2"].map(
-            brain_dicts("remap_cde", "legacy_region_name"))
+            map_brain_region("brain_short_code", "brain_cde_vocab"))
+
+    Fix wrong UBERON IDs in a CDE-like string (display name used as mapping key):
+
+        df["region_level_2"] = df["region_level_2"].map(
+            map_brain_region("brain_cde_vocab", "brain_cde_vocab"))
     """
-    level_map = BRAIN_LEVELS_CDE.get(region_level, {})
-
-    def _extract_raw_code(full_cde: str) -> str:
-        if " (" not in full_cde:
-            return ""
-        inner = full_cde.split(" (", 1)[1]
-        return inner.split(",")[0].strip()
-
-    def _extract_display_name(s: str) -> str:
-        idx = s.rfind(" (")
-        return s[:idx].strip() if idx != -1 else s.strip()
-
-    # display_name (lowercase) → normalized_code, built once at call time
-    display_lower_to_norm_code: dict[str, str] = {
-        _extract_display_name(full_cde).lower(): norm_code
-        for norm_code, full_cde in level_map.items()
-    }
-
-    def _get_output(norm_code: str) -> str | None:
-        full_cde = level_map.get(norm_code)
-        if full_cde is None:
-            return None
-        if type_of_output == "remap_cde":
+    def _get_output(full_cde: str) -> str | None:
+        if type_of_output == "brain_cde_vocab":
             return full_cde
-        if type_of_output == "legacy_region_name":
-            return _extract_display_name(full_cde)
-        if type_of_output == "region_code":
-            return _extract_raw_code(full_cde)
+        if type_of_output == "brain_region_name":
+            return _extract_region_name(full_cde)
+        if type_of_output == "brain_short_code":
+            return _extract_short_code(full_cde)
         raise ValueError(f"Unknown type_of_output: {type_of_output!r}")
 
-    def _norm_code_from_region_code(raw: str) -> str | None:
-        norm = normalize_brain_region_key(raw)
-        if norm in level_map:
-            return norm
-        canonical = LEGACY_BRAIN_REGION_CODE_TO_REGION_CODE.get(norm)
-        if canonical is not None:
-            return normalize_vocab_key(canonical)
-        return None
+    if type_of_input == "brain_region_name":
+        def _map_one(raw: str) -> str | None:
+            cde = BRAIN_REGION_NAME_TO_CDE.get(normalize_vocab_key(raw))
+            return _get_output(cde) if cde else None
 
-    def _norm_code_from_display_name(display: str) -> str | None:
-        return display_lower_to_norm_code.get(display.strip().lower())
+    elif type_of_input == "brain_short_code":
+        def _map_one(raw: str) -> str | None:
+            cde = BRAIN_REGION_CODE_TO_CDE.get(normalize_vocab_key(raw))
+            return _get_output(cde) if cde else None
 
-    def _norm_code_from_legacy_name(raw: str) -> str | None:
-        code = LEGACY_BRAIN_REGION_NAME_TO_REGION_CODE.get(normalize_brain_region_key(raw))
-        if code is not None:
-            return normalize_vocab_key(code)
-        return _norm_code_from_display_name(raw)
-
-    if type_of_input == "region_code":
-        def _map(raw: str) -> str | None:
-            if not isinstance(raw, str):
-                return None
-            norm_code = _norm_code_from_region_code(raw)
-            return _get_output(norm_code) if norm_code else None
-
-    elif type_of_input == "legacy_region_name":
-        def _map(raw: str) -> str | None:
-            if not isinstance(raw, str):
-                return None
-            norm_code = _norm_code_from_legacy_name(raw)
-            return _get_output(norm_code) if norm_code else None
-
-    elif type_of_input == "remap_cde":
-        def _map(raw: str) -> str | None:
-            if not isinstance(raw, str):
-                return None
-            norm_code = _norm_code_from_display_name(_extract_display_name(raw))
-            return _get_output(norm_code) if norm_code else None
+    elif type_of_input == "brain_cde_vocab":
+        def _map_one(raw: str) -> str | None:
+            cde = BRAIN_REGION_NAME_TO_CDE.get(normalize_vocab_key(_extract_region_name(raw)))
+            return _get_output(cde) if cde else None
 
     else:
         raise ValueError(f"Unknown type_of_input: {type_of_input!r}")
+
+    def _map(raw: str) -> str:
+        if not isinstance(raw, str):
+            return _UNMAPPED_PLACEHOLDER
+        if ";" not in raw:
+            result = _map_one(raw)
+            return result if result is not None else _UNMAPPED_PLACEHOLDER
+        seen: set[str] = set()
+        unique: list[str] = []
+        for part in raw.split(";"):
+            mapped = _map_one(part.strip())
+            if mapped is not None and mapped not in seen:
+                seen.add(mapped)
+                unique.append(mapped)
+        return ";".join(unique) if unique else _UNMAPPED_PLACEHOLDER
 
     return _map
