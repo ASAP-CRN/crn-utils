@@ -38,6 +38,8 @@ from crn_utils.cde_vocab import (
     BIOBANK_PATTERNS,
     normalize_vocab_key,
 )
+from crn_utils.path import get_repo_root
+
 
 __all__ = ["BiobankSubjectIdFixer"]
 
@@ -47,35 +49,6 @@ _DATE_LIKE = re.compile(
     r"^\d{1,2}-[A-Za-z]{3}$|^[A-Za-z]{3}-\d{1,2}$|^\d{2}-\d{2}$",
     re.IGNORECASE,
 )
-
-
-def _find_repo_root(start: Path) -> Path:
-    """
-    Walk up from start until a directory containing `.git` is found.
-
-    Parameters
-    ----------
-    start : Path
-        Starting path (typically `Path(__file__)` of the calling module).
-
-    Returns
-    -------
-    Path
-        The nearest ancestor directory that contains a `.git` entry.
-
-    Raises
-    ------
-    RuntimeError
-        If no `.git` directory is found between start and the filesystem root.
-    """
-    for candidate in [start.resolve(), *start.resolve().parents]:
-        if (candidate / ".git").exists():
-            return candidate
-    raise RuntimeError(
-        f"Could not locate a git repository root above '{start}'. "
-        "Pass repo_root explicitly if running outside the repository."
-    )
-
 
 class BiobankSubjectIdFixer:
     """
@@ -125,7 +98,7 @@ class BiobankSubjectIdFixer:
             # Walk up from the calling file (qc_hook) rather than this library
             # file, so we land in asap-crn-cloud-dataset-metadata, not crn-utils.
             start = Path(caller_path) if caller_path is not None else Path(__file__)
-            self.repo_root = _find_repo_root(start)
+            self.repo_root = get_repo_root(start)
 
     # ------------------------------------------------------------------
     # Public API

@@ -38,12 +38,13 @@ Use examples:
     from crn_utils.brain_regions import brain_dicts
 
     df["region_level_2"] = df["region_level_2"].map(
-        brain_dicts("remap_cde", "region_name"))
+        brain_dicts("remap_cde", "legacy_region_name"))
 
 4) Normalize fields in aggregation by region for summary_stats:
-    from crn_utils.brain_regions import get_region_code, get_region_title
-    brain_code   = sw_df["brain_region"].map(get_region_code).value_counts().to_dict()
-    brain_region = sw_df["brain_region"].map(get_region_title).value_counts().to_dict()
+    from crn_utils.brain_regions import get_region_code, brain_dicts
+    brain_code   = df["brain_region"].map(get_region_code).value_counts().to_dict()
+    brain_region = df["brain_region"].map(
+        brain_dicts("legacy_region_name", "legacy_region_name")).value_counts().to_dict()
 """
 from typing import Callable
 
@@ -182,12 +183,10 @@ def brain_dicts(
             "amy", "snd"). Normalized before lookup; legacy codes such as
             "snd" are resolved via `LEGACY_BRAIN_REGION_CODE_TO_REGION_CODE`.
         "legacy_region_name"
-            Submitted region name key from
-            `LEGACY_BRAIN_REGION_NAME_TO_REGION_CODE` (e.g. "frontal cortex",
-            "frontal lobe"). Normalized before lookup.
-        "region_name"
-            CDE display name from `brain_region_levels.display_name`
-            (e.g. "Frontal cortex"). Case-insensitive match.
+            Any plain region name without UBERON annotation. Checks
+            `LEGACY_BRAIN_REGION_NAME_TO_REGION_CODE` first (submitted names
+            such as "frontal lobe"), then falls back to the CDE display-name
+            lookup in `BRAIN_LEVELS_CDE` (e.g. "Frontal cortex").
         "remap_cde"
             Full CDE Validation string
             (e.g. "Frontal cortex (F_CTX, UBERON:0001870)"). The display-name
@@ -222,7 +221,7 @@ def brain_dicts(
     Strip UBERON suffix, keeping only the display name:
 
         df["region_level_2"] = df["region_level_2"].map(
-            brain_dicts("remap_cde", "region_name"))
+            brain_dicts("remap_cde", "legacy_region_name"))
     """
     level_map = BRAIN_LEVELS_CDE.get(region_level, {})
 
@@ -248,18 +247,10 @@ def brain_dicts(
             return None
         if type_of_output == "remap_cde":
             return full_cde
-        if type_of_output == "region_name":
+        if type_of_output == "legacy_region_name":
             return _extract_display_name(full_cde)
         if type_of_output == "region_code":
             return _extract_raw_code(full_cde)
-        if type_of_output == "legacy_region_name":
-            raw_code   = _extract_raw_code(full_cde)
-            norm_target = normalize_vocab_key(raw_code)
-            return next(
-                (k for k, v in LEGACY_BRAIN_REGION_NAME_TO_REGION_CODE.items()
-                 if normalize_vocab_key(v) == norm_target),
-                None,
-            )
         raise ValueError(f"Unknown type_of_output: {type_of_output!r}")
 
     def _norm_code_from_region_code(raw: str) -> str | None:
@@ -271,12 +262,14 @@ def brain_dicts(
             return normalize_vocab_key(canonical)
         return None
 
-    def _norm_code_from_legacy_name(raw: str) -> str | None:
-        code = LEGACY_BRAIN_REGION_NAME_TO_REGION_CODE.get(normalize_brain_region_key(raw))
-        return normalize_vocab_key(code) if code is not None else None
-
     def _norm_code_from_display_name(display: str) -> str | None:
         return display_lower_to_norm_code.get(display.strip().lower())
+
+    def _norm_code_from_legacy_name(raw: str) -> str | None:
+        code = LEGACY_BRAIN_REGION_NAME_TO_REGION_CODE.get(normalize_brain_region_key(raw))
+        if code is not None:
+            return normalize_vocab_key(code)
+        return _norm_code_from_display_name(raw)
 
     if type_of_input == "region_code":
         def _map(raw: str) -> str | None:
@@ -290,13 +283,6 @@ def brain_dicts(
             if not isinstance(raw, str):
                 return None
             norm_code = _norm_code_from_legacy_name(raw)
-            return _get_output(norm_code) if norm_code else None
-
-    elif type_of_input == "region_name":
-        def _map(raw: str) -> str | None:
-            if not isinstance(raw, str):
-                return None
-            norm_code = _norm_code_from_display_name(raw)
             return _get_output(norm_code) if norm_code else None
 
     elif type_of_input == "remap_cde":
