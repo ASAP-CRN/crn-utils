@@ -94,7 +94,7 @@ def get_field_transfer_map() -> pd.DataFrame:
         ["CLINPATH", "CLINPATH", "path_infarcs", "path_infarcts", None],
         # CDE v4.0+ standardization of instrument field across assays
         ["ASSAY", "ASSAY", "sequencing_instrument", "instrument", None],
-        # condition was only used in v4.0.X, replaced by extending intervention_id
+        # condition was only used in release v4.0.X, replaced by extending intervention_id
         ["SAMPLE", "SAMPLE", "condition", "intervention_id", None],
         # CDE v4.3 standardization of MS field across proteomics/metabolomics/lipidomics
         ["ASSAY", "ASSAY", "ms_proteomics_data_acquisition_method", "ms_data_acquisition_method", None],
@@ -103,7 +103,10 @@ def get_field_transfer_map() -> pd.DataFrame:
         ["ASSAY", "ASSAY", "ms_proteomics_ms1_scan_range", "ms_ms1_scan_range", None],
         ["ASSAY", "ASSAY", "ms_proteomics_precursor_mass_tolerance", "ms_precursor_mass_tolerance", None],
         ["ASSAY", "ASSAY", "ms_proteomics_fragment_mass_tolerance", "ms_fragment_mass_tolerance", None],
-        
+        # Same-table rename after MOUSE/CELL -> SUBJECT renaming in CDE v4.0
+        ["SUBJECT", "SUBJECT", "ASAP_mouse_id", "ASAP_subject_id", None],
+        ["SUBJECT", "SUBJECT", "ASAP_cell_id", "ASAP_subject_id", None],
+
         # Add more as needed
     ]
     
