@@ -103,10 +103,11 @@ def get_field_transfer_map() -> pd.DataFrame:
         ["ASSAY", "ASSAY", "ms_proteomics_ms1_scan_range", "ms_ms1_scan_range", None],
         ["ASSAY", "ASSAY", "ms_proteomics_precursor_mass_tolerance", "ms_precursor_mass_tolerance", None],
         ["ASSAY", "ASSAY", "ms_proteomics_fragment_mass_tolerance", "ms_fragment_mass_tolerance", None],
-        # Same-table rename after MOUSE/CELL -> SUBJECT renaming in CDE v4.0
-        ["SUBJECT", "SUBJECT", "ASAP_mouse_id", "ASAP_subject_id", None],
-        ["SUBJECT", "SUBJECT", "ASAP_cell_id", "ASAP_subject_id", None],
 
+        # Handling ASAP_mouse_id --> ASAP_subject_id when performing patches
+        ["SUBJECT", "SUBJECT", "ASAP_mouse_id", "ASAP_subject_id", None],
+        ["SAMPLE", "SAMPLE", "ASAP_mouse_id", "ASAP_subject_id", None],
+        
         # Add more as needed
     ]
     
@@ -238,12 +239,18 @@ def apply_table_update_map(
                     raise ValueError(f"Join key {join_key} not found in {old_table}")
                 if join_key not in tables[new_table].columns:
                     raise ValueError(f"ERROR: Join key '{join_key}' not found in {old_table}")
-            
+
+                # Necessary to prevent duplicated columns if any are shared
+                distinct_cols = [
+                    c for c in source_dfs[0].columns
+                    if c not in updated_tables[new_table].columns or c == join_key
+                ]
+                
                 updated_tables[new_table] = pd.merge(
                     updated_tables[new_table], 
-                    source_dfs[0], 
+                    source_dfs[0][distinct_cols], 
                     on=join_key, 
-                    how="outer"
+                    how="left"
                 )
                 log.info(f"Merged '{old_table}' -> '{new_table}' (joined on '{join_key}')")
             
@@ -254,11 +261,19 @@ def apply_table_update_map(
             if join_key not in source_dfs[1].columns:
                 raise ValueError(f"Join key {join_key} not found in {old_tables_exist[1]}") 
             
-            updated_tables[new_table] = pd.merge(source_dfs[0], 
-                                                 source_dfs[1], 
-                                                 on=join_key, 
-                                                 how="outer"
-                                                )
+            # Bring only distinct cols from second source to avoid _x/_y column duplication
+            # NOTE: This takes columns from source_dfs[0] as precedence, although these should be constant as largely ID columns.
+            distinct_cols = [
+                c for c in source_dfs[1].columns
+                if c not in source_dfs[0].columns or c == join_key
+            ]
+            
+            updated_tables[new_table] = pd.merge(
+                source_dfs[0],
+                source_dfs[1][distinct_cols],
+                on=join_key,
+                how="left"
+            )
             log.info(f"Merged '{', '.join(old_tables_exist)}' -> '{new_table}' (joined on '{join_key}')")
             
     # Remove old tables that have been processed
