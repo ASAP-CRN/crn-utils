@@ -83,6 +83,9 @@ def get_field_transfer_map() -> pd.DataFrame:
         # Moved in CDE v3.1
         ["SUBJECT", "SAMPLE", "age_at_collection", "age_at_collection", "subject_id"],
         
+        # Moved in CDE v4.1
+        ["SUBJECT", "CLINPATH", "primary_diagnosis", "primary_diagnosis", "subject_id"],
+
         # --- Same-table renames---
         
         # Changed in CDE v3.1

@@ -28,6 +28,7 @@ __all__ = [
     "list_expected_metadata_tables",
     "detect_encoding_artefacts",
     "fix_encoding_artefacts",
+    "recode_latin",
 ]
 
 SUPPORTED_CDE_VERSIONS = {
@@ -121,7 +122,7 @@ def detect_encoding_artefacts(df: pd.DataFrame) -> list[tuple[str, str, str]]:
     Returns
     -------
     list of tuple
-        Each element is ``(column, row_index, cell_value)`` for every cell that
+        Each element is `(column, row_index, cell_value)` for every cell that
         contains at least one known artefact byte.
     """
     hits = []
@@ -149,11 +150,11 @@ def fix_encoding_artefacts(df: pd.DataFrame) -> pd.DataFrame:
     Returns
     -------
     pd.DataFrame
-        Copy of ``df`` with artefact bytes replaced throughout all string columns.
+        Copy of `df` with artefact bytes replaced throughout all string columns.
 
     Notes
     -----
-    Complementary to the latin1→UTF-8 re-encode pass in ``read_meta_table``.
+    Complementary to the latin1→UTF-8 re-encode pass in `read_meta_table`.
     That pass resolves bytes above 0x9F correctly for true latin1 content; this
     function handles the Windows-1252 private range (0x80–0x9F) that latin1
     leaves undefined, and the overlapping Mac OS Roman range (0xD0–0xD5).
@@ -165,16 +166,53 @@ def fix_encoding_artefacts(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def sanitize_validation_string(validation_str):
-    """Sanitize validation strings by replacing smart quotes with straight quotes."""
-    if not isinstance(validation_str, str):
-        return validation_str
+def recode_latin(df: pd.DataFrame, cols: list[str] | None = None) -> pd.DataFrame:
+    """
+    Re-interpret string columns as Latin-1 bytes decoded to UTF-8.
+
+    Use only when a table was intentionally loaded with `encoding="latin1"`
+    because its bytes are multi-byte UTF-8 sequences misread as Latin-1.
+    Do **not** apply to tables already loaded correctly as UTF-8, because characters
+    with a code point of U+0100 or higher (i.e. that cannot be represented as a single Latin-1 byte),
+    like `μ`, `°`, `–` [en dash], `—` [em dash], `…` [ellipsis] will be corrupted.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame to recode.
+    cols : list of str or None
+        Column names to process. If None, all object-dtype columns are recoded.
+
+    Returns
+    -------
+    pd.DataFrame
+        Copy of `df` with the specified columns recoded.
+    """
+    out = df.copy()
+    target = cols if cols is not None else out.select_dtypes(include="object").columns.tolist()
+    for col in target:
+        if col not in out.columns:
+            continue
+        out[col] = (
+            out[col]
+            .str.encode("latin1", errors="replace")
+            .str.decode("utf-8", errors="replace")
+        )
+    return out
+
+
+def normalize_typography(s: object) -> object:                                                                                                                                                                                                                            
+    """Replace typographic punctuation with ASCII equivalents."""
+    if not isinstance(s, str):
+        return s
     return (
-        validation_str.replace('"', '"')
-        .replace('"', '"')
-        .replace("\u201c", "'").replace("\u201d", "'")
-        .replace("…", "...")
+        s.replace("\u201c", '"')  # U+201C left double quotation mark  → "
+        .replace("\u201d", '"')   # U+201D right double quotation mark → "
+        .replace("\u2018", "'")   # U+2018 left single quotation mark  → '
+        .replace("\u2019", "'")   # U+2019 right single quotation mark → '
+        .replace("\u2026", "...") # U+2026 horizontal ellipsis         → ...
     )
+
 
 def read_CDE(
     cde_version: str = "v3.2",
@@ -284,20 +322,6 @@ def archive_CDE(
     CDE_df.to_csv(export_path, index=False)
     print(f"wrote CDE to: {export_path}")
 
-def sanitize_string(s):
-    """Replace smart quotes with straight quotes and other problematic characters."""
-    if not isinstance(s, str):
-        return s
-    return (
-        s.replace('"', '"')
-        .replace('"', '"')
-        .replace(
-            "\u201c", "'")
-             .replace("\u201d",
-            "'",
-        )
-        .replace("…", "...")
-    )
 
 def clean_cde_schema(cde_schema):
     """
@@ -314,14 +338,12 @@ def clean_cde_schema(cde_schema):
 
     # Sanitize the Validation column
     if "Validation" in cleaned_schema.columns:
-        cleaned_schema["Validation"] = cleaned_schema["Validation"].apply(
-            sanitize_string
-        )
+        cleaned_schema["Validation"] = cleaned_schema["Validation"].apply(normalize_typography)
 
     # Also sanitize any other columns that might contain validation expressions
     for col in ["Description", "Notes", "Example"]:
         if col in cleaned_schema.columns:
-            cleaned_schema[col] = cleaned_schema[col].apply(sanitize_string)
+            cleaned_schema[col] = cleaned_schema[col].apply(normalize_typography)
 
     return cleaned_schema
 
@@ -443,13 +465,17 @@ def export_table(table_name: str, df: pd.DataFrame, out_dir: str):
     })
     df.to_csv(os.path.join(out_dir, f"{table_name}.csv"), index=False)
 
-def remove_special_characters_ascii_printable(value: object) -> object:
+def sanitize_url_doi(value: object) -> object:
     """
-    For URL/DOI-like fields, keep only ASCII printable characters (0x20..0x7E),
-    drop control chars, and drop U+FFFD.
+    Removes:
+    i) non-ASCII printable characters (outside 0x20..0x7E)
+    ii) U+FFFD (placeholder for a bytes that couldn't be decoded)
+    iii) trailing dots (.)
 
-    Note: even after .str.encode("latin1", errors="replace").str.decode("utf-8", errors="replace")
+    Note: For URL/DOI-like fields, this function is applied to ensure clean hyperlinks.
+    even after .str.encode("latin1", errors="replace").str.decode("utf-8", errors="replace")
     some non-ASCII characters can remain as "�" (U+FFFD) which can cause hyperlinking issues.
+    
     """
     if value is None or value is pd.NA:
         return value
@@ -466,11 +492,15 @@ def remove_special_characters_ascii_printable(value: object) -> object:
         for character in value_str
         if 32 <= ord(character) <= 126
     )
-    return value_str.strip()
+
+    # Remove trailing dots
+    value_str = value_str.rstrip(".")
+
+    return value_str
 
 def read_meta_table(
     table_path: str | Path,
-    columns_remove_special_characters_and_ending_dots: list[str] | None = None
+    columns_sanitize_url_doi: list[str] | None = None
 ) -> pd.DataFrame:
     # read the whole table
     try:
@@ -479,24 +509,19 @@ def read_meta_table(
         print(f"UnicodeDecodeError: {table_path}")
         table_df = pd.read_csv(table_path, encoding="latin1", dtype=str)
 
-    for col in table_df.select_dtypes(include="object").columns:
-        table_df[col] = (
-            table_df[col]
-            .str.encode("latin1", errors="replace")
-            .str.decode("utf-8", errors="replace")
-        )
 
     for col in table_df.columns:
-        table_df[col] = table_df[col].apply(sanitize_validation_string)
+        table_df[col] = table_df[col].apply(normalize_typography)
+        # Normalize all double quotes to single quotes to avoid issues with CSV export
+        table_df[col] = table_df[col].apply(lambda x: x.replace('"', "'") if isinstance(x, str) else x)
 
     # Special treatment for URL/DOI-like fields to
     # remove non-ASCII characters and ending dots which cause hyperlinking issues
     # (e.g., github_url, protocols_io_DOI, other_reference, publication_DOI)
-    if columns_remove_special_characters_and_ending_dots is not None:
-        for col in columns_remove_special_characters_and_ending_dots:
+    if columns_sanitize_url_doi is not None:
+        for col in columns_sanitize_url_doi:
             if col in table_df.columns:
-                table_df[col] = table_df[col].apply(remove_special_characters_ascii_printable)
-                table_df[col] = table_df[col].str.rstrip(".")
+                table_df[col] = table_df[col].apply(sanitize_url_doi)
 
     # drop the first column if it is just the index incase it was saved with index = True
     if table_df.columns[0] == "Unnamed: 0":
