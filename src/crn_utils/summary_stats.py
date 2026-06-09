@@ -56,25 +56,39 @@ _brain_region_coder = {
     "Middle Temporal Gyrus": "MTG",
     "Middle temporal gyrus": "MTG",
     "Parahippocampal Gyrus": "PARA",
-    # TODO: The following are for unblocking the v4.1.1 release - revisit with update to brain region mapping
+    # TODO: The following are for unblocking the v4.1.1 and v5.0.0 release - revisit with update to brain region mapping
     "Midbrain": "MB",
     "Substantia nigra (SN, UBERON:0002038)": "SN",
     "Anterior cingulate gyrus (ACG, UBERON:0002756)": "ACG",
     "Posterior cingulate gyrus (PCG, UBERON:0002740)": "PCG",
     "Frontal lobe (FL, UBERON:0016525)": "FL",
     "Cerebellar hemisphere (CBH, UBERON:0002245)": "CH",
+    "Prefrontal cortex (PFC, UBERON:0000451)": "PFC",
+    "Putamen (PUT, UBERON:0001874)": "PUT",
+    "Amygdala (AMY, UBERON:0001876)": "AMG",
+    "Caudate nucleus (CAU, UBERON:0001873)": "CAU",
+    "Inferior parietal lobule (IPL, UBERON:0006088)": "IPL",
+    "Middle frontal gyrus (MFG, UBERON:0002702)": "MFG",
+    "Middle temporal gyrus (MTG, UBERON:0002771)": "MTG",
+    "Parahippocampal gyrus (PHG, UBERON:0002973)": "PHG",
+    "Parietal lobe (PL, UBERON:0001872)": "PL",
+    "Temporal lobe (TL, UBERON:0001871)": "TL",
+    "Cingulate gyrus (CG, UBERON:0002967)": "CG",
+    "Grey matter (GM, UBERON:0002020)": "GM",
+    "Hippocampus (HC, UBERON:0002421)": "HC",
 }
 
 
 _region_titles = {
     "ACG": "Anterior Cingulate Gyrus",
-    "CAU": "Caudate",
+    "CAU": "Caudate Nucleus",
     "PUT": "Putamen",
-    "HIP": "Hippocampus",
+    "HIP": "Hippocampus",  # Note: HIP kept for legacy usage, HC was used for brain map update
+    "HC": "Hippocampus",  
     "SN": "Substantia Nigra",
     "AMG": "Amygdala",
     "PFC": "Prefrontal Cortex",
-    "IPL": "Inferior Parietal Lobe",
+    "IPL": "Inferior Parietal Lobule",
     "ACC": "Antaerior Cingulate Cortex",
     "F_CTX": "Frontal Cortex",
     "P_CTX": "Parietal Cortex",
@@ -83,11 +97,16 @@ _region_titles = {
     "MFG": "Middle Frontal Gyrus",
     "MTG": "Middle Temporal Gyrus",
     "PARA": "Para-Hippocampal Gyrus",
-    # TODO: The following are for unblocking the v4.1.1 release - revisit with update to brain region mapping
+    # TODO: The following are for unblocking the v4.1.1 and v5.0.0 release - revisit with update to brain region mapping
     "MB": "Midbrain",
     "PCG": "Posterior Cingulate Gyrus",
     "FL": "Frontal Lobe",
-    "CH": "Cerebellar hemisphere",
+    "CH": "Cerebellar Hemisphere",
+    "PHG": "Parahippocampal Gyrus",
+    "PL": "Parietal Lobe",
+    "TL": "Temporal Lobe",
+    "CG": "Cingulate Gyrus",
+    "GM": "Grey Matter",
 }
 
 
@@ -138,7 +157,9 @@ def make_stats_df_pmdbs(dfs: dict[pd.DataFrame]) -> pd.DataFrame:
         "ASAP_dataset_id",
         "replicate",
         "age_at_collection",
+        "region_level_1",
         "region_level_2",
+        "region_level_3",
         "condition_id",
     ]
     subject_cols = ["ASAP_subject_id", "sex"]
@@ -168,19 +189,30 @@ def get_stat_tabs_pmdbs(dfs: dict[pd.DataFrame]):
 
 
 def get_stats_pmdbs(df: pd.DataFrame) -> dict:
+    
+    # Helper to select L2 > L1 > L3 for brain region annotation, with fallback to "Unknown"
+    # At time of writing, L1 is more informative than L3 for most PMDBS datasets
+    def _resolve_region(row):
+        for col in ["region_level_2", "region_level_1", "region_level_3"]:
+            val = row.get(col, None)
+            if val and str(val).lower() not in ("na", "unknown", "unknown_brain_annotation", "nan"):
+                return val
+        return "Unknown"
+    
     n_samples = df[["ASAP_sample_id", "replicate"]].drop_duplicates().shape[0]
     n_subjects = df["ASAP_subject_id"].nunique()
+    df["resolved_region"] = df.apply(_resolve_region, axis=1)
 
     # sample-level
     sw_df = df[["ASAP_sample_id", "ASAP_subject_id", "replicate", "gp2_phenotype",
-                "age_at_collection", "region_level_2", "condition_id", "sex"]].drop_duplicates()
+                "age_at_collection", "resolved_region", "condition_id", "sex"]].drop_duplicates()
     print(f"shape df: {df.shape}, shape sw_df: {sw_df.shape}")
 
     age_s = sw_df["age_at_collection"].replace({"NA": np_nan}).astype("float")
     samples = dict(
         n_samples=n_samples,
-        brain_code = sw_df["region_level_2"].replace(_brain_region_coder).value_counts().to_dict(),
-        brain_region = sw_df["region_level_2"].replace(_brain_region_coder).map(_region_titles).value_counts().to_dict(),
+        brain_code = sw_df["resolved_region"].replace(_brain_region_coder).value_counts().to_dict(),
+        brain_region = sw_df["resolved_region"].replace(_brain_region_coder).map(_region_titles).value_counts().to_dict(),
         PD_status=(sw_df["gp2_phenotype"].value_counts().to_dict(),),
         condition_id=(sw_df["condition_id"].value_counts().to_dict(),),
         sex=(sw_df["sex"].value_counts().to_dict(),),
@@ -189,7 +221,7 @@ def get_stats_pmdbs(df: pd.DataFrame) -> dict:
     )
 
     # subject-level
-    sub_df = df[["ASAP_subject_id", "gp2_phenotype", "sex", "age_at_collection", "condition_id"]].drop_duplicates()
+    sub_df = df[["ASAP_subject_id", "gp2_phenotype", "sex", "age_at_collection", "condition_id"]].drop_duplicates(subset=["ASAP_subject_id"])
     age_s = sub_df["age_at_collection"].replace({"NA": np_nan}).astype("float")
     subject = dict(
         n_subjects=n_subjects,
