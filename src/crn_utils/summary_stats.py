@@ -203,6 +203,14 @@ def get_stats_pmdbs(df: pd.DataFrame) -> dict:
     n_subjects = df["ASAP_subject_id"].nunique()
     df["resolved_region"] = df.apply(_resolve_region, axis=1)
 
+    # Get condition_id counts at the subject level to avoid double-counting
+    subject_condition_id = (
+        df.groupby("ASAP_subject_id")["condition_id"]
+        .agg(lambda x: x.mode()[0]) # This takes the most common condition if a subject has multiple samples with different conditions (Jakobsson bulk)
+        .value_counts()
+        .to_dict()
+    )
+    
     # sample-level
     sw_df = df[["ASAP_sample_id", "ASAP_subject_id", "replicate", "gp2_phenotype",
                 "age_at_collection", "resolved_region", "condition_id", "sex"]].drop_duplicates()
@@ -221,12 +229,13 @@ def get_stats_pmdbs(df: pd.DataFrame) -> dict:
     )
 
     # subject-level
-    sub_df = df[["ASAP_subject_id", "gp2_phenotype", "sex", "age_at_collection", "condition_id"]].drop_duplicates(subset=["ASAP_subject_id"])
+    sub_df = df[["ASAP_subject_id", "gp2_phenotype", "sex", "age_at_collection",
+                 "condition_id"]].drop_duplicates(subset=["ASAP_subject_id"])
     age_s = sub_df["age_at_collection"].replace({"NA": np_nan}).astype("float")
     subject = dict(
         n_subjects=n_subjects,
         PD_status=(sub_df["gp2_phenotype"].value_counts().to_dict(),),
-        condition_id=(sub_df["condition_id"].value_counts().to_dict(),),
+        condition_id=subject_condition_id,
         sex=(sub_df["sex"].value_counts().to_dict(),),
         age_at_collection=dict(mean=f"{age_s.mean():.1f}", median=f"{age_s.median():.1f}",
                                max=f"{age_s.max():.1f}", min=f"{age_s.min():.1f}"),
