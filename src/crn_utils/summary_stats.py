@@ -56,18 +56,39 @@ _brain_region_coder = {
     "Middle Temporal Gyrus": "MTG",
     "Middle temporal gyrus": "MTG",
     "Parahippocampal Gyrus": "PARA",
+    # TODO: The following are for unblocking the v4.1.1 and v5.0.0 release - revisit with update to brain region mapping
+    "Midbrain": "MB",
+    "Substantia nigra (SN, UBERON:0002038)": "SN",
+    "Anterior cingulate gyrus (ACG, UBERON:0002756)": "ACG",
+    "Posterior cingulate gyrus (PCG, UBERON:0002740)": "PCG",
+    "Frontal lobe (FL, UBERON:0016525)": "FL",
+    "Cerebellar hemisphere (CBH, UBERON:0002245)": "CH",
+    "Prefrontal cortex (PFC, UBERON:0000451)": "PFC",
+    "Putamen (PUT, UBERON:0001874)": "PUT",
+    "Amygdala (AMY, UBERON:0001876)": "AMG",
+    "Caudate nucleus (CAU, UBERON:0001873)": "CAU",
+    "Inferior parietal lobule (IPL, UBERON:0006088)": "IPL",
+    "Middle frontal gyrus (MFG, UBERON:0002702)": "MFG",
+    "Middle temporal gyrus (MTG, UBERON:0002771)": "MTG",
+    "Parahippocampal gyrus (PHG, UBERON:0002973)": "PHG",
+    "Parietal lobe (PL, UBERON:0001872)": "PL",
+    "Temporal lobe (TL, UBERON:0001871)": "TL",
+    "Cingulate gyrus (CG, UBERON:0002967)": "CG",
+    "Grey matter (GM, UBERON:0002020)": "GM",
+    "Hippocampus (HC, UBERON:0002421)": "HC",
 }
 
 
 _region_titles = {
     "ACG": "Anterior Cingulate Gyrus",
-    "CAU": "Caudate",
+    "CAU": "Caudate Nucleus",
     "PUT": "Putamen",
-    "HIP": "Hippocampus",
+    "HIP": "Hippocampus",  # Note: HIP kept for legacy usage, HC was used for brain map update
+    "HC": "Hippocampus",  
     "SN": "Substantia Nigra",
     "AMG": "Amygdala",
     "PFC": "Prefrontal Cortex",
-    "IPL": "Inferior Parietal Lobe",
+    "IPL": "Inferior Parietal Lobule",
     "ACC": "Antaerior Cingulate Cortex",
     "F_CTX": "Frontal Cortex",
     "P_CTX": "Parietal Cortex",
@@ -76,6 +97,16 @@ _region_titles = {
     "MFG": "Middle Frontal Gyrus",
     "MTG": "Middle Temporal Gyrus",
     "PARA": "Para-Hippocampal Gyrus",
+    # TODO: The following are for unblocking the v4.1.1 and v5.0.0 release - revisit with update to brain region mapping
+    "MB": "Midbrain",
+    "PCG": "Posterior Cingulate Gyrus",
+    "FL": "Frontal Lobe",
+    "CH": "Cerebellar Hemisphere",
+    "PHG": "Parahippocampal Gyrus",
+    "PL": "Parietal Lobe",
+    "TL": "Temporal Lobe",
+    "CG": "Cingulate Gyrus",
+    "GM": "Grey Matter",
 }
 
 
@@ -119,79 +150,35 @@ def get_stats_table(dfs: dict[pd.DataFrame],
 
 
 def make_stats_df_pmdbs(dfs: dict[pd.DataFrame]) -> pd.DataFrame:
-    """ """
-    # do joins to get the stats we need.
-    # first JOIN SAMPLE and CONDITION on "condition_id" how=left to get our "intervention_id" or PD / control
     sample_cols = [
         "ASAP_sample_id",
         "ASAP_subject_id",
         "ASAP_team_id",
         "ASAP_dataset_id",
         "replicate",
-        "replicate_count",
-        "repeated_sample",
-        "batch",
-        "organism",
-        "tissue",
-        "assay_type",
-        "condition_id",
-    ]
-
-    subject_cols = [
-        "ASAP_subject_id",
-        "source_subject_id",
-        "biobank_name",
-        "sex",
-        "race",
-        "primary_diagnosis",
-        "primary_diagnosis_text",
-    ]
-
-    pmdbs_cols = [
-        "ASAP_sample_id",
-        "brain_region",
-        "hemisphere",
+        "age_at_collection",
         "region_level_1",
         "region_level_2",
         "region_level_3",
-    ]
-
-    condition_cols = [
         "condition_id",
-        "intervention_name",
     ]
+    subject_cols = ["ASAP_subject_id", "sex"]
+    condition_cols = ["condition_id", "intervention_name"]
 
-    if "age_at_collection" in dfs["SUBJECT"].columns:
-        subject_cols.append("age_at_collection")
-    elif "age_at_collection" in dfs["SAMPLE"].columns:
-        sample_cols.append("age_at_collection")
-    else:
-        raise ValueError(f"get_stats_pmdbs: No age_at_collection column found in SUBJECT or SAMPLE")
-
-    SAMPLE_ = dfs["SAMPLE"][sample_cols]
-
-    if "gp2_phenotype" in dfs["SUBJECT"].columns:
+    SUBJECT_ = dfs["SUBJECT"]
+    if "gp2_phenotype" in SUBJECT_.columns:
         subject_cols.append("gp2_phenotype")
-        SUBJECT_ = dfs["SUBJECT"][subject_cols]
+        SUBJECT_ = SUBJECT_[subject_cols]
     else:
-        SUBJECT_ = dfs["SUBJECT"][subject_cols]
-        SUBJECT_["gp2_phenotype"] = SUBJECT_["primary_diagnosis"]
+        SUBJECT_ = SUBJECT_[subject_cols].copy()
+        SUBJECT_["gp2_phenotype"] = "NA"
 
-    PMDBS_ = dfs["PMDBS"][pmdbs_cols]
-    CONDITION_ = dfs["CONDITION"][condition_cols]
-
-    df = pd.merge(SAMPLE_, CONDITION_, on="condition_id", how="left")
-
-    # then JOIN the result with SUBJECT on "ASAP_subject_id" how=left to get "age_at_collection", "sex", "primary_diagnosis"
-    df = pd.merge(df, SUBJECT_, on="ASAP_subject_id", how="left")
-
-    # then JOIN the result with PMDBS on "ASAP_subject_id" how=left to get "brain_region"
-    df = (
-        pd.merge(df, PMDBS_, on="ASAP_sample_id", how="left")
+    df = pd.merge(dfs["SAMPLE"][sample_cols], dfs["CONDITION"][condition_cols], on="condition_id", how="left")
+    return (
+        pd.merge(df, SUBJECT_, on="ASAP_subject_id", how="left")
         .drop_duplicates()
         .reset_index(drop=True)
     )
-    return df
 
 
 def get_stat_tabs_pmdbs(dfs: dict[pd.DataFrame]):
@@ -202,106 +189,59 @@ def get_stat_tabs_pmdbs(dfs: dict[pd.DataFrame]):
 
 
 def get_stats_pmdbs(df: pd.DataFrame) -> dict:
-    # should be the same as df.shape[0]
+    
+    # Helper to select L2 > L1 > L3 for brain region annotation, with fallback to "Unknown"
+    # At time of writing, L1 is more informative than L3 for most PMDBS datasets
+    def _resolve_region(row):
+        for col in ["region_level_2", "region_level_1", "region_level_3"]:
+            val = row.get(col, None)
+            if val and str(val).lower() not in ("na", "unknown", "unknown_brain_annotation", "nan"):
+                return val
+        return "Unknown"
+    
     n_samples = df[["ASAP_sample_id", "replicate"]].drop_duplicates().shape[0]
     n_subjects = df["ASAP_subject_id"].nunique()
+    df["resolved_region"] = df.apply(_resolve_region, axis=1)
 
-    # get stats for the dataset
-    # 0. total number of samples
-    # SAMPLE wise
-    sw_df = df[
-        [
-            "ASAP_sample_id",
-            "ASAP_subject_id",
-            "replicate",
-            "gp2_phenotype",
-            "primary_diagnosis",
-            "age_at_collection",
-            "brain_region",
-            "condition_id",
-            "sex",
-        ]
-    ].drop_duplicates()
-
-    print(f"shape df: {df.shape}, shape sw_df: {sw_df.shape}")
-
-    brain_code = (
-        sw_df["brain_region"].replace(_brain_region_coder).value_counts().to_dict()
-    )
-    brain_region = (
-        sw_df["brain_region"]
-        .replace(_brain_region_coder)
-        .map(_region_titles)
+    # Get condition_id counts at the subject level to avoid double-counting
+    subject_condition_id = (
+        df.groupby("ASAP_subject_id")["condition_id"]
+        .agg(lambda x: x.mode()[0]) # This takes the most common condition if a subject has multiple samples with different conditions (Jakobsson bulk)
         .value_counts()
         .to_dict()
     )
+    
+    # sample-level
+    sw_df = df[["ASAP_sample_id", "ASAP_subject_id", "replicate", "gp2_phenotype",
+                "age_at_collection", "resolved_region", "condition_id", "sex"]].drop_duplicates()
+    print(f"shape df: {df.shape}, shape sw_df: {sw_df.shape}")
 
-    age_at_collection = (
-        sw_df["age_at_collection"].replace({"NA": np_nan}).astype("float")
-    )
-    sex = (sw_df["sex"].value_counts().to_dict(),)
-    PD_status = (sw_df["gp2_phenotype"].value_counts().to_dict(),)
-    condition_id = (sw_df["condition_id"].value_counts().to_dict(),)
-    age = dict(
-        mean=f"{age_at_collection.mean():.1f}",
-        median=f"{age_at_collection.median():.1f}",
-        max=f"{age_at_collection.max():.1f}",
-        min=f"{age_at_collection.min():.1f}",
-    )
-
-    # does this copy the values?
+    age_s = sw_df["age_at_collection"].replace({"NA": np_nan}).astype("float")
     samples = dict(
         n_samples=n_samples,
-        brain_region=brain_region,
-        brain_code=brain_code,
-        PD_status=PD_status,
-        condition_id=condition_id,
-        age_at_collection=age,
-        sex=sex,
+        brain_code = sw_df["resolved_region"].replace(_brain_region_coder).value_counts().to_dict(),
+        brain_region = sw_df["resolved_region"].replace(_brain_region_coder).map(_region_titles).value_counts().to_dict(),
+        PD_status=(sw_df["gp2_phenotype"].value_counts().to_dict(),),
+        condition_id=(sw_df["condition_id"].value_counts().to_dict(),),
+        sex=(sw_df["sex"].value_counts().to_dict(),),
+        age_at_collection=dict(mean=f"{age_s.mean():.1f}", median=f"{age_s.median():.1f}",
+                               max=f"{age_s.max():.1f}", min=f"{age_s.min():.1f}"),
     )
 
-    # SUBJECT wise
-    sw_df = df[
-        [
-            "ASAP_subject_id",
-            "gp2_phenotype",
-            "primary_diagnosis",
-            "sex",
-            "age_at_collection",
-            "condition_id",
-        ]
-    ].drop_duplicates()
-    # fill in primary_diagnosis if gp2_phenotype is not in df
-    PD_status = (sw_df["gp2_phenotype"].value_counts().to_dict(),)
-    condition_id = (sw_df["condition_id"].value_counts().to_dict(),)
-    diagnosis = (sw_df["primary_diagnosis"].value_counts().to_dict(),)
-    sex = (sw_df["sex"].value_counts().to_dict(),)
-    age_at_collection = (
-        sw_df["age_at_collection"].replace({"NA": np_nan}).astype("float")
-    )
-
-    age = dict(
-        mean=f"{age_at_collection.mean():.1f}",
-        median=f"{age_at_collection.median():.1f}",
-        max=f"{age_at_collection.max():.1f}",
-        min=f"{age_at_collection.min():.1f}",
-    )
-
+    # subject-level
+    sub_df = df[["ASAP_subject_id", "gp2_phenotype", "sex", "age_at_collection",
+                 "condition_id"]].drop_duplicates(subset=["ASAP_subject_id"])
+    age_s = sub_df["age_at_collection"].replace({"NA": np_nan}).astype("float")
     subject = dict(
         n_subjects=n_subjects,
-        PD_status=PD_status,
-        condition_id=condition_id,
-        diagnosis=diagnosis,
-        age_at_collection=age,
-        sex=sex,
+        PD_status=(sub_df["gp2_phenotype"].value_counts().to_dict(),),
+        condition_id=subject_condition_id,
+        sex=(sub_df["sex"].value_counts().to_dict(),),
+        age_at_collection=dict(mean=f"{age_s.mean():.1f}", median=f"{age_s.median():.1f}",
+                               max=f"{age_s.max():.1f}", min=f"{age_s.min():.1f}"),
     )
 
-    report = dict(
-        subject=subject,
-        samples=samples,
-    )
-    # SAMPLE wise
-    return report
+    return dict(subject=subject, samples=samples)
 
 
 def make_stats_df_human_non_brain(dfs: dict[pd.DataFrame]) -> pd.DataFrame:
@@ -703,39 +643,45 @@ def get_stats_mouse(df: pd.DataFrame) -> dict:
     return report
 
 
-def get_cohort_stats_table(dfs: dict[pd.DataFrame], source: str = None):
+def get_cohort_stats_table(dfs: dict[pd.DataFrame], organism: str, sample_source: str):
     """ """
-    if source == "pmdbs":
-        # get stats_df by dataset, concatenate and then get stats
-        datasets = dfs["STUDY"]["ASAP_dataset_id"].unique()
-        stat_df = pd.DataFrame()
+    datasets = dfs["STUDY"]["ASAP_dataset_id"].unique()
+    stat_df = pd.DataFrame()
+    
+    if organism == "Human" and sample_source == "Brain":
         for dataset in datasets:
             dfs_ = {k: v[v["ASAP_dataset_id"] == dataset] for k, v in dfs.items()}
             df = make_stats_df_pmdbs(dfs_)
             stat_df = pd.concat([stat_df, df])
-
         report = get_stats_pmdbs(stat_df)
+        
+    elif sample_source in ["Cell lines", "Cell", "iPSC", "InVitro"]:
+        for dataset in datasets:
+            dfs_ = {k: v[v["ASAP_dataset_id"] == dataset] for k, v in dfs.items()}
+            df = make_stats_df_cell(dfs_)
+            stat_df = pd.concat([stat_df, df])
+        report = get_stats_cell(stat_df)
+    
+    elif organism == "Human":  # non-brain
+        for dataset in datasets:
+            dfs_ = {k: v[v["ASAP_dataset_id"] == dataset] for k, v in dfs.items()}
+            df = make_stats_df_human_non_brain(dfs_)
+            stat_df = pd.concat([stat_df, df])
+        report = get_stats_human_non_brain(stat_df)
 
-        N_datasets = stat_df["ASAP_dataset_id"].nunique()
-        N_teams = stat_df["ASAP_team_id"].nunique()
-        report["N_datasets"] = N_datasets
-        report["N_teams"] = N_teams
-
-    elif source == "mouse":
-        datasets = dfs["STUDY"]["ASAP_dataset_id"].unique()
-        stat_df = pd.DataFrame()
+    elif sample_source == "Mouse":
         for dataset in datasets:
             dfs_ = {k: v[v["ASAP_dataset_id"] == dataset] for k, v in dfs.items()}
             df = make_stats_df_mouse(dfs_)
             stat_df = pd.concat([stat_df, df])
-
         report = get_stats_mouse(stat_df)
 
-        N_datasets = stat_df["ASAP_dataset_id"].nunique()
-        N_teams = stat_df["ASAP_team_id"].nunique()
-        report["N_datasets"] = N_datasets
-        report["N_teams"] = N_teams
     else:
-        raise ValueError(f"get_cohort_stats_table: Unknown source {source}")
-
+        raise ValueError(f"get_cohort_stats_table: Unexpected categories: organism {organism}, source {sample_source}")
+    
+    N_datasets = stat_df["ASAP_dataset_id"].nunique()
+    N_teams = stat_df["ASAP_team_id"].nunique()
+    report["N_datasets"] = N_datasets
+    report["N_teams"] = N_teams
+        
     return report, stat_df

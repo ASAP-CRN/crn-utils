@@ -194,6 +194,7 @@ BRAIN_REGION_CODES: dict[str, str] = {
     "middle frontal gyrus":       "MFG",
     "middle temporal gyrus":      "MTG",
     "parahippocampal gyrus":      "PARA",
+    "posterior cingulate gyrus": "PCG",
 
     # team-specific short codes (already lowercase after normalization)
     "amy":  "AMY",  # team Jakobsson
@@ -252,6 +253,7 @@ BRAIN_L2_UBERON: dict[str, str] = {
     "p ctx": "Parietal cortex (P_CTX, UBERON:0006091)",
     "sn":    "Substantia nigra (SN, UBERON:0002038)",
     "t ctx": "Temporal cortex (T_CTX, UBERON:0001875)",
+    "pcg": "Posterior cingulate gyrus (PCG, UBERON:0002740)",
 }
 
 
