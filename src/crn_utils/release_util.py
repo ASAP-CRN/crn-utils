@@ -145,10 +145,8 @@ def prep_release_metadata(dataset_id: str,
     # ---- Generating contents of file_metadata/ ----
     logging.info("Generating file metadata from GCP raw bucket...")
 
-    file_metadata_path = dataset_dir / "file_metadata"
+    file_metadata_path = dataset_dir / "file_metadata" / "release" / release_version
     file_metadata_path.mkdir(exist_ok=True)
-
-    raw_bucket_name = f"asap-raw-{dataset_id}"
 
     gen_bucket_summary(
         dl_path=file_metadata_path,
@@ -176,7 +174,8 @@ def prep_release_metadata(dataset_id: str,
 
     updated_meta_tables["DATA"] = update_data_table_with_gcp_uri(
         data_df=updated_meta_tables["DATA"],
-        ds_path=dataset_dir
+        ds_path=dataset_dir,
+        release_version=release_version
     )
 
     # There is no SPATIAL table for CosMx datasets.
