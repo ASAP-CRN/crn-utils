@@ -45,6 +45,9 @@ SUPPORTED_CDE_VERSIONS = {
     "v3.3": "v3.3",
     "v4.1": "v4.1",
     "v4.2": "v4.2",
+    "v4.3": "v4.3",
+    "v4.4": "v4.4",
+    "v4.5": "v4.5",
 }
 
 # Bytes 0x80–0x9F in Windows-1252 carry typographic characters that are undefined
