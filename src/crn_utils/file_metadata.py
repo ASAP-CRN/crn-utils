@@ -11,7 +11,7 @@ wf_common_path = repo_root.parent / "wf-common" / "util"
 sys.path.insert(0, str(wf_common_path))
 
 # from wf-common
-from common import strip_team_prefix
+from common.gcloud_ops import strip_team_prefix
 
 __all__ = [
     "make_file_metadata",
@@ -392,7 +392,7 @@ def get_artifacts_df(dl_path: str | Path,
     ]
 
     dl_path = Path(dl_path)
-    artifacts = list(dl_path.glob("*-artifact_files.csv"))
+    artifacts = list(dl_path.glob("*artifact_files.csv"))
     if len(artifacts) > 0:
         artifact = artifacts[0]
         print(f"Processing {artifact.name}")

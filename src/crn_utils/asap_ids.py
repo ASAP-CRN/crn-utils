@@ -17,7 +17,7 @@ sys.path.insert(0, str(wf_common_path))
 sys.path.insert(0, str(crn_utils_root / "src"))
 
 # from wf-common
-from common import strip_team_prefix
+from common.gcloud_ops import strip_team_prefix
 
 # from crn-utils
 from crn_utils.google_spreadsheets import read_google_sheet
