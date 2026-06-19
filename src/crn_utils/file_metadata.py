@@ -126,7 +126,9 @@ def make_file_metadata(
 
 def update_data_table_with_gcp_uri(
         data_df: pd.DataFrame, 
-        ds_path: str | Path):
+        ds_path: str | Path,
+        release_version: str,
+     ) -> pd.DataFrame:
     """
     Add GCP URIs to DATA table.
     Handles pooled/multiplexed files where multiple samples share the same file_name.
@@ -140,7 +142,7 @@ def update_data_table_with_gcp_uri(
 
     """
     ds_path = Path(ds_path)
-    file_metadata_path = os.path.join(ds_path, "file_metadata")
+    file_metadata_path = os.path.join(ds_path, "file_metadata", "release", release_version)
 
     raw_files = pd.read_csv(os.path.join(file_metadata_path, "raw_files.csv"))
     
