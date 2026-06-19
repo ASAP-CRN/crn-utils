@@ -669,7 +669,7 @@ def get_cohort_stats_table(dfs: dict[pd.DataFrame], organism: str, sample_source
             stat_df = pd.concat([stat_df, df])
         report = get_stats_human_non_brain(stat_df)
 
-    elif sample_source == "Mouse":
+    elif organism == "Mouse":
         for dataset in datasets:
             dfs_ = {k: v[v["ASAP_dataset_id"] == dataset] for k, v in dfs.items()}
             df = make_stats_df_mouse(dfs_)
