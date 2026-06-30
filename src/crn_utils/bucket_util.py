@@ -1,5 +1,6 @@
 import os
 import subprocess
+import logging
 from pathlib import Path
 
 __all__ = [
@@ -7,6 +8,7 @@ __all__ = [
     "gcloud_rsync",
     "gcloud_mv",
     "gcloud_rm",
+    "gcloud_hash",
     "authenticate_with_service_account",
 ]
 
@@ -177,3 +179,59 @@ def gcloud_rm(destination: str | Path, directory=False, project: str | None = No
     else:
         print(f"gcloud command failed: {result.stderr}")
     return result.stdout
+
+
+def gcloud_hash(
+    bucket_name: str,
+    prefix: str,
+    project: str | None = None,
+) -> dict[str, str]:
+    """Fetch MD5 hashes for GCS objects matching a prefix.
+
+    Wraps ``gcloud storage hash --hex`` and parses the line-oriented output
+    into a mapping from object basename to hex MD5.
+
+    Parameters
+    ----------
+    bucket_name : str
+        GCS bucket name, without the ``gs://`` scheme.
+    prefix : str
+        Object glob relative to the bucket root (e.g. ``"artifacts/**"``).
+    project : str or None, optional
+        Billing project. Defaults to ``"dnastack-asap-parkinsons"`` when None.
+
+    Returns
+    -------
+    dict of str to str
+        Mapping ``{file_name: md5_hex}`` for each matched object. Empty when
+        the prefix matches no objects or the command fails.
+
+    Notes
+    -----
+    Objects uploaded via parallel-composite upload have no MD5 stored in GCS
+    (only ``crc32c``) and will be absent from the returned mapping.
+    """
+    if project is None:
+        project = "dnastack-asap-parkinsons"
+
+    command = [
+        "gcloud", "storage", "hash", "--hex",
+        f"gs://{bucket_name}/{prefix}",
+        f"--billing-project={project}",
+    ]
+    try:
+        result = subprocess.run(
+            command, check=True, capture_output=True, text=True
+        )
+    except subprocess.CalledProcessError as exc:
+        logging.error("gcloud storage hash failed: %s", exc.stderr.strip())
+        return {}
+
+    md5s: dict[str, str] = {}
+    curr_md5: str | None = None
+    for line in result.stdout.splitlines():
+        if line.startswith("md5_hash:"):
+            curr_md5 = line.split(":", 1)[1].strip()
+        elif line.startswith("url:") and curr_md5 is not None:
+            md5s[line.split("/")[-1].strip()] = curr_md5
+    return md5s

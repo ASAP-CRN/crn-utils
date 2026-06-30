@@ -3,8 +3,8 @@ from pathlib import Path
 import os, sys
 import json
 
-from .bucket_util import gcloud_ls
-from .checksums import get_md5_hashes
+# TODO: Target of folding gcloud operations into wf-common::gcloud_ops.py
+from .bucket_util import gcloud_ls, gcloud_hash
 
 repo_root = Path(__file__).resolve().parents[2]
 wf_common_path = repo_root.parent / "wf-common" / "util"
@@ -259,7 +259,7 @@ def gen_bucket_summary(
         f for f in artifacts if f != "" and Path(f).name[0] != "." and f[-1] != "/"
     ]
     if artifact_files:
-        bucket_files_md5 = get_md5_hashes(bucket_path, "artifacts/**")
+        bucket_files_md5 = gcloud_hash(bucket_path, "artifacts/**")
         artifact_files_df = pd.DataFrame(artifact_files, columns=["artifact_files"])
         artifact_files_df["file_name"] = artifact_files_df["artifact_files"].apply(lambda x: x.split("/")[-1])
         artifact_files_df["bucket_md5"] = artifact_files_df["file_name"].map(bucket_files_md5)
@@ -286,7 +286,7 @@ def gen_bucket_summary(
                 print(f"Found {len(raw_files)} {raw_type} raw files for {dataset_name}")
                 raw_files_df = pd.DataFrame(raw_files, columns=["raw_files"])
                 raw_files_df["file_name"] = raw_files_df["raw_files"].apply(lambda x: x.split("/")[-1])
-                bucket_files_md5 = get_md5_hashes(bucket_path, prefix)
+                bucket_files_md5 = gcloud_hash(bucket_path, prefix)
                 raw_files_df["bucket_md5"] = raw_files_df["file_name"].map(bucket_files_md5)
 
                 # write file list and md5s to file
@@ -300,7 +300,7 @@ def gen_bucket_summary(
                     raw_files_df.to_csv(dl_path / f"{dataset_name}-{env_type}_raw_files.csv", index=False, mode='a', header=False)
                     with open(dl_path / f"{dataset_name}-{env_type}_raw_files-md5s.json", "r") as f:
                         existing_md5s = json.load(f)
-                    new_md5s = get_md5_hashes(bucket_path, prefix)
+                    new_md5s = gcloud_hash(bucket_path, prefix)
                     existing_md5s.update(new_md5s)
                     with open(dl_path / f"{dataset_name}-{env_type}_raw_files-md5s.json", "w") as f:
                         json.dump(existing_md5s, f)
@@ -342,7 +342,7 @@ def gen_spatial_bucket_summary(
         spatial_files = [f for f in spatial_files_ if f != ""]
 
         if len(spatial_files) > 0:
-            bucket_files_md5 = get_md5_hashes(bucket_path, prefix)
+            bucket_files_md5 = gcloud_hash(bucket_path, prefix)
             spatial_files_df = pd.DataFrame(spatial_files, columns=["spatial_files"])
 
             spatial_files_df["file_name"] = spatial_files_df["spatial_files"].apply(
