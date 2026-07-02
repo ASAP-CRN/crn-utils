@@ -30,8 +30,6 @@ from .asap_ids import (
 from .file_metadata import (
     gen_bucket_summary,
     update_data_table_with_gcp_uri,
-    update_spatial_table_with_gcp_uri,
-    gen_spatial_bucket_summary,
     make_file_metadata,
 )
 from .constants import *  # List of tables expected (CDE <= v4.0)
@@ -47,20 +45,6 @@ __all__ = [
     "process_schema",
     "get_crn_release_metadata",
 ]
-
-
-def get_spatial_subtype_from_dataset_id(dataset_id: str) -> str:
-    """
-    Determine spatial subtype (i.e. visium, geomx or cosmx) from dataset_id.
-    """
-    if "visium" in dataset_id.lower():
-        return "visium"
-    elif "geomx" in dataset_id.lower():
-        return "geomx"
-    elif "cosmx" in dataset_id.lower():
-        return "cosmx"
-    else:
-        raise KeyError(f"get_spatial_subtype_from_dataset_id: Unable to determine spatial subtype from dataset_id: {dataset_id}")
 
 
 # The following is a refactor of the main function to prepare metadata for a release.
@@ -154,17 +138,10 @@ def prep_release_metadata(dataset_id: str,
         env_type="raw",
     )
 
-    if "spatial" in assay.lower():
-        gen_spatial_bucket_summary(
-            dl_path=file_metadata_path,
-            dataset_id=dataset_id
-        )
-
     make_file_metadata(
         ds_path=dataset_dir,
         dl_path=file_metadata_path,
         data_df=updated_meta_tables["DATA"],
-        spatial=("spatial" in assay.lower())
     )
 
     logging.info(f"File metadata summaries saved to [{file_metadata_path}]")
@@ -177,17 +154,6 @@ def prep_release_metadata(dataset_id: str,
         ds_path=dataset_dir,
         release_version=release_version
     )
-
-    # There is no SPATIAL table for CosMx datasets.
-    # For CDE >v4.0 this needs to be modified for visium and geomx datasets as well as there is no longer SPATIAL table
-    if "spatial" in assay.lower():
-        spatial_subtype = get_spatial_subtype_from_dataset_id(assay)
-        if not spatial_subtype == "cosmx":
-            updated_meta_tables["SPATIAL"] = update_spatial_table_with_gcp_uri(
-                spatial_df=updated_meta_tables["SPATIAL"],
-                ds_path=dataset_dir,
-                spatial_subtype=spatial_subtype
-            )
 
     logging.info("File metadata merged with DATA table")
 
@@ -219,6 +185,11 @@ def prep_release_metadata(dataset_id: str,
     return None
 
 
+
+# NOTE: this function is unused (superseded by prep_release_metadata) and
+# references get_spatial_subtype_from_dataset_id / update_spatial_table_with_gcp_uri,
+# both removed from this module. Left intentionally broken pending deletion
+# of this whole legacy code path. Do not call with spatial=True.
 def get_crn_release_metadata(
     ds_path: str | Path,
     schema_version: str,

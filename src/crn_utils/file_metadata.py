@@ -16,12 +16,9 @@ from common.gcloud_ops import strip_team_prefix
 __all__ = [
     "make_file_metadata",
     "update_data_table_with_gcp_uri",
-    "update_spatial_table_with_gcp_uri",
     "gen_bucket_summary",
-    "gen_spatial_bucket_summary",
     "get_artifacts_df",
     "get_fastqs_df",
-    "get_spatial_df",
     "add_bucket_md5",
 ]
 
@@ -29,7 +26,6 @@ def make_file_metadata(
     ds_path: str | Path,
     dl_path: str | Path,
     data_df: pd.DataFrame,
-    spatial: bool = False,
 ):
     """
     Generate file metadata for a dataset.
@@ -38,8 +34,6 @@ def make_file_metadata(
         - ds_path: path to the dataset directory
         - dl_path: path to the download directory
         - data_df: DataFrame containing dataset information
-        - spatial: boolean indicating if spatial data should be included
-
     """
 
     dl_path = Path(dl_path)
@@ -89,11 +83,6 @@ def make_file_metadata(
 
     fastq_df = get_fastqs_df(dl_path, asap_dataset_id, team_id)
     files_df = pd.concat([fastq_df, artifacts_df])
-
-    if spatial:
-        spatial_df = get_spatial_df(dl_path, asap_dataset_id, team_id)
-        spatial_df.to_csv(os.path.join(dl_path, "spatial_files.csv"), index=False)
-        files_df = pd.concat([fastq_df, spatial_df])
 
     merge_cols = ["gcp_uri", "file_name", "bucket_md5"]
 
@@ -161,63 +150,6 @@ def update_data_table_with_gcp_uri(
 
     return data_df
 
-
-def update_spatial_table_with_gcp_uri(
-    spatial_df: pd.DataFrame, ds_path: str | Path, spatial_subtype: str = "other"
-):
-    """
-    Update SPATIAL table with GCP URIs and MD5 hashes.
-
-    Required fields:
-        - spatial_df: DataFrame containing the SPATIAL table information
-        - ds_path: path to the dataset directory, where file_metadata/raw_files.csv is located
-        - spatial_subtype: type of spatial data ("visium", "geomx", "cosmx")
-
-    Returns:
-        - Updated DataFrame with "gcp_uri" and "md5" columns added based on the mapping from raw_files.csv and spatial_files.csv
-        - The specific columns updated depend on the spatial_subtype
-    """
-
-    ds_path = Path(ds_path)
-    file_metadata_path = os.path.join(ds_path, "file_metadata")
-
-    raw_files = pd.read_csv(os.path.join(file_metadata_path, "raw_files.csv"))
-    spatial_files = pd.read_csv(
-        os.path.join(file_metadata_path, f"{ds_path.name}-spatial_files.csv")
-    )
-    # make mappers for spatial files
-    spatial_file_gcp_mapper = dict(
-        zip(spatial_files["file_name"], spatial_files["spatial_files"])
-    )
-    spatial_file_md5_mapper = dict(
-        zip(spatial_files["file_name"], spatial_files["bucket_md5"])
-    )
-
-    raw_files = raw_files[["file_name", "gcp_uri", "bucket_md5"]]
-    raw_file_gcp_mapper = dict(zip(raw_files["file_name"], raw_files["gcp_uri"]))
-    raw_file_md5_mapper = dict(zip(raw_files["file_name"], raw_files["bucket_md5"]))
-
-    # combine mappers
-    spatial_file_gcp_mapper.update(raw_file_gcp_mapper)
-    spatial_file_md5_mapper.update(raw_file_md5_mapper)
-
-    if spatial_subtype == "visium":
-        left_ons = ["visium_cytassist"]
-    elif spatial_subtype == "geomx":
-        left_ons = ["geomx_config", "geomx_dsp_config", "geomx_annotation_file"]
-    elif spatial_subtype == "cosmx":
-        left_ons = [] # currently no files in SPATIAL table for CosMx datasets
-    else:
-        raise ValueError(f"Unsupported spatial subtype: {spatial_subtype}")
-
-    for left_on in left_ons:
-        spatial_df[f"{left_on}_md5"] = spatial_df[left_on].map(spatial_file_md5_mapper)
-        spatial_df[f"{left_on}_gcp_uri"] = spatial_df[left_on].map(
-            spatial_file_gcp_mapper
-        )
-
-    print(f"Updated 'SPATIAL.csv' with gcp_uris")
-    return spatial_df
 
 # Replaces gen_raw_bucket_summary and gen_dev_bucket_summary
 # gen_dev_bucket_summary seemed to be a partial copy of gen_raw_bucket_summary
@@ -307,61 +239,6 @@ def gen_bucket_summary(
             else:
                 print(f"No {raw_type} raw files found for {dataset_name}")
 
-
-def gen_spatial_bucket_summary(
-    dl_path: str | Path, 
-    dataset_id: str
-):
-    
-    """
-    Generate summary of spatial files in raw bucket and save to dl_path.
-
-    Required fields in config:
-        - dl_path: path to save the summary files
-        - dataset_id: dataset identifier (e.g., "team-smith-pmdbs-sn-rnaseq")
-    """
-
-    if dataset_id.startswith("team-"):
-        dataset_name = strip_team_prefix(dataset_id)
-    else:
-        raise ValueError(f"Dataset ID [{dataset_id}] does not start with expected 'team-' prefix.")
-
-
-    if "cohort" in dataset_id:
-        print(f"No raw bucket for cohort datasets: {dataset_id}")
-
-    else:
-        # Get bucket name and path
-        raw_bucket_name = f"asap-raw-{dataset_id}"
-        dl_path = Path(dl_path)
-        bucket_path = raw_bucket_name.split("/")[-1]
-        prefix = f"spatial/**/*"
-        spatial_files_ = gcloud_ls(
-            bucket_path, prefix, project="dnastack-asap-parkinsons"
-        )
-        spatial_files = [f for f in spatial_files_ if f != ""]
-
-        if len(spatial_files) > 0:
-            bucket_files_md5 = gcloud_hash(bucket_path, prefix)
-            spatial_files_df = pd.DataFrame(spatial_files, columns=["spatial_files"])
-
-            spatial_files_df["file_name"] = spatial_files_df["spatial_files"].apply(
-                lambda x: x.split("/")[-1]
-            )
-            spatial_files_df["bucket_md5"] = spatial_files_df["file_name"].map(
-                bucket_files_md5
-            )
-            spatial_files_df.to_csv(
-                os.path.join(dl_path, f"{dataset_name}-spatial_files.csv"), index=False
-            )
-            # merge in md5s.
-            # dump md5s to file
-            with open(
-                os.path.join(dl_path, f"{dataset_name}-spatial_files-md5s.json"), "w"
-            ) as f:
-                json.dump(bucket_files_md5, f)
-        else:
-            print(f"No spatial files found for {dataset_name}")
 
 
 ####################
@@ -493,64 +370,6 @@ def get_fastqs_df(
         return pd.concat(dfs, ignore_index=True).drop_duplicates(subset=["file_name"])
     else:
         print(f"no raw files found for {dl_path.parent.name}")
-        return pd.DataFrame(columns=keep_cols)
-
-
-def get_spatial_df(
-        dl_path: str | Path, 
-        asap_dataset_id: str, 
-        asap_team_id: str) -> pd.DataFrame:
-    """
-    Looks for files matching "*-spatial_files.csv" in the given dl_path,
-    reads the first one it finds, and processes it to create a DataFrame
-    with metadata about the spatial files.
-    It adds columns for ASAP dataset and team IDs, timestamps, workflow information,
-    artifact type, GCP URI, and bucket MD5 checksums.
-
-    Required fields:
-        - dl_path: path to download summary files from bucket
-        - asap_dataset_id: ASAP dataset ID (e.g. DS_PMDBS_0004)
-        - asap_team_id: ASAP team ID (e.g. TEAM_SMITH)
-
-    Returns a DataFrame with columns specified in keep_cols,
-    or an empty DataFrame with those columns if no matching files are found.
-    
-    """
-    dl_path = Path(dl_path)
-
-    keep_cols = [
-        "ASAP_dataset_id",
-        "ASAP_team_id",
-        "artifact_type",
-        "file_name",
-        "timestamp",
-        "workflow",
-        "workflow_version",
-        "gcp_uri",  # change to gcp_uri
-        "bucket_md5",
-    ]
-
-    spatial_files = list(dl_path.glob("*-spatial_files.csv"))
-    if len(spatial_files) > 0:
-        spatial_file = spatial_files[0]  # HACK
-        print(f"Processing {spatial_file.name}")
-        # spatial_files,file_name,bucket_md5
-        spatial_df = pd.read_csv(spatial_file)
-        # now export the combined_df to a csv file
-        spatial_df["ASAP_dataset_id"] = asap_dataset_id
-        spatial_df["ASAP_team_id"] = asap_team_id
-        spatial_df["timestamp"] = "NA"
-        spatial_df["workflow"] = "NA"
-        spatial_df["workflow_version"] = "NA"
-        spatial_df["artifact_type"] = "contributed"
-        spatial_df["gcp_uri"] = spatial_df["spatial_files"]
-
-        spatial_df = spatial_df[keep_cols]
-        # rename "spatial_files" to "raw_files"
-        # spatial_df.rename(columns={"spatial_files": "raw_files"}, inplace=True)
-        return spatial_df
-    else:
-        print(f"no images files found for {dl_path.parent.name}")
         return pd.DataFrame(columns=keep_cols)
 
 
