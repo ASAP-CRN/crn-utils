@@ -58,16 +58,17 @@ __all__ = [
 #      but now it's based on CDE ValidCategories (organism and sample_source).
 #      This is a temporary hack for the Feb2026/March2026 releases which use PMDBS/MOUSE/CELL ASAP IDs
 #      A fututre implementation will fully transition to general SUBJECT ASAP IDs.
-def prep_release_metadata(dataset_id: str,
-                          organism: str,
-                          source: str,
-                          assay: str,
-                          cde_version: str,
-                          release_version: str,
-                          metadata_dir: Path,
-                          dataset_dir: Path,
-                          map_path: Path
-                          ) -> None:
+def prep_release_metadata(
+    dataset_id: str,
+    organism: str,
+    source: str,
+    cde_version: str,
+    release_version: str,
+    metadata_dir: Path,
+    dataset_dir: Path,
+    map_path: Path,
+    force: bool = False,
+    ) -> None:
     """
     Prepares dataset metadata for release.
 
@@ -83,13 +84,12 @@ def prep_release_metadata(dataset_id: str,
         - dataset_id: (e.g., "team-smith-pmdbs-sn-rnaseq")
         - organism: organism type of the dataset (e.g., "Human", "Mouse")
         - source: source type of the dataset (e.g., "Brain", "Fecal", "Cell lines", "iPSC")
-        - assay: assay type of the dataset (e.g., "bulk_rna_seq", "single_nucleus_rna_seq")
         - cde_version: CDE schema version to prepare for (e.g., "v4.0")
         - release_version: CRN release version (e.g., "v4.0.1")
         - metadata_dir: Path to metadata directory
         - dataset_dir: Path to dataset directory
         - map_path: Path to master ID mappers
-
+        - force: If True, re-walk GCP bucket even if cached file metadata CSVs exist
     """
 
     # normalize source
@@ -132,10 +132,12 @@ def prep_release_metadata(dataset_id: str,
     file_metadata_path = dataset_dir / "file_metadata" / "release" / release_version
     file_metadata_path.mkdir(exist_ok=True)
 
+    # Saves tables listing files for artifacts, spatial, and raw files (fastq/raw) if they exist in the bucket.
     gen_bucket_summary(
         dl_path=file_metadata_path,
         dataset_id=dataset_id,
         env_type="raw",
+        force=force
     )
 
     make_file_metadata(

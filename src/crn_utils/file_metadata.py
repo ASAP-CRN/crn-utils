@@ -22,6 +22,105 @@ __all__ = [
     "add_bucket_md5",
 ]
 
+
+def summarize_bucket_prefix(
+    bucket: str,
+    prefix: str,
+    source_prefix: str,
+    cache_path: Path | None = None,
+    force: bool = False,
+) -> pd.DataFrame:
+    """
+    List all objects under bucket/prefix and return one row per object.
+
+    Columns: file_name, gcp_uri, bucket_md5, source_prefix
+
+    If cache_path is given and exists and force=False, reads from cache.
+    Otherwise walks the bucket, fetches MD5s, and writes the cache if cache_path is given.
+
+    Args:
+        bucket: GCS bucket name (without gs://)
+        prefix: glob prefix, e.g. "artifacts/**"
+        source_prefix: 'fastq' | 'raw' | 'artifact' | 'spatial' | 'curated' —
+            identifies which bucket prefix a row came from. Carried through to
+            the final artifacts.csv so artifact- and spatial-sourced rows stay
+            distinguishable once merged.
+        cache_path: optional path for the intermediate CSV cache
+        force: if True, re-walk the bucket even if cache exists
+    """
+    cols = ["file_name", "gcp_uri", "bucket_md5", "source_prefix"]
+
+    if cache_path is not None and cache_path.exists() and not force:
+        return pd.read_csv(cache_path)
+
+    listing = gcloud_ls(bucket, prefix, project="dnastack-asap-parkinsons")
+    files = [f for f in listing if f and Path(f).name[0] != "." and not f.endswith("/")]
+
+    if not files:
+        return pd.DataFrame(columns=cols)
+
+    md5s = gcloud_hash(bucket, prefix)
+    df = pd.DataFrame({"gcp_uri": files})
+    df["file_name"] = df["gcp_uri"].apply(lambda x: x.split("/")[-1])
+    df["bucket_md5"] = df["file_name"].map(md5s)
+    df["source_prefix"] = source_prefix
+    df = df[cols]
+
+    if cache_path is not None:
+        df.to_csv(cache_path, index=False)
+
+    return df
+
+
+def gen_bucket_summary(
+    dl_path: str | Path,
+    dataset_id: str,
+    env_type: str,
+    force: bool = False,
+):
+    """
+    Generate summary of raw or dev bucket contents, writing one intermediate
+    CSV per prefix to dl_path. These CSVs serve as the cache for subsequent
+    runs (re-read unless force=True).
+
+    For env_type="raw", walks artifacts/**, spatial/**, fastqs/**, and raw/**
+    if they exist. 
+
+    Args:
+        dl_path: directory to write intermediate CSVs for caching
+        dataset_id: dataset identifier (e.g., "team-smith-pmdbs-sn-rnaseq")
+        env_type: "raw" or "dev"
+        force: re-walk bucket even if cached CSVs exist
+    """
+    if dataset_id.startswith("team-"):
+        dataset_name = strip_team_prefix(dataset_id)
+    else:
+        raise RuntimeError(
+            f"Invalid dataset_id format: {dataset_id}. Expected: team-<team>-<details>"
+        )
+
+    if "cohort" in dataset_id and env_type == "raw":
+        print(f"No raw bucket file metadata summary required for cohort datasets: {dataset_id}")
+        return
+
+    bucket = f"asap-{env_type}-{dataset_id}"
+    dl_path = Path(dl_path)
+
+    artifact_cache = dl_path / f"{dataset_name}-{env_type}_artifact_files.csv"
+    summarize_bucket_prefix(bucket, "artifacts/**", "artifact", artifact_cache, force=force)
+
+    if env_type == "raw":
+        # Create spatial summary only if it exists
+        spatial_cache = dl_path / f"{dataset_name}-{env_type}_spatial_files.csv"
+        summarize_bucket_prefix(bucket, "spatial/**/*", "spatial", spatial_cache, force=force)
+
+        # NOTE: Assumes the raw bucket only contains fastq.gz or .raw files. Must be updated if other files are encountered.
+        for raw_type in ["fastq", "raw"]:
+            prefix = "fastqs/**/*.fastq.gz" if raw_type == "fastq" else "raw/**/*.raw"
+            raw_cache = dl_path / f"{dataset_name}-{env_type}_{raw_type}_files.csv"
+            summarize_bucket_prefix(bucket, prefix, raw_type, raw_cache, force=force)
+
+
 def make_file_metadata(
     ds_path: str | Path,
     dl_path: str | Path,
@@ -149,96 +248,6 @@ def update_data_table_with_gcp_uri(
     print(f"Updated 'DATA.csv' with gcp_uri ({len(data_df)} rows)")
 
     return data_df
-
-
-# Replaces gen_raw_bucket_summary and gen_dev_bucket_summary
-# gen_dev_bucket_summary seemed to be a partial copy of gen_raw_bucket_summary
-# and had incostiencies such as listing fastq's, that aren't expected in the dev bucket.
-def gen_bucket_summary(
-    dl_path: str | Path,
-    dataset_id: str,
-    env_type: str,
-    flatten: bool = False,
-):
-    """
-    Generate summary of raw or dev bucket contents and save to dl_path.
-
-    Required fields in config:
-        - dl_path: path to save the summary files
-        - dataset_id: dataset identifier (e.g., "team-smith-pmdbs-sn-rnaseq")
-        - env_type: environment type ("raw" or "dev")
-        - flatten: whether to use a flattened prefix for gcloud_ls (True or False)
-    """
-
-    if dataset_id.startswith("team-"):
-        dataset_name = strip_team_prefix(dataset_id)
-    else:
-        raise RuntimeError(
-            f"Invalid dataset_id format: {dataset_id}. Expected format: team-<team_name>-<dataset_details>")
-
-    if ("cohort" in dataset_name) & (env_type == "raw"):
-        print(f"No raw bucket for cohort datasets: {dataset_name}")
-        return
-
-    # Get bucket name and path
-    bucket_name = f"asap-{env_type}-{dataset_id}"
-    dl_path = Path(dl_path)
-    bucket_path = bucket_name.split("/")[-1]
-
-    # --- Artifacts ---
-    artifacts = gcloud_ls(bucket_path, "artifacts/**", project="dnastack-asap-parkinsons")
-    artifact_files = [
-        f for f in artifacts if f != "" and Path(f).name[0] != "." and f[-1] != "/"
-    ]
-    if artifact_files:
-        bucket_files_md5 = gcloud_hash(bucket_path, "artifacts/**")
-        artifact_files_df = pd.DataFrame(artifact_files, columns=["artifact_files"])
-        artifact_files_df["file_name"] = artifact_files_df["artifact_files"].apply(lambda x: x.split("/")[-1])
-        artifact_files_df["bucket_md5"] = artifact_files_df["file_name"].map(bucket_files_md5)
-        artifact_files_df.to_csv(dl_path / f"{dataset_name}-{env_type}_artifact_files.csv", index=False)
-        with open(dl_path / f"{dataset_name}-{env_type}_artifacts-md5s.json", "w") as f:
-            json.dump(bucket_files_md5, f)
-    else:
-        print(f"No artifact files found for {dataset_name}")
-
-    # --- Raw files (only in raw env)---
-    # TODO: need to list raw files beyond raw and fastq extensions
-    if env_type == "raw":
-        raw_types = ["raw", "fastq"]
-
-        wrote_raw_files = 0
-        for raw_type in raw_types:
-            if raw_type == "fastq":
-                prefix = "fastqs/*.fastq.gz" if flatten else "fastqs/**/*.fastq.gz"
-            else:
-                prefix = "raw/*.raw" if flatten else "raw/**/*.raw"
-
-            raw_files = [f for f in gcloud_ls(bucket_path, prefix, project="dnastack-asap-parkinsons") if f != ""]
-            if raw_files:
-                print(f"Found {len(raw_files)} {raw_type} raw files for {dataset_name}")
-                raw_files_df = pd.DataFrame(raw_files, columns=["raw_files"])
-                raw_files_df["file_name"] = raw_files_df["raw_files"].apply(lambda x: x.split("/")[-1])
-                bucket_files_md5 = gcloud_hash(bucket_path, prefix)
-                raw_files_df["bucket_md5"] = raw_files_df["file_name"].map(bucket_files_md5)
-
-                # write file list and md5s to file
-                wrote_raw_files += 1
-                if wrote_raw_files == 1:
-                    raw_files_df.to_csv(dl_path / f"{dataset_name}-{env_type}_{raw_type}_files.csv", index=False)
-                    with open(dl_path / f"{dataset_name}-{env_type}_{raw_type}_files-md5s.json", "w") as f:
-                        json.dump(bucket_files_md5, f)
-                else:
-                    #append to existing file if multiple raw_types are found
-                    raw_files_df.to_csv(dl_path / f"{dataset_name}-{env_type}_raw_files.csv", index=False, mode='a', header=False)
-                    with open(dl_path / f"{dataset_name}-{env_type}_raw_files-md5s.json", "r") as f:
-                        existing_md5s = json.load(f)
-                    new_md5s = gcloud_hash(bucket_path, prefix)
-                    existing_md5s.update(new_md5s)
-                    with open(dl_path / f"{dataset_name}-{env_type}_raw_files-md5s.json", "w") as f:
-                        json.dump(existing_md5s, f)
-            else:
-                print(f"No {raw_type} raw files found for {dataset_name}")
-
 
 
 ####################
