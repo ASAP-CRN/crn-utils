@@ -1,7 +1,7 @@
 import pandas as pd
 from pathlib import Path
-import os, sys
-import json
+import sys
+
 
 # TODO: Target of folding gcloud operations into wf-common::gcloud_ops.py
 from .bucket_util import gcloud_ls, gcloud_hash
@@ -14,12 +14,10 @@ sys.path.insert(0, str(wf_common_path))
 from common.gcloud_ops import strip_team_prefix
 
 __all__ = [
-    "make_file_metadata",
-    "update_data_table_with_gcp_uri",
+    "update_data_table_with_bucket_metadata",
     "gen_bucket_summary",
     "get_artifacts_df",
     "get_raw_df",
-    "add_bucket_md5",
 ]
 
 
@@ -122,97 +120,6 @@ def gen_bucket_summary(
         raw_cache = dl_path / f"{dataset_name}_raw_files.csv"
         for raw_type, prefix in [("fastq", "fastqs/**/*.fastq.gz"), ("raw", "raw/**/*.raw")]:
             summarize_bucket_prefix(bucket, prefix, raw_type, raw_cache, force=force)
-
-
-def make_file_metadata(
-    ds_path: str | Path,
-    dl_path: str | Path,
-    data_df: pd.DataFrame,
-):
-    """
-    Generate file metadata for a dataset.
-
-    Required fields:
-        - ds_path: path to the dataset directory
-        - dl_path: path to the download directory
-        - data_df: DataFrame containing dataset information
-    """
-
-    dl_path = Path(dl_path)
-    ds_path = Path(ds_path)
-
-    dataset_name = ds_path.name
-    team_name = dataset_name.split("-")[0]
-
-    print(f"Processing {dataset_name}, {team_name=}")
-    # we'll get metadata from the raw bucket at "/metadata/release"
-
-    data_df = data_df[
-        [
-            "ASAP_sample_id",
-            "ASAP_team_id",
-            "ASAP_dataset_id",
-            "sample_id",  # sample_id gets clobbered.
-            "replicate",
-            "batch",
-            "file_name",
-            "file_MD5",
-            "file_type",
-        ]
-    ]
-
-    data_df["sample_name"] = (
-        data_df["ASAP_sample_id"].astype(str) + "_" + data_df["replicate"].astype(str)
-    )
-
-    asap_dataset_id = data_df["ASAP_dataset_id"].unique()[0]
-    team_id = data_df["ASAP_team_id"].unique()[0]
-
-    # add contributed artifacts
-    artifacts_df = get_artifacts_df(dl_path, asap_dataset_id, team_id)
-
-    if artifacts_df.shape[0] > 0:
-        artifacts_df.to_csv(os.path.join(dl_path, "artifacts.csv"), index=False)
-    else:
-        print(f"No artifact files found for {dataset_name}")
-
-    ############################################
-    ## raw files
-    ############################################
-
-    samp_df = data_df.copy()
-    samp_df["project_id"] = team_name
-
-    raw_df = get_raw_df(dl_path)
-    files_df = pd.concat([raw_df, artifacts_df])
-
-    merge_cols = ["gcp_uri", "file_name", "bucket_md5"]
-
-    df = samp_df.merge(files_df[merge_cols].copy(), on="file_name", how="left")
-    keep_cols = [
-        "ASAP_dataset_id",
-        "ASAP_team_id",
-        "ASAP_sample_id",
-        "file_name",
-        "replicate",
-        "batch",
-        "file_MD5",
-        "file_type",
-        "gcp_uri",
-        "sample_name",
-        "bucket_md5",
-    ]
-    df = df.loc[:, keep_cols]
-    # # check md5s
-    check = pd.Index(df.loc[:, "file_MD5"] == df.loc[:, "bucket_md5"])
-    if not check.all():
-        print(f"MD5s do not match for {dataset_name}")
-        mismatch_counts = df.loc[~check, "file_name"].value_counts()
-        for file_name, count in mismatch_counts.items():
-            print(f"  {file_name} ({count} occurrence{'s' if count > 1 else ''})")
-
-    # now export the combined_df to a csv file
-    df.to_csv(os.path.join(dl_path, "raw_files.csv"), index=False)
 
 
 def update_data_table_with_bucket_metadata(

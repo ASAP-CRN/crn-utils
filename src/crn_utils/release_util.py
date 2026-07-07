@@ -9,9 +9,7 @@ from .util import (
     read_CDE,
     read_meta_table,
     read_CDE_asap_ids,
-    export_meta_tables,
     load_tables,
-    write_version,
 )
 
 from .asap_ids import (
@@ -29,8 +27,9 @@ from .asap_ids import (
 
 from .file_metadata import (
     gen_bucket_summary,
-    update_data_table_with_gcp_uri,
-    make_file_metadata,
+    update_data_table_with_bucket_metadata,
+    get_artifacts_df,
+    get_raw_df,
 )
 from .constants import *  # List of tables expected (CDE <= v4.0)
 from .doi import update_study_table_with_doi
@@ -140,21 +139,26 @@ def prep_release_metadata(
         force=force
     )
 
-    make_file_metadata(
-        ds_path=dataset_dir,
-        dl_path=file_metadata_path,
-        data_df=updated_meta_tables["DATA"],
-    )
+    asap_dataset_id = updated_meta_tables["DATA"]["ASAP_dataset_id"].unique()[0]
+    team_id = updated_meta_tables["DATA"]["ASAP_team_id"].unique()[0]
 
+    # Combine artifacts and spatial files (if they exist) into a single artifacts.csv file
+    artifacts_df = get_artifacts_df(file_metadata_path, asap_dataset_id, team_id)
+    if artifacts_df.shape[0] > 0:
+        artifacts_df.to_csv(file_metadata_path / "artifacts.csv", index=False)
+    else:
+        logging.info(f"No artifact or spatial files found for {dataset_id}")
+        
     logging.info(f"File metadata summaries saved to [{file_metadata_path}]")
 
     # ---- Merging file metadata with DATA table ----
     logging.info("Merging file metadata with DATA table...")
+    
+    raw_df = get_raw_df(file_metadata_path)
 
-    updated_meta_tables["DATA"] = update_data_table_with_gcp_uri(
+    updated_meta_tables["DATA"] = update_data_table_with_bucket_metadata(
         data_df=updated_meta_tables["DATA"],
-        ds_path=dataset_dir,
-        release_version=release_version
+        inventory_df=raw_df,
     )
 
     logging.info("File metadata merged with DATA table")
