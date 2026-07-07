@@ -215,41 +215,32 @@ def make_file_metadata(
     df.to_csv(os.path.join(dl_path, "raw_files.csv"), index=False)
 
 
-def update_data_table_with_gcp_uri(
-        data_df: pd.DataFrame, 
-        ds_path: str | Path,
-        release_version: str,
-     ) -> pd.DataFrame:
+def update_data_table_with_bucket_metadata(
+    data_df: pd.DataFrame,
+    inventory_df: pd.DataFrame,
+) -> pd.DataFrame:
     """
-    Add GCP URIs to DATA table.
-    Handles pooled/multiplexed files where multiple samples share the same file_name.
-
-    Required fields:
-    - data_df: DataFrame containing the DATA table information, including "file_name" column
-    - ds_path: path to the dataset directory, where file_metadata/raw_files.csv is located
-
-    Returns:
-    - Updated DataFrame with "gcp_uri" column added based on the mapping from raw_files.csv
-
+    Add gcp_uri and file_MD5 to the DATA table from the raw-files inventory
+    DataFrame. file_MD5 is computed from the bucket (bucket_md5), not
+    contributor-submitted — any pre-existing file_MD5 column is dropped and
+    replaced. Handles pooled/multiplexed files where multiple samples share
+    the same file_name.
     """
-    ds_path = Path(ds_path)
-    file_metadata_path = os.path.join(ds_path, "file_metadata", "release", release_version)
+    uri_map = (
+        inventory_df[["file_name", "gcp_uri", "bucket_md5"]]
+        .drop_duplicates(subset=["file_name"])
+        .rename(columns={"bucket_md5": "file_MD5"})
+    )
 
-    raw_files = pd.read_csv(os.path.join(file_metadata_path, "raw_files.csv"))
-    
-    # Deduplicate by file_name before merging
-    # Multiple samples share the same physical files in pooled sequencing
-    raw_files_unique = raw_files[["file_name", "gcp_uri"]].drop_duplicates(subset=["file_name"])
-    
-    # Ensure we're not creating duplicates
+    data_df = data_df.drop(columns=["file_MD5"], errors="ignore")
+
     initial_rows = len(data_df)
-    data_df = data_df.merge(raw_files_unique, on="file_name", how="left", validate="many_to_one")
-    
+    data_df = data_df.merge(uri_map, on="file_name", how="left", validate="many_to_one")
+
     if len(data_df) != initial_rows:
         print(f"WARNING: Row count changed from {initial_rows} to {len(data_df)} during merge!")
-    
-    print(f"Updated 'DATA.csv' with gcp_uri ({len(data_df)} rows)")
 
+    print(f"Updated 'DATA.csv' with gcp_uri and file_MD5 ({len(data_df)} rows)")
     return data_df
 
 
@@ -321,33 +312,3 @@ def get_raw_df(dl_path: str | Path) -> pd.DataFrame:
     df = pd.read_csv(raw_file_csvs[0])
     return df[keep_cols].drop_duplicates(subset=["file_name"])
 
-
-def add_bucket_md5(
-        df_file_metadata: pd.DataFrame, 
-        dl_path: str | Path):
-    """
-    Adds a column for bucket MD5 checksums to the given DataFrame.
-
-    Required fields
-        - df_file_metadata: DataFrame containing file metadata
-        - dl_path: path to download summary files from bucket
-
-    Returns the DataFrame with an added "bucket_md5" column.
-
-    """
-
-    dl_path = Path(dl_path)
-
-    md5_files = list(dl_path.glob(f"*-md5s.json"))
-    if len(md5_files) == 0:
-        print(f"no md5 files found for {dl_path.parent.name}")
-        df_file_metadata["bucket_md5"] = "NA"
-        return df_file_metadata
-
-    md5_mapper = {}
-    for file in md5_files:
-        with open(file, "r") as f:
-            md5s = json.load(f)
-            md5_mapper.update(md5s)
-    df_file_metadata["bucket_md5"] = df_file_metadata["file_name"].map(md5_mapper)
-    return df_file_metadata
