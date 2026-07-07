@@ -1,6 +1,7 @@
+import sys
+import logging
 import pandas as pd
 from pathlib import Path
-import sys
 
 
 # TODO: Target of folding gcloud operations into wf-common::gcloud_ops.py
@@ -102,7 +103,7 @@ def gen_bucket_summary(
         )
 
     if "cohort" in dataset_id and env_type == "raw":
-        print(f"No raw bucket file metadata summary required for cohort datasets: {dataset_id}")
+        logging.info(f"No raw bucket file metadata summary required for cohort datasets: {dataset_id}")
         return
 
     bucket = f"asap-{env_type}-{dataset_id}"
@@ -145,9 +146,9 @@ def update_data_table_with_bucket_metadata(
     data_df = data_df.merge(uri_map, on="file_name", how="left", validate="many_to_one")
 
     if len(data_df) != initial_rows:
-        print(f"WARNING: Row count changed from {initial_rows} to {len(data_df)} during merge!")
+        logging.warning(f"Row count changed from {initial_rows} to {len(data_df)} during merge!")
 
-    print(f"Updated 'DATA.csv' with gcp_uri and file_MD5 ({len(data_df)} rows)")
+    logging.info(f"Updated 'DATA.csv' with gcp_uri and file_MD5 ({len(data_df)} rows)")
     return data_df
 
 
@@ -178,7 +179,7 @@ def get_artifacts_df(
         csvs.extend(dl_path.glob(pattern))
 
     if not csvs:
-        print(f"no artifact or spatial files found for {dl_path}")
+        logging.warning(f"No artifact or spatial files found for {dl_path}")
         return pd.DataFrame(columns=keep_cols)
 
     dfs = []
@@ -213,7 +214,7 @@ def get_raw_df(dl_path: str | Path) -> pd.DataFrame:
     keep_cols = ["file_name", "gcp_uri", "bucket_md5"]
     raw_file_csvs = list(dl_path.glob("*_raw_files.csv"))
     if not raw_file_csvs:
-        print(f"no raw files found for {dl_path}")
+        logging.warning(f"No raw files found for {dl_path}")
         return pd.DataFrame(columns=keep_cols)
 
     df = pd.read_csv(raw_file_csvs[0])
