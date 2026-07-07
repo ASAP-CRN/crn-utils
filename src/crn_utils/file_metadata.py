@@ -18,7 +18,7 @@ __all__ = [
     "update_data_table_with_gcp_uri",
     "gen_bucket_summary",
     "get_artifacts_df",
-    "get_fastqs_df",
+    "get_raw_df",
     "add_bucket_md5",
 ]
 
@@ -85,7 +85,11 @@ def gen_bucket_summary(
 
     For env_type="raw", walks artifacts/**, spatial/**, fastqs/**, and raw/**
     if they exist. 
-
+    
+    Assumptions (revisit if they change):
+    - A dataset's raw bucket contains either fastqs/ OR raw/, never both.
+    - The raw directory (raw/ or fastqs/) only contains fastq.gz or .raw files.
+    
     Args:
         dl_path: directory to write intermediate CSVs for caching
         dataset_id: dataset identifier (e.g., "team-smith-pmdbs-sn-rnaseq")
@@ -106,18 +110,17 @@ def gen_bucket_summary(
     bucket = f"asap-{env_type}-{dataset_id}"
     dl_path = Path(dl_path)
 
-    artifact_cache = dl_path / f"{dataset_name}-{env_type}_artifact_files.csv"
-    summarize_bucket_prefix(bucket, "artifacts/**", "artifact", artifact_cache, force=force)
-
     if env_type == "raw":
-        # Create spatial summary only if it exists
-        spatial_cache = dl_path / f"{dataset_name}-{env_type}_spatial_files.csv"
+        
+        artifact_cache = dl_path / f"{dataset_name}_artifact_files.csv"
+        summarize_bucket_prefix(bucket, "artifacts/**", "artifact", artifact_cache, force=force)
+        
+        # Spatial intermediate will be folded into artifacts.csv if it exists
+        spatial_cache = dl_path / f"{dataset_name}_spatial_files.csv"
         summarize_bucket_prefix(bucket, "spatial/**/*", "spatial", spatial_cache, force=force)
 
-        # NOTE: Assumes the raw bucket only contains fastq.gz or .raw files. Must be updated if other files are encountered.
-        for raw_type in ["fastq", "raw"]:
-            prefix = "fastqs/**/*.fastq.gz" if raw_type == "fastq" else "raw/**/*.raw"
-            raw_cache = dl_path / f"{dataset_name}-{env_type}_{raw_type}_files.csv"
+        raw_cache = dl_path / f"{dataset_name}_raw_files.csv"
+        for raw_type, prefix in [("fastq", "fastqs/**/*.fastq.gz"), ("raw", "raw/**/*.raw")]:
             summarize_bucket_prefix(bucket, prefix, raw_type, raw_cache, force=force)
 
 
@@ -180,8 +183,8 @@ def make_file_metadata(
     samp_df = data_df.copy()
     samp_df["project_id"] = team_name
 
-    fastq_df = get_fastqs_df(dl_path, asap_dataset_id, team_id)
-    files_df = pd.concat([fastq_df, artifacts_df])
+    raw_df = get_raw_df(dl_path)
+    files_df = pd.concat([raw_df, artifacts_df])
 
     merge_cols = ["gcp_uri", "file_name", "bucket_md5"]
 
@@ -250,136 +253,73 @@ def update_data_table_with_gcp_uri(
     return data_df
 
 
-####################
-def get_artifacts_df(dl_path: str | Path, 
-                     asap_dataset_id: str, 
-                     asap_team_id: str):
-    """ 
-    Looks for files matching "*-artifact_files.csv" in the given dl_path,
-    reads the first one it finds, and processes it to create an artifacts DataFrame
-
-    Required fields:
-        - dl_path: path to download summary files from bucket
-        - asap_dataset_id: ASAP dataset ID (e.g. DS_PMDBS_0004)
-        - asap_team_id: ASAP team ID (e.g. TEAM_SMITH)
-
-    Returns a DataFrame with columns specified in keep_cols
+def get_artifacts_df(
+    dl_path: str | Path,
+    asap_dataset_id: str,
+    asap_team_id: str,
+) -> pd.DataFrame:
+    """
+    Read the artifact (and spatial, if it exists) intermediate CSVs written by 
+    gen_bucket_summary and return a single combined DataFrame with ASAP identifiers.
+    
+    Args:
+        dl_path: path to download summary files from bucket (e.g., file_metadata/release/v5.0.0)
+        asap_dataset_id: ASAP dataset ID (e.g., DS_PMDBS_0004)
+        asap_team_id: ASAP team ID (e.g., TEAM_SMITH)
     """
     dl_path = Path(dl_path)
-
+    
     keep_cols = [
-        "ASAP_dataset_id",
-        "ASAP_team_id",
-        "artifact_type",
-        "file_name",
-        "timestamp",
-        "workflow",
-        "workflow_version",
-        "gcp_uri",  # change to gcp_uri
-        "bucket_md5",
+        "ASAP_dataset_id", "ASAP_team_id", "file_name", "gcp_uri", "bucket_md5", "source_prefix",
     ]
+    
+    ARTIFACT_GLOBS = ["*_artifact_files.csv", "*_spatial_files.csv"]
+    
+    csvs = []
+    for pattern in ARTIFACT_GLOBS:
+        csvs.extend(dl_path.glob(pattern))
 
-    dl_path = Path(dl_path)
-    artifacts = list(dl_path.glob("*artifact_files.csv"))
-    if len(artifacts) > 0:
-        artifact = artifacts[0]
-        print(f"Processing {artifact.name}")
-        df = pd.read_csv(artifact)
+    if not csvs:
+        print(f"no artifact or spatial files found for {dl_path}")
+        return pd.DataFrame(columns=keep_cols)
 
-        df["exclude"] = (
-            df["artifact_files"].apply(lambda x: "cellranger_counts" in x)
-            | df["artifact_files"].apply(lambda x: ".git" in x)
-            | df["artifact_files"].apply(lambda x: ".DS_Store" in x)
+    dfs = []
+    for csv_path in csvs:
+        df = pd.read_csv(csv_path)
+        
+        # NOTE/TODO: These files are excluded from the promote_raw_data script for
+        # storage reasons and to encourage users to use DNAstack's processed data.
+        # This exclusion list is rather fragile and should be revisited: see ticket BIOS-2421
+        exclude = (
+            df["gcp_uri"].str.contains("cellranger_counts", na=False)
+            | df["gcp_uri"].str.contains("bam_files", na=False)
+            | df["gcp_uri"].str.contains(r"\.git", na=False)
+            | df["gcp_uri"].str.contains(r"\.DS_Store", na=False)
         )
-        # now concatenate the dataframes
-        df = df[~df["exclude"]]
+        df = df[~exclude].copy()
         df["ASAP_dataset_id"] = asap_dataset_id
         df["ASAP_team_id"] = asap_team_id
-        df["timestamp"] = "NA"
-        df["workflow"] = "NA"
-        df["workflow_version"] = "NA"
-        df["artifact_type"] = "contributed"
-        df["gcp_uri"] = df["artifact_files"]
+        dfs.append(df[keep_cols])
 
-        return df[keep_cols]
-    else:
-        print(f"no artifact files found for {dl_path.parent.name}")
-        df = pd.DataFrame(columns=keep_cols)
-        return df
+    return pd.concat(dfs, ignore_index=True)
 
 
-def get_fastqs_df(
-        dl_path: str | Path, 
-        asap_dataset_id: str, 
-        asap_team_id: str
-        ) -> pd.DataFrame:
+def get_raw_df(dl_path: str | Path) -> pd.DataFrame:
     """
-    Looks for raw file CSVs written by gen_bucket_summary in the given dl_path,
-    reads all matches, concatenates them, and returns a DataFrame with metadata
-    about the raw files (fastq or .raw).
-    It adds columns for ASAP dataset and team IDs, timestamps, workflow information,
-    artifact type, GCP URI, and bucket MD5 checksums.
-
-    gen_bucket_summary writes files with these naming conventions:
-      - First raw_type found: "{dataset_name}-{env_type}_{raw_type}_files.csv"
-        e.g. "*-raw_fastq_files.csv" or "*-raw_raw_files.csv"
-      - Subsequent raw_types (appended): "{dataset_name}-{env_type}_raw_files.csv"
-    This function uses a glob of "*-raw_*_files.csv" to match all variants.
-
-    Required fields:
-        - dl_path: path to download summary files from bucket
-        - asap_dataset_id: ASAP dataset ID (e.g. DS_PMDBS_0004)
-        - asap_team_id: ASAP team ID (e.g. TEAM_SMITH)
-
-    Returns a DataFrame with columns specified in keep_cols,
-    or an empty DataFrame with those columns if no matching files are found.
-
+    Read the raw-files intermediate CSV written by gen_bucket_summary()
+    
+    Args:
+        dl_path: path to download summary files from bucket (e.g., file_metadata/release/v5.0.0)
     """
-
     dl_path = Path(dl_path)
-
-    keep_cols = [
-        "ASAP_dataset_id",
-        "ASAP_team_id",
-        "artifact_type",
-        "file_name",
-        "timestamp",
-        "workflow",
-        "workflow_version",
-        "gcp_uri",
-        "bucket_md5",
-    ]
-
-    # gen_bucket_summary writes raw file CSVs with one of two specific names
-    # (column "raw_files"), depending on which raw_type is found first:
-    #   "{dataset_name}-raw_raw_files.csv"   (when .raw files are found first)
-    #   "{dataset_name}-raw_fastq_files.csv" (when fastq.gz files are found first)
-    # If both types exist, the second is appended to the first file (same name, no new file).
-    # We must NOT match "*-raw_artifact_files.csv" (column "artifact_files"), hence the
-    # explicit patterns below rather than the broader "*-raw_*_files.csv".
-    RAW_FILE_GLOBS = ["*-raw_raw_files.csv", "*-raw_fastq_files.csv"]
-    raw_file_csvs = []
-    for pattern in RAW_FILE_GLOBS:
-        raw_file_csvs.extend(dl_path.glob(pattern))
-
-    if len(raw_file_csvs) > 0:
-        dfs = []
-        for raw_file_csv in raw_file_csvs:
-            print(f"Processing {raw_file_csv.name}")
-            df = pd.read_csv(raw_file_csv)
-            df["ASAP_dataset_id"] = asap_dataset_id
-            df["ASAP_team_id"] = asap_team_id
-            df["timestamp"] = "NA"
-            df["workflow"] = "NA"
-            df["workflow_version"] = "NA"
-            df["artifact_type"] = "contributed"
-            df["gcp_uri"] = df["raw_files"]
-            dfs.append(df[keep_cols])
-
-        return pd.concat(dfs, ignore_index=True).drop_duplicates(subset=["file_name"])
-    else:
-        print(f"no raw files found for {dl_path.parent.name}")
+    keep_cols = ["file_name", "gcp_uri", "bucket_md5"]
+    raw_file_csvs = list(dl_path.glob("*_raw_files.csv"))
+    if not raw_file_csvs:
+        print(f"no raw files found for {dl_path}")
         return pd.DataFrame(columns=keep_cols)
+
+    df = pd.read_csv(raw_file_csvs[0])
+    return df[keep_cols].drop_duplicates(subset=["file_name"])
 
 
 def add_bucket_md5(
