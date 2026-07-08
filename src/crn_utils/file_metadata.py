@@ -3,9 +3,8 @@ import logging
 import pandas as pd
 from pathlib import Path
 
-
 # TODO: Target of folding gcloud operations into wf-common::gcloud_ops.py
-from .bucket_util import gcloud_ls, gcloud_hash
+from .bucket_util import gcloud_ls, gcloud_hash, gcloud_rsync
 
 repo_root = Path(__file__).resolve().parents[2]
 wf_common_path = repo_root.parent / "wf-common" / "util"
@@ -17,6 +16,8 @@ from common.gcloud_ops import strip_team_prefix
 __all__ = [
     "update_data_table_with_bucket_metadata",
     "gen_raw_bucket_summary",
+    "gen_dev_bucket_summary",
+    "process_curated_files",
     "get_artifacts_df",
     "get_raw_df",
 ]
@@ -116,6 +117,188 @@ def gen_raw_bucket_summary(
     raw_cache = dl_path / f"{dataset_name}_raw_files.csv"
     for raw_type, prefix in [("fastq", "fastqs/**/*.fastq.gz"), ("raw", "raw/**/*.raw")]:
         summarize_bucket_prefix(bucket, prefix, raw_type, raw_cache, force=force)
+
+
+def gen_dev_bucket_summary(
+    dl_path: str | Path,
+    dataset_id: str,
+    workflow_name: str,
+    curated_workflows: list[str],
+    force: bool = False,
+) -> pd.DataFrame:
+    """
+    Generate summary of dev bucket contents for a dataset's curated workflow
+    outputs, writing an intermediate CSV cache to dl_path. Works for both
+    team- and cohort- dataset_ids.
+
+    Unlike the raw bucket (fixed artifacts/spatial/fastq/raw prefixes), the dev
+    bucket has exactly one relevant prefix per dataset: the workflow that
+    produced its curated outputs. workflow_name is looked up per-dataset by the
+    caller from the dataset release table; curated_workflows is the allowlist of
+    workflow names this release pipeline knows how to catalogue.
+
+    Columns: file_name, gcp_uri, bucket_md5, source_prefix (source_prefix is
+    always "curated" here).
+
+    Args:
+        dl_path: directory to write the intermediate CSV for caching
+        dataset_id: dataset identifier (e.g., "team-smith-pmdbs-sn-rnaseq" or "cohort-pmdbs-bulk-rnaseq")
+        workflow_name: name of the workflow whose outputs to catalogue (e.g., pmdbs_sc_rnaseq), or "NA"
+        curated_workflows: allowlist of workflow names this pipeline supports
+        force: re-walk bucket even if a cached CSV exists
+    """
+    cols = ["file_name", "gcp_uri", "bucket_md5", "source_prefix"]
+
+    dataset_name = strip_team_prefix(dataset_id)
+
+    if workflow_name == "NA":
+        logging.info(f"Skipping {dataset_id} as workflow is NA")
+        return pd.DataFrame(columns=cols)
+    if workflow_name not in curated_workflows:
+        logging.info(f"Skipping {dataset_id} as workflow {workflow_name} is not implemented")
+        return pd.DataFrame(columns=cols)
+
+    bucket = f"asap-dev-{dataset_id}"
+    dl_path = Path(dl_path)
+    cache_path = dl_path / f"{dataset_name}_curated_files.csv"
+
+    return summarize_bucket_prefix(bucket, f"{workflow_name}/**", "curated", cache_path, force=force)
+
+
+def process_curated_files(
+    dataset_dir: str | Path,
+    dataset_id: str,
+    workflow_name: str,
+    curated_df: pd.DataFrame,
+    release_version: str,
+) -> None:
+    """
+    Merges the dev-bucket curated-file inventory (file_name, gcp_uri, bucket_md5,
+    source_prefix — from gen_dev_bucket_summary) with downloaded MANIFEST.tsv
+    metadata (workflow_version, timestamp), rebases gcp_uri from the dev bucket
+    to the curated (production) bucket, and writes curated_files.csv.
+
+    NOTE on the gcp_uri rebase: MANIFEST.tsv and the workflow outputs it
+    describes are downloaded/hashed from the DEV bucket (gs://asap-dev-...),
+    since that's where they live at release-prep time — promotion to the
+    curated bucket (gs://asap-curated-...) is a separate, later step. gcp_uri
+    in the final output is therefore a *prospective* path: where the file will
+    live once promoted, not where it currently lives.
+
+    NOTE on ASAP_dataset_id/ASAP_team_id for cohorts: cohort dev/curated
+    buckets contain files exclusive to the cohort (not attributable to any
+    single constituent dataset), so there is no single-constituent STUDY.csv
+    identity to source from. For cohort dataset_ids, use the cohort dataset_id
+    itself as ASAP_dataset_id and the literal string "Cohort" as ASAP_team_id,
+    rather than reading STUDY.csv (which for a cohort is itself a
+    concatenation of multiple constituents' rows and has no single answer).
+
+    Args:
+        dataset_dir: path to the dataset (or cohort) directory, e.g.
+            {dss_meta_root}/datasets/{dataset_name}
+        dataset_id: dataset identifier (e.g., "team-smith-pmdbs-sn-rnaseq" or
+            "cohort-pmdbs-bulk-rnaseq")
+        workflow_name: name of the workflow whose outputs were catalogued
+            (e.g., pmdbs_sc_rnaseq)
+        curated_df: DataFrame from gen_dev_bucket_summary, columns
+            [file_name, gcp_uri, bucket_md5, source_prefix]
+        release_version: Release version string (e.g., "v4.0.0")
+    """
+    dataset_dir = Path(dataset_dir)
+    logging.info(f"Start: generate curated_files.csv for {dataset_id}")
+
+    if curated_df.empty:
+        logging.info(f"Skipping {dataset_id} as no curated files were found")
+        return
+
+    logging.info(f"Dataset: {dataset_id} has {len(curated_df)} curated files")
+    curated_df = curated_df.copy()
+
+    file_metadata_path = dataset_dir / "file_metadata" / "release" / release_version
+    file_metadata_path.mkdir(parents=True, exist_ok=True)
+
+    # gcp_uri is the full dev-bucket object path (bucket + workflow + subdirs +
+    # filename) — strip the known "gs://asap-dev-{dataset_id}/{workflow_name}/"
+    # prefix to get the remainder (subdirs/filename), used both for the
+    # archive filter and to rebase onto the curated bucket.
+    dev_prefix = f"gs://asap-dev-{dataset_id}/{workflow_name}/"
+    curated_prefix = f"gs://asap-curated-{dataset_id}/{workflow_name}/"
+    curated_df["_remainder"] = curated_df["gcp_uri"].str.slice(len(dev_prefix))
+
+    # Archive filter: only the *first* subdirectory under the workflow root is
+    # checked — a file sitting directly under the workflow root is never
+    # treated as archived, regardless of its own name.
+    curated_df["_first_dir"] = curated_df["_remainder"].apply(
+        lambda r: r.split("/")[0] if "/" in r else ""
+    )
+    curated_df = curated_df[~curated_df["_first_dir"].str.startswith("archive")]
+
+    # Get manifest files (needed to source workflow_version/timestamp)
+    manifest_rows = curated_df[curated_df["file_name"] == "MANIFEST.tsv"]
+
+    manifests_df = pd.DataFrame()
+    for _, manifest_row in manifest_rows.iterrows():
+        remote = manifest_row["gcp_uri"]  # dev-bucket path -- not yet promoted
+        remainder_cleaned = manifest_row["_remainder"].replace("/", "-")
+        local = file_metadata_path / remainder_cleaned
+
+        gcloud_rsync(remote, local, directory=False)
+        logging.info(f"Downloaded {remote} to {local}")
+
+        local_df = pd.read_csv(local, sep="\t")
+        local_df = local_df.dropna(subset=["workflow_version"], how="all")
+        local_df = local_df.rename(columns={"filename": "file_name"})
+        manifests_df = pd.concat([manifests_df, local_df])
+
+        local.unlink()
+        logging.info(f"Deleted temporary file {local}")
+
+    # Merge manifest data. No suffix collision here -- curated_df has no
+    # "workflow" column at this point, so the manifest's own "workflow" column
+    # passes through unrenamed and is used directly for the check below.
+    curated_df = curated_df.merge(manifests_df, on="file_name", how="left")
+
+    # Validate workflow consistency (manifest-declared workflow vs. the one we
+    # walked the dev bucket for)
+    if "workflow" in curated_df.columns:
+        checked = curated_df.loc[curated_df["workflow"].notna(), "workflow"]
+        assert (checked == workflow_name).all(), (
+            f"MANIFEST workflow does not match expected workflow "
+            f"'{workflow_name}' for {dataset_id}"
+        )
+
+    # Rebase gcp_uri from dev bucket to curated (production) bucket
+    curated_df["gcp_uri"] = curated_prefix + curated_df["_remainder"]
+
+    # Add dataset identifiers.
+    if dataset_id.startswith("cohort-"):
+        asap_dataset_id = dataset_id
+        asap_team_id = "Cohort"
+    else:
+        study_file = dataset_dir / "metadata" / "release" / release_version / "STUDY.csv"
+        study_df = pd.read_csv(study_file)
+        asap_dataset_id = study_df["ASAP_dataset_id"].unique()[0]
+        asap_team_id = study_df["ASAP_team_id"].unique()[0]
+
+    curated_df["ASAP_dataset_id"] = asap_dataset_id
+    curated_df["ASAP_team_id"] = asap_team_id
+    curated_df["workflow"] = workflow_name  # overwrite/normalize for rows with no manifest match
+
+    # Column set aligned with artifacts.csv (ASAP_dataset_id, ASAP_team_id,
+    # file_name, gcp_uri, bucket_md5, source_prefix), plus workflow/
+    # workflow_version/timestamp which carry real signal here (sourced from
+    # MANIFEST.tsv), per the file_metadata refactor's D8 decision.
+    output_cols = [
+        "ASAP_dataset_id", "ASAP_team_id", "file_name", "gcp_uri", "bucket_md5",
+        "source_prefix", "workflow", "workflow_version", "timestamp",
+    ]
+    curated_df = curated_df[output_cols]
+
+    # Save curated files metadata
+    outfile_curated = file_metadata_path / "curated_files.csv"
+    curated_df.to_csv(outfile_curated, index=False)
+
+    logging.info(f"End: generate curated_files.csv for {dataset_id}")
 
 
 def update_data_table_with_bucket_metadata(
