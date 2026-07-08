@@ -16,7 +16,7 @@ from common.gcloud_ops import strip_team_prefix
 
 __all__ = [
     "update_data_table_with_bucket_metadata",
-    "gen_bucket_summary",
+    "gen_raw_bucket_summary",
     "get_artifacts_df",
     "get_raw_df",
 ]
@@ -71,28 +71,25 @@ def summarize_bucket_prefix(
     return df
 
 
-def gen_bucket_summary(
+def gen_raw_bucket_summary(
     dl_path: str | Path,
     dataset_id: str,
-    env_type: str,
     force: bool = False,
 ):
     """
-    Generate summary of raw or dev bucket contents, writing one intermediate
-    CSV per prefix to dl_path. These CSVs serve as the cache for subsequent
-    runs (re-read unless force=True).
+    Generate summary of raw bucket contents, writing one intermediate CSV per
+    prefix to dl_path. These CSVs serve as the cache for subsequent runs
+    (re-read unless force=True).
 
-    For env_type="raw", walks artifacts/**, spatial/**, fastqs/**, and raw/**
-    if they exist. 
-    
+    Walks artifacts/**, spatial/**, fastqs/**, and raw/** if they exist.
+
     Assumptions (revisit if they change):
     - A dataset's raw bucket contains either fastqs/ OR raw/, never both.
     - The raw directory (raw/ or fastqs/) only contains fastq.gz or .raw files.
-    
+
     Args:
         dl_path: directory to write intermediate CSVs for caching
         dataset_id: dataset identifier (e.g., "team-smith-pmdbs-sn-rnaseq")
-        env_type: "raw" or "dev"
         force: re-walk bucket even if cached CSVs exist
     """
     if dataset_id.startswith("team-"):
@@ -102,25 +99,23 @@ def gen_bucket_summary(
             f"Invalid dataset_id format: {dataset_id}. Expected: team-<team>-<details>"
         )
 
-    if "cohort" in dataset_id and env_type == "raw":
+    if "cohort" in dataset_id:
         logging.info(f"No raw bucket file metadata summary required for cohort datasets: {dataset_id}")
         return
 
-    bucket = f"asap-{env_type}-{dataset_id}"
+    bucket = f"asap-raw-{dataset_id}"
     dl_path = Path(dl_path)
 
-    if env_type == "raw":
-        
-        artifact_cache = dl_path / f"{dataset_name}_artifact_files.csv"
-        summarize_bucket_prefix(bucket, "artifacts/**", "artifact", artifact_cache, force=force)
-        
-        # Spatial intermediate will be folded into artifacts.csv if it exists
-        spatial_cache = dl_path / f"{dataset_name}_spatial_files.csv"
-        summarize_bucket_prefix(bucket, "spatial/**/*", "spatial", spatial_cache, force=force)
+    artifact_cache = dl_path / f"{dataset_name}_artifact_files.csv"
+    summarize_bucket_prefix(bucket, "artifacts/**", "artifact", artifact_cache, force=force)
 
-        raw_cache = dl_path / f"{dataset_name}_raw_files.csv"
-        for raw_type, prefix in [("fastq", "fastqs/**/*.fastq.gz"), ("raw", "raw/**/*.raw")]:
-            summarize_bucket_prefix(bucket, prefix, raw_type, raw_cache, force=force)
+    # Spatial intermediate will be folded into artifacts.csv if it exists
+    spatial_cache = dl_path / f"{dataset_name}_spatial_files.csv"
+    summarize_bucket_prefix(bucket, "spatial/**/*", "spatial", spatial_cache, force=force)
+
+    raw_cache = dl_path / f"{dataset_name}_raw_files.csv"
+    for raw_type, prefix in [("fastq", "fastqs/**/*.fastq.gz"), ("raw", "raw/**/*.raw")]:
+        summarize_bucket_prefix(bucket, prefix, raw_type, raw_cache, force=force)
 
 
 def update_data_table_with_bucket_metadata(

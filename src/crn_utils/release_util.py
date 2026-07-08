@@ -26,7 +26,7 @@ from .asap_ids import (
 )
 
 from .file_metadata import (
-    gen_bucket_summary,
+    gen_raw_bucket_summary,
     update_data_table_with_bucket_metadata,
     get_artifacts_df,
     get_raw_df,
@@ -132,10 +132,9 @@ def prep_release_metadata(
     file_metadata_path.mkdir(exist_ok=True)
 
     # Saves tables listing files for artifacts, spatial, and raw files (fastq/raw) if they exist in the bucket.
-    gen_bucket_summary(
+    gen_raw_bucket_summary(
         dl_path=file_metadata_path,
         dataset_id=dataset_id,
-        env_type="raw",
         force=force
     )
 
