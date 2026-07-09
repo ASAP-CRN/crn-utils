@@ -81,7 +81,10 @@ def gen_raw_bucket_summary(
 
     Assumptions (revisit if they change):
     - A dataset's raw bucket contains either fastqs/ OR raw/, never both.
-    - The raw directory (raw/ or fastqs/) only contains fastq.gz or .raw files.
+    - fastqs/ only contains *.fastq.gz files. raw/ contents vary by assay
+      (e.g. spatial platform export formats like CosMx's *.csv.gz or proteomics 
+      .raw) and are not restricted to a single extension — everything under raw/ is
+      collected; only files DATA.file_name actually references get merged in.
 
     Args:
         dl_path: directory to write intermediate CSVs for caching
@@ -104,7 +107,7 @@ def gen_raw_bucket_summary(
 
     logging.info(f"Checking for raw data files (fastq/raw) for {dataset_id}...")
     raw_cache = dl_path / "raw_files_cache.csv"
-    for raw_type, prefix in [("fastq", "fastqs/**/*.fastq.gz"), ("raw", "raw/**/*.raw")]:
+    for raw_type, prefix in [("fastq", "fastqs/**/*.fastq.gz"), ("raw", "raw/**")]:
         summarize_bucket_prefix(bucket, prefix, raw_type, raw_cache, force=force)
 
 
@@ -160,7 +163,7 @@ def process_curated_files(
     release_version: str,
 ) -> None:
     """
-    Merges the dev-bucket curated-file inventory (file_name, gcp_uri, bucket_md5,
+    Merges the dev-bucket curated-file cache (file_name, gcp_uri, bucket_md5,
     source_prefix — from gen_dev_bucket_summary) with downloaded MANIFEST.tsv
     metadata (workflow_version, timestamp), rebases gcp_uri from the dev bucket
     to the curated (production) bucket, and writes curated_files.csv.
@@ -290,17 +293,17 @@ def process_curated_files(
 
 def update_data_table_with_bucket_metadata(
     data_df: pd.DataFrame,
-    inventory_df: pd.DataFrame,
+    cache_df: pd.DataFrame,
 ) -> pd.DataFrame:
     """
-    Add gcp_uri and file_MD5 to the DATA table from the raw-files inventory
+    Add gcp_uri and file_MD5 to the DATA table from the raw-files cache
     DataFrame. file_MD5 is computed from the bucket (bucket_md5), not
     contributor-submitted — any pre-existing file_MD5 column is dropped and
     replaced. Handles pooled/multiplexed files where multiple samples share
     the same file_name.
     """
     uri_map = (
-        inventory_df[["file_name", "gcp_uri", "bucket_md5"]]
+        cache_df[["file_name", "gcp_uri", "bucket_md5"]]
         .drop_duplicates(subset=["file_name"])
         .rename(columns={"bucket_md5": "file_MD5"})
     )

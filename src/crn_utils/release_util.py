@@ -157,7 +157,7 @@ def prep_release_metadata(
 
     updated_meta_tables["DATA"] = update_data_table_with_bucket_metadata(
         data_df=updated_meta_tables["DATA"],
-        inventory_df=raw_df,
+        cache_df=raw_df,
     )
 
     logging.info("File metadata merged with DATA table")
