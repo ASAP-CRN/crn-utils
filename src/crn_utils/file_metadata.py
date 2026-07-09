@@ -1,4 +1,3 @@
-import sys
 import logging
 import pandas as pd
 from pathlib import Path
@@ -7,11 +6,7 @@ from pathlib import Path
 from .bucket_util import gcloud_ls, gcloud_hash, gcloud_rsync
 
 repo_root = Path(__file__).resolve().parents[2]
-wf_common_path = repo_root.parent / "wf-common" / "util"
-sys.path.insert(0, str(wf_common_path))
 
-# from wf-common
-from common.gcloud_ops import strip_team_prefix
 
 __all__ = [
     "update_data_table_with_bucket_metadata",
@@ -93,13 +88,6 @@ def gen_raw_bucket_summary(
         dataset_id: dataset identifier (e.g., "team-smith-pmdbs-sn-rnaseq")
         force: re-walk bucket even if cached CSVs exist
     """
-    if dataset_id.startswith("team-"):
-        dataset_name = strip_team_prefix(dataset_id)
-    else:
-        raise RuntimeError(
-            f"Invalid dataset_id format: {dataset_id}. Expected: team-<team>-<details>"
-        )
-
     if "cohort" in dataset_id:
         logging.info(f"No raw bucket file metadata summary required for cohort datasets: {dataset_id}")
         return
@@ -109,13 +97,13 @@ def gen_raw_bucket_summary(
 
     # Spatial files will be folded into artifacts.csv by get_artifacts_df() if they exist
     logging.info(f"Checking for artifact files (artifacts/ and spatial/) for {dataset_id}...")
-    artifact_cache = dl_path / f"{dataset_name}_artifact_files.csv"
-    spatial_cache = dl_path / f"{dataset_name}_spatial_files.csv"
+    artifact_cache = dl_path / "artifact_files_cache.csv"
+    spatial_cache = dl_path / "spatial_files_cache.csv"
     summarize_bucket_prefix(bucket, "artifacts/**", "artifact", artifact_cache, force=force)
     summarize_bucket_prefix(bucket, "spatial/**/*", "spatial", spatial_cache, force=force)
 
     logging.info(f"Checking for raw data files (fastq/raw) for {dataset_id}...")
-    raw_cache = dl_path / f"{dataset_name}_raw_files.csv"
+    raw_cache = dl_path / "raw_files_cache.csv"
     for raw_type, prefix in [("fastq", "fastqs/**/*.fastq.gz"), ("raw", "raw/**/*.raw")]:
         summarize_bucket_prefix(bucket, prefix, raw_type, raw_cache, force=force)
 
@@ -150,8 +138,6 @@ def gen_dev_bucket_summary(
     """
     cols = ["file_name", "gcp_uri", "bucket_md5", "source_prefix"]
 
-    dataset_name = strip_team_prefix(dataset_id)
-
     if workflow_name == "NA":
         logging.info(f"Skipping {dataset_id} as workflow is NA")
         return pd.DataFrame(columns=cols)
@@ -161,7 +147,7 @@ def gen_dev_bucket_summary(
 
     bucket = f"asap-dev-{dataset_id}"
     dl_path = Path(dl_path)
-    cache_path = dl_path / f"{dataset_name}_curated_files.csv"
+    cache_path = dl_path / "curated_files_cache.csv"
 
     return summarize_bucket_prefix(bucket, f"{workflow_name}/**", "curated", cache_path, force=force)
 
@@ -351,7 +337,7 @@ def get_artifacts_df(
         "ASAP_dataset_id", "ASAP_team_id", "file_name", "gcp_uri", "bucket_md5", "source_prefix",
     ]
     
-    ARTIFACT_GLOBS = ["*_artifact_files.csv", "*_spatial_files.csv"]
+    ARTIFACT_GLOBS = ["artifact_files_cache.csv", "spatial_files_cache.csv"]
     
     csvs = []
     for pattern in ARTIFACT_GLOBS:
@@ -391,7 +377,7 @@ def get_raw_df(dl_path: str | Path) -> pd.DataFrame:
     """
     dl_path = Path(dl_path)
     keep_cols = ["file_name", "gcp_uri", "bucket_md5"]
-    raw_file_csvs = list(dl_path.glob("*_raw_files.csv"))
+    raw_file_csvs = list(dl_path.glob("raw_files_cache.csv"))
     if not raw_file_csvs:
         logging.warning(f"No raw files found for {dl_path}")
         return pd.DataFrame(columns=keep_cols)
