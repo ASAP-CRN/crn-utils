@@ -107,13 +107,14 @@ def gen_raw_bucket_summary(
     bucket = f"asap-raw-{dataset_id}"
     dl_path = Path(dl_path)
 
+    # Spatial files will be folded into artifacts.csv by get_artifacts_df() if they exist
+    logging.info(f"Checking for artifact files (artifacts/ and spatial/) for {dataset_id}...")
     artifact_cache = dl_path / f"{dataset_name}_artifact_files.csv"
-    summarize_bucket_prefix(bucket, "artifacts/**", "artifact", artifact_cache, force=force)
-
-    # Spatial intermediate will be folded into artifacts.csv if it exists
     spatial_cache = dl_path / f"{dataset_name}_spatial_files.csv"
+    summarize_bucket_prefix(bucket, "artifacts/**", "artifact", artifact_cache, force=force)
     summarize_bucket_prefix(bucket, "spatial/**/*", "spatial", spatial_cache, force=force)
 
+    logging.info(f"Checking for raw data files (fastq/raw) for {dataset_id}...")
     raw_cache = dl_path / f"{dataset_name}_raw_files.csv"
     for raw_type, prefix in [("fastq", "fastqs/**/*.fastq.gz"), ("raw", "raw/**/*.raw")]:
         summarize_bucket_prefix(bucket, prefix, raw_type, raw_cache, force=force)

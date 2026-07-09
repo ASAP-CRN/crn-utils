@@ -1,3 +1,5 @@
+# NOTE: This script will be deprecated/folded into wf-common's gcloud_ops.py in the near future.
+
 import os
 import subprocess
 import logging
@@ -13,37 +15,37 @@ __all__ = [
 ]
 
 
-# create functions to list, rsync and delete files into GCP
-# Updated to use gcloud instead of gsutil
 def gcloud_ls(bucket_name: str, prefix: str, project: str | None = None):
     """
-    prints the files in a GCS bucket matching a given prefix.
-
+    Lists the files in a GCS bucket_name/prefix path
+    
     Args:
-        bucket_name (str): The name of the GCS bucket.
-        prefix (str): The prefix to filter objects.
-        project (str | None): GCP project name. If None, uses default project [dnastack-asap-parkinsons]
-
+        bucket_name (str): GCS bucket name, without the "gs://" scheme.
+        prefix (str): Object glob relative to the bucket root (e.g. "artifacts/**").
+        project (str | None): GCP project name. If None, defaults to "dnastack-asap-parkinsons".
+        
     Returns:
-       list of files
-
+        list: List of files in the specified GCS bucket/prefix path. Empty list
+        if no files are found or if the command fails.
     """
     default_project = "dnastack-asap-parkinsons"
     if project is None:
         project = default_project
 
     cmd = f"gcloud storage ls gs://{bucket_name}/{prefix} --billing-project={project}"
-
-    print(f"IN: {cmd}")
-    prefix = prefix + "/" if not prefix.endswith("/") else prefix
+    logging.info(f"Running: {cmd}")
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-    print(f"OUT: {result.stdout}")
-    if result.returncode == 0:
-        pass
-    else:
-        print(f"gcloud command failed: {result.stderr}")
 
-    return result.stdout.split("\n")
+    if result.returncode != 0:
+        if "matched no objects" in result.stderr:
+            logging.info(f"No objects found for gs://{bucket_name}/{prefix}")
+        else:
+            logging.error(f"gcloud command failed: {result.stderr.strip()}")
+        return []
+
+    files = result.stdout.split("\n")
+    logging.info(f"Found {len(files)} objects for gs://{bucket_name}/{prefix}")
+    return files
 
 
 def gcloud_rsync(
@@ -186,7 +188,8 @@ def gcloud_hash(
     prefix: str,
     project: str | None = None,
 ) -> dict[str, str]:
-    """Fetch MD5 hashes for GCS objects matching a prefix.
+    """
+    Fetch MD5 hashes for GCS objects matching a prefix.
 
     Wraps ``gcloud storage hash --hex`` and parses the line-oriented output
     into a mapping from object basename to hex MD5.
