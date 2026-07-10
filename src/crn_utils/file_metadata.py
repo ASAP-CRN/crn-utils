@@ -155,6 +155,47 @@ def gen_dev_bucket_summary(
     return summarize_bucket_prefix(bucket, f"{workflow_name}/**", "curated", cache_path, force=force)
 
 
+def load_manifests(
+    manifest_rows: pd.DataFrame,
+    tmp_dir: Path,
+) -> pd.DataFrame:
+    """
+    Download and parse every MANIFEST.tsv found under the workflow root.
+
+    The dev bucket can hold multiple physical copies of MANIFEST.tsv (e.g.
+    the workflow's own output dir plus a workflow_metadata/{timestamp}/
+    audit copy), so the result may contain duplicate file_name rows --
+    deduping happens downstream in process_curated_files, keyed on gcp_uri.
+
+    Args:
+        manifest_rows: dev-bucket listing rows where file_name == "MANIFEST.tsv"
+        tmp_dir: directory to briefly download each manifest into
+
+    Returns:
+        DataFrame with file_name plus manifest columns (workflow,
+        workflow_version, timestamp, ...).
+    """
+    manifests_df = pd.DataFrame()
+
+    for _, manifest_row in manifest_rows.iterrows():
+        remote = manifest_row["gcp_uri"]  # dev-bucket path -- not yet promoted
+        remainder_cleaned = manifest_row["_remainder"].replace("/", "-")
+        local = tmp_dir / remainder_cleaned
+
+        gcloud_rsync(remote, local, directory=False)
+        logging.info(f"Downloaded {remote} to {local}")
+
+        local_df = pd.read_csv(local, sep="\t")
+        local_df = local_df.dropna(subset=["workflow_version"], how="all")
+        local_df = local_df.rename(columns={"filename": "file_name"})
+        manifests_df = pd.concat([manifests_df, local_df], ignore_index=True)
+
+        local.unlink()
+        logging.info(f"Deleted temporary file {local}")
+
+    return manifests_df
+
+
 def process_curated_files(
     dataset_dir: str | Path,
     dataset_id: str,
@@ -163,36 +204,26 @@ def process_curated_files(
     release_version: str,
 ) -> None:
     """
-    Merges the dev-bucket curated-file cache (file_name, gcp_uri, bucket_md5,
-    source_prefix — from gen_dev_bucket_summary) with downloaded MANIFEST.tsv
-    metadata (workflow_version, timestamp), rebases gcp_uri from the dev bucket
-    to the curated (production) bucket, and writes curated_files.csv.
+    Merge the dev-bucket curated-file listing with MANIFEST.tsv metadata
+    (workflow_version, timestamp), rebase gcp_uri to the curated bucket, and
+    write curated_files.csv.
 
-    NOTE on the gcp_uri rebase: MANIFEST.tsv and the workflow outputs it
-    describes are downloaded/hashed from the DEV bucket (gs://asap-dev-...),
-    since that's where they live at release-prep time — promotion to the
-    curated bucket (gs://asap-curated-...) is a separate, later step. gcp_uri
-    in the final output is therefore a *prospective* path: where the file will
-    live once promoted, not where it currently lives.
+    gcp_uri rebase: files are hashed from the DEV bucket (where they live at
+    release-prep time), so the output gcp_uri is *prospective* -- where the
+    file will live once promoted to gs://asap-curated-..., not where it is now.
 
-    NOTE on ASAP_dataset_id/ASAP_team_id for cohorts: cohort dev/curated
-    buckets contain files exclusive to the cohort (not attributable to any
-    single constituent dataset), so there is no single-constituent STUDY.csv
-    identity to source from. For cohort dataset_ids, use the cohort dataset_id
-    itself as ASAP_dataset_id and the literal string "Cohort" as ASAP_team_id,
-    rather than reading STUDY.csv (which for a cohort is itself a
-    concatenation of multiple constituents' rows and has no single answer).
+    ASAP_dataset_id/team_id for cohorts: cohort buckets hold files not
+    attributable to any single constituent, so there's no STUDY.csv to read --
+    use the cohort dataset_id itself and "Cohort" as the team_id instead.
 
     Args:
         dataset_dir: path to the dataset (or cohort) directory, e.g.
             {dss_meta_root}/datasets/{dataset_name}
-        dataset_id: dataset identifier (e.g., "team-smith-pmdbs-sn-rnaseq" or
-            "cohort-pmdbs-bulk-rnaseq")
-        workflow_name: name of the workflow whose outputs were catalogued
-            (e.g., pmdbs_sc_rnaseq)
-        curated_df: DataFrame from gen_dev_bucket_summary, columns
+        dataset_id: e.g. "team-smith-pmdbs-sn-rnaseq" or "cohort-pmdbs-bulk-rnaseq"
+        workflow_name: workflow whose outputs were catalogued (e.g. pmdbs_sc_rnaseq)
+        curated_df: from gen_dev_bucket_summary, columns
             [file_name, gcp_uri, bucket_md5, source_prefix]
-        release_version: Release version string (e.g., "v4.0.0")
+        release_version: e.g. "v4.0.0"
     """
     dataset_dir = Path(dataset_dir)
     logging.info(f"Start: generate curated_files.csv for {dataset_id}")
@@ -207,49 +238,47 @@ def process_curated_files(
     file_metadata_path = dataset_dir / "file_metadata" / "release" / release_version
     file_metadata_path.mkdir(parents=True, exist_ok=True)
 
-    # gcp_uri is the full dev-bucket object path (bucket + workflow + subdirs +
-    # filename) — strip the known "gs://asap-dev-{dataset_id}/{workflow_name}/"
-    # prefix to get the remainder (subdirs/filename), used both for the
-    # archive filter and to rebase onto the curated bucket.
+    # Strip the known dev-bucket prefix to get subdirs/filename -- used for
+    # both the archive filter below and the curated-bucket rebase.
     dev_prefix = f"gs://asap-dev-{dataset_id}/{workflow_name}/"
     curated_prefix = f"gs://asap-curated-{dataset_id}/{workflow_name}/"
     curated_df["_remainder"] = curated_df["gcp_uri"].str.slice(len(dev_prefix))
 
-    # Archive filter: only the *first* subdirectory under the workflow root is
-    # checked — a file sitting directly under the workflow root is never
-    # treated as archived, regardless of its own name.
+    # Archive filter: only the first subdirectory is checked -- a file
+    # directly under the workflow root is never treated as archived.
     curated_df["_first_dir"] = curated_df["_remainder"].apply(
         lambda r: r.split("/")[0] if "/" in r else ""
     )
     curated_df = curated_df[~curated_df["_first_dir"].str.startswith("archive")]
 
-    # Get manifest files (needed to source workflow_version/timestamp)
+    # Get manifest metadata (workflow_version/timestamp)
     manifest_rows = curated_df[curated_df["file_name"] == "MANIFEST.tsv"]
+    manifests_df = load_manifests(manifest_rows, file_metadata_path)
 
-    manifests_df = pd.DataFrame()
-    for _, manifest_row in manifest_rows.iterrows():
-        remote = manifest_row["gcp_uri"]  # dev-bucket path -- not yet promoted
-        remainder_cleaned = manifest_row["_remainder"].replace("/", "-")
-        local = file_metadata_path / remainder_cleaned
-
-        gcloud_rsync(remote, local, directory=False)
-        logging.info(f"Downloaded {remote} to {local}")
-
-        local_df = pd.read_csv(local, sep="\t")
-        local_df = local_df.dropna(subset=["workflow_version"], how="all")
-        local_df = local_df.rename(columns={"filename": "file_name"})
-        manifests_df = pd.concat([manifests_df, local_df])
-
-        local.unlink()
-        logging.info(f"Deleted temporary file {local}")
-
-    # Merge manifest data. No suffix collision here -- curated_df has no
-    # "workflow" column at this point, so the manifest's own "workflow" column
-    # passes through unrenamed and is used directly for the check below.
+    # Merge manifest data (no suffix collision: curated_df has no "workflow"
+    # column yet, so the manifest's own passes through for the check below).
     curated_df = curated_df.merge(manifests_df, on="file_name", how="left")
 
-    # Validate workflow consistency (manifest-declared workflow vs. the one we
-    # walked the dev bucket for)
+    # curated_df is unique per gcp_uri pre-merge, so duplicate manifest
+    # copies (see load_manifests) can fan a row out -- collapse back to one
+    # row per gcp_uri. Flag (don't silently drop) if duplicates disagree,
+    # since that would mean two manifest copies recorded different metadata
+    # for the same file.
+    dup_cols = [c for c in ("workflow", "workflow_version", "timestamp") if c in curated_df.columns]
+    conflicting = (
+        curated_df.duplicated(subset=["gcp_uri"], keep=False)
+        & ~curated_df.duplicated(subset=["gcp_uri"] + dup_cols, keep=False)
+    )
+    if conflicting.any():
+        logging.warning(
+            f"{curated_df.loc[conflicting, 'gcp_uri'].nunique()} file(s) matched multiple "
+            f"manifest entries with differing {dup_cols}; keeping the first occurrence: "
+            f"{curated_df.loc[conflicting, 'gcp_uri'].unique().tolist()}"
+        )
+    curated_df = curated_df.drop_duplicates(subset=["gcp_uri"], keep="first")
+
+    # Validate workflow consistency (manifest-declared vs. the one we walked
+    # the dev bucket for)
     if "workflow" in curated_df.columns:
         checked = curated_df.loc[curated_df["workflow"].notna(), "workflow"]
         assert (checked == workflow_name).all(), (
@@ -260,7 +289,7 @@ def process_curated_files(
     # Rebase gcp_uri from dev bucket to curated (production) bucket
     curated_df["gcp_uri"] = curated_prefix + curated_df["_remainder"]
 
-    # Add dataset identifiers.
+    # Add dataset identifiers
     if dataset_id.startswith("cohort-"):
         asap_dataset_id = dataset_id
         asap_team_id = "Cohort"
@@ -272,12 +301,10 @@ def process_curated_files(
 
     curated_df["ASAP_dataset_id"] = asap_dataset_id
     curated_df["ASAP_team_id"] = asap_team_id
-    curated_df["workflow"] = workflow_name  # overwrite/normalize for rows with no manifest match
+    curated_df["workflow"] = workflow_name  # normalize for rows with no manifest match
 
-    # Column set aligned with artifacts.csv (ASAP_dataset_id, ASAP_team_id,
-    # file_name, gcp_uri, bucket_md5, source_prefix), plus workflow/
-    # workflow_version/timestamp which carry real signal here (sourced from
-    # MANIFEST.tsv), per the file_metadata refactor's D8 decision.
+    # Columns aligned with artifacts.csv, plus workflow/workflow_version/
+    # timestamp (sourced from MANIFEST.tsv) per the D8 refactor decision.
     output_cols = [
         "ASAP_dataset_id", "ASAP_team_id", "file_name", "gcp_uri", "bucket_md5",
         "source_prefix", "workflow", "workflow_version", "timestamp",
