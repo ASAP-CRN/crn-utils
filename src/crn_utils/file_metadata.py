@@ -213,8 +213,8 @@ def process_curated_files(
     file will live once promoted to gs://asap-curated-..., not where it is now.
 
     ASAP_dataset_id/team_id for cohorts: cohort buckets hold files not
-    attributable to any single constituent, so there's no STUDY.csv to read --
-    use the cohort dataset_id itself and "Cohort" as the team_id instead.
+    attributable to any single constituent -- use the cohort dataset_id itself 
+    and "Cohort" as the team_id instead.
 
     Args:
         dataset_dir: path to the dataset (or cohort) directory, e.g.
