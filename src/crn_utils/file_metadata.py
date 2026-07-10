@@ -296,25 +296,61 @@ def update_data_table_with_bucket_metadata(
     cache_df: pd.DataFrame,
 ) -> pd.DataFrame:
     """
-    Add gcp_uri and file_MD5 to the DATA table from the raw-files cache
-    DataFrame. file_MD5 is computed from the bucket (bucket_md5), not
-    contributor-submitted — any pre-existing file_MD5 column is dropped and
-    replaced. Handles pooled/multiplexed files where multiple samples share
-    the same file_name.
+    Add gcp_uri to the DATA table, and reconcile file_MD5 with the bucket-
+    computed value:
+      - bucket_md5 present, contributor's file_MD5 blank: filled from bucket.
+      - bucket_md5 present, contributor's file_MD5 present and they agree:
+        no-op (bucket value used, matches contributor's).
+      - bucket_md5 present, contributor's file_MD5 present and they disagree:
+        bucket value is used (independently verifiable), but the mismatch is
+        logged for follow-up -- could indicate corruption, a stale/wrong
+        contributor value, or a re-upload the contributor didn't reflect in
+        their submission.
+      - bucket_md5 unavailable (e.g. composite-uploaded file, no native MD5
+        in GCS): falls back to the contributor-submitted value, unverified.
+        
+    Args:
+        data_df: QC'd DATA table. Only rows with a DATA.file_name that matches a 
+            cache_df.file_name are updated.
+        cache_df: summary of bucket contents, with columns [file_name, gcp_uri, 
+            bucket_md5, source_prefix] (from gen_raw_bucket_summary)
     """
     uri_map = (
         cache_df[["file_name", "gcp_uri", "bucket_md5"]]
         .drop_duplicates(subset=["file_name"])
-        .rename(columns={"bucket_md5": "file_MD5"})
     )
-
-    data_df = data_df.drop(columns=["file_MD5"], errors="ignore")
 
     initial_rows = len(data_df)
     data_df = data_df.merge(uri_map, on="file_name", how="left", validate="many_to_one")
 
     if len(data_df) != initial_rows:
         logging.warning(f"Row count changed from {initial_rows} to {len(data_df)} during merge!")
+
+    file_md5_str = data_df["file_MD5"].astype("string")
+    bucket_md5_str = data_df["bucket_md5"].astype("string")
+
+    # Normalize for comparison and for final output
+    contributor_md5 = file_md5_str.str.strip().str.lower()
+    bucket_md5 = bucket_md5_str.str.strip().str.lower()
+
+    mismatched = bucket_md5.notna() & contributor_md5.notna() & (bucket_md5 != contributor_md5)
+    if mismatched.any():
+        details = data_df.loc[mismatched, "file_name"].tolist()
+        logging.warning(
+            f"{mismatched.sum()} row(s) have a bucket MD5 that disagrees with the "
+            f"contributor-submitted file_MD5 (bucket value used): {details}"
+        )
+
+    unverified = bucket_md5.isna() & contributor_md5.notna()
+    if unverified.any():
+        logging.warning(
+            f"{unverified.sum()} row(s) have no bucket MD5 (likely composite-uploaded) "
+            f"and retain the contributor-submitted, unverified file_MD5: "
+            f"{data_df.loc[unverified, 'file_name'].unique().tolist()}"
+        )
+
+    data_df["file_MD5"] = bucket_md5.combine_first(contributor_md5)
+    data_df = data_df.drop(columns=["bucket_md5"])
 
     logging.info(f"Updated 'DATA.csv' with gcp_uri and file_MD5 ({len(data_df)} rows)")
     return data_df

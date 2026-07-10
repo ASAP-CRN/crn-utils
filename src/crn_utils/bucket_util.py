@@ -234,7 +234,8 @@ def gcloud_hash(
     curr_md5: str | None = None
     for line in result.stdout.splitlines():
         if line.startswith("md5_hash:"):
-            curr_md5 = line.split(":", 1)[1].strip()
+            value = line.split(":", 1)[1].strip()
+            curr_md5 = None if value.lower() == "null" else value
         elif line.startswith("url:") and curr_md5 is not None:
             md5s[line.split("/")[-1].strip()] = curr_md5
     return md5s
