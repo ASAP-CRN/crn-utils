@@ -1,5 +1,8 @@
+# NOTE: This script will be deprecated/folded into wf-common's gcloud_ops.py in the near future.
+
 import os
 import subprocess
+import logging
 from pathlib import Path
 
 __all__ = [
@@ -7,41 +10,48 @@ __all__ = [
     "gcloud_rsync",
     "gcloud_mv",
     "gcloud_rm",
+    "gcloud_hash",
     "authenticate_with_service_account",
 ]
 
 
-# create functions to list, rsync and delete files into GCP
-# Updated to use gcloud instead of gsutil
 def gcloud_ls(bucket_name: str, prefix: str, project: str | None = None):
     """
-    prints the files in a GCS bucket matching a given prefix.
+    Lists the files in a GCS bucket_name/prefix path
 
-    Args:
-        bucket_name (str): The name of the GCS bucket.
-        prefix (str): The prefix to filter objects.
-        project (str | None): GCP project name. If None, uses default project [dnastack-asap-parkinsons]
+    Parameters
+    ----------
+    bucket_name : str
+        GCS bucket name, without the "gs://" scheme.
+    prefix : str
+        Object glob relative to the bucket root (e.g. "artifacts/**").
+    project : str or None, optional
+        GCP project name. If None, defaults to "dnastack-asap-parkinsons".
 
-    Returns:
-       list of files
-
+    Returns
+    -------
+    list
+        List of files in the specified GCS bucket/prefix path. Empty list
+        if no files are found or if the command fails.
     """
     default_project = "dnastack-asap-parkinsons"
     if project is None:
         project = default_project
 
     cmd = f"gcloud storage ls gs://{bucket_name}/{prefix} --billing-project={project}"
-
-    print(f"IN: {cmd}")
-    prefix = prefix + "/" if not prefix.endswith("/") else prefix
+    logging.info(f"Running: {cmd}")
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-    print(f"OUT: {result.stdout}")
-    if result.returncode == 0:
-        pass
-    else:
-        print(f"gcloud command failed: {result.stderr}")
 
-    return result.stdout.split("\n")
+    if result.returncode != 0:
+        if "matched no objects" in result.stderr:
+            logging.info(f"No objects found for gs://{bucket_name}/{prefix}")
+        else:
+            logging.error(f"gcloud command failed: {result.stderr.strip()}")
+        return []
+
+    files = result.stdout.split("\n")
+    logging.info(f"Found {len(files)} objects for gs://{bucket_name}/{prefix}")
+    return files
 
 
 def gcloud_rsync(
@@ -177,3 +187,61 @@ def gcloud_rm(destination: str | Path, directory=False, project: str | None = No
     else:
         print(f"gcloud command failed: {result.stderr}")
     return result.stdout
+
+
+def gcloud_hash(
+    bucket_name: str,
+    prefix: str,
+    project: str | None = None,
+) -> dict[str, str]:
+    """
+    Fetch MD5 hashes for GCS objects matching a prefix.
+
+    Wraps ``gcloud storage hash --hex`` and parses the line-oriented output
+    into a mapping from object basename to hex MD5.
+
+    Parameters
+    ----------
+    bucket_name : str
+        GCS bucket name, without the ``gs://`` scheme.
+    prefix : str
+        Object glob relative to the bucket root (e.g. ``"artifacts/**"``).
+    project : str or None, optional
+        Billing project. Defaults to ``"dnastack-asap-parkinsons"`` when None.
+
+    Returns
+    -------
+    dict of str to str
+        Mapping ``{file_name: md5_hex}`` for each matched object. Empty when
+        the prefix matches no objects or the command fails.
+
+    Notes
+    -----
+    Objects uploaded via parallel-composite upload have no MD5 stored in GCS
+    (only ``crc32c``) and will be absent from the returned mapping.
+    """
+    if project is None:
+        project = "dnastack-asap-parkinsons"
+
+    command = [
+        "gcloud", "storage", "hash", "--hex",
+        f"gs://{bucket_name}/{prefix}",
+        f"--billing-project={project}",
+    ]
+    try:
+        result = subprocess.run(
+            command, check=True, capture_output=True, text=True
+        )
+    except subprocess.CalledProcessError as exc:
+        logging.error("gcloud storage hash failed: %s", exc.stderr.strip())
+        return {}
+
+    md5s: dict[str, str] = {}
+    curr_md5: str | None = None
+    for line in result.stdout.splitlines():
+        if line.startswith("md5_hash:"):
+            value = line.split(":", 1)[1].strip()
+            curr_md5 = None if value.lower() == "null" else value
+        elif line.startswith("url:") and curr_md5 is not None:
+            md5s[line.split("/")[-1].strip()] = curr_md5
+    return md5s

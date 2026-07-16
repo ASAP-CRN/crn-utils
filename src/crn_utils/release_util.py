@@ -9,9 +9,7 @@ from .util import (
     read_CDE,
     read_meta_table,
     read_CDE_asap_ids,
-    export_meta_tables,
     load_tables,
-    write_version,
 )
 
 from .asap_ids import (
@@ -28,11 +26,10 @@ from .asap_ids import (
 )
 
 from .file_metadata import (
-    gen_bucket_summary,
-    update_data_table_with_gcp_uri,
-    update_spatial_table_with_gcp_uri,
-    gen_spatial_bucket_summary,
-    make_file_metadata,
+    gen_raw_bucket_summary,
+    update_data_table_with_bucket_metadata,
+    get_artifacts_df,
+    get_raw_df,
 )
 from .constants import *  # List of tables expected (CDE <= v4.0)
 from .doi import update_study_table_with_doi
@@ -49,20 +46,6 @@ __all__ = [
 ]
 
 
-def get_spatial_subtype_from_dataset_id(dataset_id: str) -> str:
-    """
-    Determine spatial subtype (i.e. visium, geomx or cosmx) from dataset_id.
-    """
-    if "visium" in dataset_id.lower():
-        return "visium"
-    elif "geomx" in dataset_id.lower():
-        return "geomx"
-    elif "cosmx" in dataset_id.lower():
-        return "cosmx"
-    else:
-        raise KeyError(f"get_spatial_subtype_from_dataset_id: Unable to determine spatial subtype from dataset_id: {dataset_id}")
-
-
 # The following is a refactor of the main function to prepare metadata for a release.
 # It combines the previous source-specific functions into a unified call,
 # while removing the ID generation step which is now handled separately.
@@ -74,16 +57,17 @@ def get_spatial_subtype_from_dataset_id(dataset_id: str) -> str:
 #      but now it's based on CDE ValidCategories (organism and sample_source).
 #      This is a temporary hack for the Feb2026/March2026 releases which use PMDBS/MOUSE/CELL ASAP IDs
 #      A fututre implementation will fully transition to general SUBJECT ASAP IDs.
-def prep_release_metadata(dataset_id: str,
-                          organism: str,
-                          source: str,
-                          assay: str,
-                          cde_version: str,
-                          release_version: str,
-                          metadata_dir: Path,
-                          dataset_dir: Path,
-                          map_path: Path
-                          ) -> None:
+def prep_release_metadata(
+    dataset_id: str,
+    organism: str,
+    source: str,
+    cde_version: str,
+    release_version: str,
+    metadata_dir: Path,
+    dataset_dir: Path,
+    map_path: Path,
+    force: bool = False,
+    ) -> None:
     """
     Prepares dataset metadata for release.
 
@@ -99,13 +83,12 @@ def prep_release_metadata(dataset_id: str,
         - dataset_id: (e.g., "team-smith-pmdbs-sn-rnaseq")
         - organism: organism type of the dataset (e.g., "Human", "Mouse")
         - source: source type of the dataset (e.g., "Brain", "Fecal", "Cell lines", "iPSC")
-        - assay: assay type of the dataset (e.g., "bulk_rna_seq", "single_nucleus_rna_seq")
         - cde_version: CDE schema version to prepare for (e.g., "v4.0")
         - release_version: CRN release version (e.g., "v4.0.1")
         - metadata_dir: Path to metadata directory
         - dataset_dir: Path to dataset directory
         - map_path: Path to master ID mappers
-
+        - force: If True, re-walk GCP bucket even if cached file metadata CSVs exist
     """
 
     # normalize source
@@ -148,46 +131,34 @@ def prep_release_metadata(dataset_id: str,
     file_metadata_path = dataset_dir / "file_metadata" / "release" / release_version
     file_metadata_path.mkdir(exist_ok=True)
 
-    gen_bucket_summary(
+    # Saves tables listing files for artifacts, spatial, and raw files (fastq/raw) if they exist in the bucket.
+    gen_raw_bucket_summary(
         dl_path=file_metadata_path,
         dataset_id=dataset_id,
-        env_type="raw",
+        force=force
     )
 
-    if "spatial" in assay.lower():
-        gen_spatial_bucket_summary(
-            dl_path=file_metadata_path,
-            dataset_id=dataset_id
-        )
+    asap_dataset_id = updated_meta_tables["DATA"]["ASAP_dataset_id"].unique()[0]
+    team_id = updated_meta_tables["DATA"]["ASAP_team_id"].unique()[0]
 
-    make_file_metadata(
-        ds_path=dataset_dir,
-        dl_path=file_metadata_path,
-        data_df=updated_meta_tables["DATA"],
-        spatial=("spatial" in assay.lower())
-    )
-
+    # Combine artifacts and spatial files (if they exist) into a single artifacts.csv file
+    artifacts_df = get_artifacts_df(file_metadata_path, asap_dataset_id, team_id)
+    if artifacts_df.shape[0] > 0:
+        artifacts_df.to_csv(file_metadata_path / "artifacts.csv", index=False)
+    else:
+        logging.info(f"No artifact or spatial files found for {dataset_id}")
+        
     logging.info(f"File metadata summaries saved to [{file_metadata_path}]")
 
     # ---- Merging file metadata with DATA table ----
     logging.info("Merging file metadata with DATA table...")
+    
+    raw_df = get_raw_df(file_metadata_path)
 
-    updated_meta_tables["DATA"] = update_data_table_with_gcp_uri(
+    updated_meta_tables["DATA"] = update_data_table_with_bucket_metadata(
         data_df=updated_meta_tables["DATA"],
-        ds_path=dataset_dir,
-        release_version=release_version
+        cache_df=raw_df,
     )
-
-    # There is no SPATIAL table for CosMx datasets.
-    # For CDE >v4.0 this needs to be modified for visium and geomx datasets as well as there is no longer SPATIAL table
-    if "spatial" in assay.lower():
-        spatial_subtype = get_spatial_subtype_from_dataset_id(assay)
-        if not spatial_subtype == "cosmx":
-            updated_meta_tables["SPATIAL"] = update_spatial_table_with_gcp_uri(
-                spatial_df=updated_meta_tables["SPATIAL"],
-                ds_path=dataset_dir,
-                spatial_subtype=spatial_subtype
-            )
 
     logging.info("File metadata merged with DATA table")
 
@@ -219,6 +190,11 @@ def prep_release_metadata(dataset_id: str,
     return None
 
 
+
+# NOTE: this function is unused (superseded by prep_release_metadata) and
+# references get_spatial_subtype_from_dataset_id / update_spatial_table_with_gcp_uri,
+# both removed from this module. Left intentionally broken pending deletion
+# of this whole legacy code path. Do not call with spatial=True.
 def get_crn_release_metadata(
     ds_path: str | Path,
     schema_version: str,

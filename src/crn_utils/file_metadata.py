@@ -1,585 +1,453 @@
+import logging
 import pandas as pd
 from pathlib import Path
-import os, sys
-import json
 
-from .bucket_util import gcloud_ls
-from .checksums import get_md5_hashes
+# TODO: Target of folding gcloud operations into wf-common::gcloud_ops.py
+from .bucket_util import gcloud_ls, gcloud_hash, gcloud_rsync
 
 repo_root = Path(__file__).resolve().parents[2]
-wf_common_path = repo_root.parent / "wf-common" / "util"
-sys.path.insert(0, str(wf_common_path))
 
-# from wf-common
-from common.gcloud_ops import strip_team_prefix
 
 __all__ = [
-    "make_file_metadata",
-    "update_data_table_with_gcp_uri",
-    "update_spatial_table_with_gcp_uri",
-    "gen_bucket_summary",
-    "gen_spatial_bucket_summary",
+    "update_data_table_with_bucket_metadata",
+    "gen_raw_bucket_summary",
+    "gen_dev_bucket_summary",
+    "process_curated_files",
     "get_artifacts_df",
-    "get_fastqs_df",
-    "get_spatial_df",
-    "add_bucket_md5",
+    "get_raw_df",
 ]
 
-def make_file_metadata(
-    ds_path: str | Path,
+
+def summarize_bucket_prefix(
+    bucket: str,
+    prefix: str,
+    source_prefix: str,
+    cache_path: Path | None = None,
+    force: bool = False,
+) -> pd.DataFrame:
+    """
+    List all objects under bucket/prefix and return one row per object.
+
+    Columns: file_name, gcp_uri, bucket_md5, source_prefix
+
+    If cache_path is given and exists and force=False, reads from cache.
+    Otherwise walks the bucket, fetches MD5s, and writes the cache if cache_path is given.
+
+    Args:
+        bucket: GCS bucket name (without gs://)
+        prefix: glob prefix, e.g. "artifacts/**"
+        source_prefix: 'fastq' | 'raw' | 'artifact' | 'spatial' | 'curated' —
+            identifies which bucket prefix a row came from. Carried through to
+            the final artifacts.csv so artifact- and spatial-sourced rows stay
+            distinguishable once merged.
+        cache_path: optional path for the intermediate CSV cache
+        force: if True, re-walk the bucket even if cache exists
+    """
+    cols = ["file_name", "gcp_uri", "bucket_md5", "source_prefix"]
+
+    if cache_path is not None and cache_path.exists() and not force:
+        return pd.read_csv(cache_path)
+
+    listing = gcloud_ls(bucket, prefix, project="dnastack-asap-parkinsons")
+    files = [f for f in listing if f and Path(f).name[0] != "." and not f.endswith("/")]
+
+    if not files:
+        return pd.DataFrame(columns=cols)
+
+    md5s = gcloud_hash(bucket, prefix)
+    df = pd.DataFrame({"gcp_uri": files})
+    df["file_name"] = df["gcp_uri"].apply(lambda x: x.split("/")[-1])
+    df["bucket_md5"] = df["file_name"].map(md5s)
+    df["source_prefix"] = source_prefix
+    df = df[cols]
+
+    if cache_path is not None:
+        df.to_csv(cache_path, index=False)
+
+    return df
+
+
+def gen_raw_bucket_summary(
     dl_path: str | Path,
-    data_df: pd.DataFrame,
-    spatial: bool = False,
+    dataset_id: str,
+    force: bool = False,
 ):
     """
-    Generate file metadata for a dataset.
+    Generate summary of raw bucket contents, writing one intermediate CSV per
+    prefix to dl_path. These CSVs serve as the cache for subsequent runs
+    (re-read unless force=True).
 
-    Required fields:
-        - ds_path: path to the dataset directory
-        - dl_path: path to the download directory
-        - data_df: DataFrame containing dataset information
-        - spatial: boolean indicating if spatial data should be included
+    Walks artifacts/**, spatial/**, fastqs/**, and raw/** if they exist.
 
+    Assumptions (revisit if they change):
+    - A dataset's raw bucket contains either fastqs/ OR raw/, never both.
+    - fastqs/ only contains *.fastq.gz files. raw/ contents vary by assay
+      (e.g. spatial platform export formats like CosMx's *.csv.gz or proteomics 
+      .raw) and are not restricted to a single extension — everything under raw/ is
+      collected; only files DATA.file_name actually references get merged in.
+
+    Args:
+        dl_path: directory to write intermediate CSVs for caching
+        dataset_id: dataset identifier (e.g., "team-smith-pmdbs-sn-rnaseq")
+        force: re-walk bucket even if cached CSVs exist
     """
+    if "cohort" in dataset_id:
+        logging.info(f"No raw bucket file metadata summary required for cohort datasets: {dataset_id}")
+        return
 
+    bucket = f"asap-raw-{dataset_id}"
     dl_path = Path(dl_path)
-    ds_path = Path(ds_path)
 
-    dataset_name = ds_path.name
-    team_name = dataset_name.split("-")[0]
+    # Spatial files will be folded into artifacts.csv by get_artifacts_df() if they exist
+    logging.info(f"Checking for artifact files (artifacts/ and spatial/) for {dataset_id}...")
+    artifact_cache = dl_path / "artifact_files_cache.csv"
+    spatial_cache = dl_path / "spatial_files_cache.csv"
+    summarize_bucket_prefix(bucket, "artifacts/**", "artifact", artifact_cache, force=force)
+    summarize_bucket_prefix(bucket, "spatial/**/*", "spatial", spatial_cache, force=force)
 
-    print(f"Processing {dataset_name}, {team_name=}")
-    # we'll get metadata from the raw bucket at "/metadata/release"
-
-    data_df = data_df[
-        [
-            "ASAP_sample_id",
-            "ASAP_team_id",
-            "ASAP_dataset_id",
-            "sample_id",  # sample_id gets clobbered.
-            "replicate",
-            "batch",
-            "file_name",
-            "file_MD5",
-            "file_type",
-        ]
-    ]
-
-    data_df["sample_name"] = (
-        data_df["ASAP_sample_id"].astype(str) + "_" + data_df["replicate"].astype(str)
-    )
-
-    asap_dataset_id = data_df["ASAP_dataset_id"].unique()[0]
-    team_id = data_df["ASAP_team_id"].unique()[0]
-
-    # add contributed artifacts
-    artifacts_df = get_artifacts_df(dl_path, asap_dataset_id, team_id)
-
-    if artifacts_df.shape[0] > 0:
-        artifacts_df.to_csv(os.path.join(dl_path, "artifacts.csv"), index=False)
-    else:
-        print(f"No artifact files found for {dataset_name}")
-
-    ############################################
-    ## raw files
-    ############################################
-
-    samp_df = data_df.copy()
-    samp_df["project_id"] = team_name
-
-    fastq_df = get_fastqs_df(dl_path, asap_dataset_id, team_id)
-    files_df = pd.concat([fastq_df, artifacts_df])
-
-    if spatial:
-        spatial_df = get_spatial_df(dl_path, asap_dataset_id, team_id)
-        spatial_df.to_csv(os.path.join(dl_path, "spatial_files.csv"), index=False)
-        files_df = pd.concat([fastq_df, spatial_df])
-
-    merge_cols = ["gcp_uri", "file_name", "bucket_md5"]
-
-    df = samp_df.merge(files_df[merge_cols].copy(), on="file_name", how="left")
-    keep_cols = [
-        "ASAP_dataset_id",
-        "ASAP_team_id",
-        "ASAP_sample_id",
-        "file_name",
-        "replicate",
-        "batch",
-        "file_MD5",
-        "file_type",
-        "gcp_uri",
-        "sample_name",
-        "bucket_md5",
-    ]
-    df = df.loc[:, keep_cols]
-    # # check md5s
-    check = pd.Index(df.loc[:, "file_MD5"] == df.loc[:, "bucket_md5"])
-    if not check.all():
-        print(f"MD5s do not match for {dataset_name}")
-        mismatch_counts = df.loc[~check, "file_name"].value_counts()
-        for file_name, count in mismatch_counts.items():
-            print(f"  {file_name} ({count} occurrence{'s' if count > 1 else ''})")
-
-    # now export the combined_df to a csv file
-    df.to_csv(os.path.join(dl_path, "raw_files.csv"), index=False)
+    logging.info(f"Checking for raw data files (fastq/raw) for {dataset_id}...")
+    raw_cache = dl_path / "raw_files_cache.csv"
+    for raw_type, prefix in [("fastq", "fastqs/**/*.fastq.gz"), ("raw", "raw/**")]:
+        summarize_bucket_prefix(bucket, prefix, raw_type, raw_cache, force=force)
 
 
-def update_data_table_with_gcp_uri(
-        data_df: pd.DataFrame, 
-        ds_path: str | Path,
-        release_version: str,
-     ) -> pd.DataFrame:
+def gen_dev_bucket_summary(
+    dl_path: str | Path,
+    dataset_id: str,
+    workflow_name: str,
+    curated_workflows: list[str],
+    force: bool = False,
+) -> pd.DataFrame:
     """
-    Add GCP URIs to DATA table.
-    Handles pooled/multiplexed files where multiple samples share the same file_name.
+    Generate summary of dev bucket contents for a dataset's curated workflow
+    outputs, writing an intermediate CSV cache to dl_path. Works for both
+    team- and cohort- dataset_ids.
 
-    Required fields:
-    - data_df: DataFrame containing the DATA table information, including "file_name" column
-    - ds_path: path to the dataset directory, where file_metadata/raw_files.csv is located
+    Unlike the raw bucket (fixed artifacts/spatial/fastq/raw prefixes), the dev
+    bucket has exactly one relevant prefix per dataset: the workflow that
+    produced its curated outputs. workflow_name is looked up per-dataset by the
+    caller from the dataset release table; curated_workflows is the allowlist of
+    workflow names this release pipeline knows how to catalogue.
+
+    Columns: file_name, gcp_uri, bucket_md5, source_prefix (source_prefix is
+    always "curated" here).
+
+    Args:
+        dl_path: directory to write the intermediate CSV for caching
+        dataset_id: dataset identifier (e.g., "team-smith-pmdbs-sn-rnaseq" or "cohort-pmdbs-bulk-rnaseq")
+        workflow_name: name of the workflow whose outputs to catalogue (e.g., pmdbs_sc_rnaseq), or "NA"
+        curated_workflows: allowlist of workflow names this pipeline supports
+        force: re-walk bucket even if a cached CSV exists
+    """
+    cols = ["file_name", "gcp_uri", "bucket_md5", "source_prefix"]
+
+    if workflow_name == "NA":
+        logging.info(f"Skipping {dataset_id} as workflow is NA")
+        return pd.DataFrame(columns=cols)
+    if workflow_name not in curated_workflows:
+        logging.info(f"Skipping {dataset_id} as workflow {workflow_name} is not implemented")
+        return pd.DataFrame(columns=cols)
+
+    bucket = f"asap-dev-{dataset_id}"
+    dl_path = Path(dl_path)
+    cache_path = dl_path / "curated_files_cache.csv"
+
+    return summarize_bucket_prefix(bucket, f"{workflow_name}/**", "curated", cache_path, force=force)
+
+
+def load_manifests(
+    manifest_rows: pd.DataFrame,
+    tmp_dir: Path,
+) -> pd.DataFrame:
+    """
+    Download and parse every MANIFEST.tsv found under the workflow root.
+
+    The dev bucket can hold multiple physical copies of MANIFEST.tsv (e.g.
+    the workflow's own output dir plus a workflow_metadata/{timestamp}/
+    audit copy), so the result may contain duplicate file_name rows --
+    deduping happens downstream in process_curated_files, keyed on gcp_uri.
+
+    Args:
+        manifest_rows: dev-bucket listing rows where file_name == "MANIFEST.tsv"
+        tmp_dir: directory to briefly download each manifest into
 
     Returns:
-    - Updated DataFrame with "gcp_uri" column added based on the mapping from raw_files.csv
-
+        DataFrame with file_name plus manifest columns (workflow,
+        workflow_version, timestamp, ...).
     """
-    ds_path = Path(ds_path)
-    file_metadata_path = os.path.join(ds_path, "file_metadata", "release", release_version)
+    manifests_df = pd.DataFrame()
 
-    raw_files = pd.read_csv(os.path.join(file_metadata_path, "raw_files.csv"))
-    
-    # Deduplicate by file_name before merging
-    # Multiple samples share the same physical files in pooled sequencing
-    raw_files_unique = raw_files[["file_name", "gcp_uri"]].drop_duplicates(subset=["file_name"])
-    
-    # Ensure we're not creating duplicates
+    for _, manifest_row in manifest_rows.iterrows():
+        remote = manifest_row["gcp_uri"]  # dev-bucket path -- not yet promoted
+        remainder_cleaned = manifest_row["_remainder"].replace("/", "-")
+        local = tmp_dir / remainder_cleaned
+
+        gcloud_rsync(remote, local, directory=False)
+        logging.info(f"Downloaded {remote} to {local}")
+
+        local_df = pd.read_csv(local, sep="\t")
+        local_df = local_df.dropna(subset=["workflow_version"], how="all")
+        local_df = local_df.rename(columns={"filename": "file_name"})
+        manifests_df = pd.concat([manifests_df, local_df], ignore_index=True)
+
+        local.unlink()
+        logging.info(f"Deleted temporary file {local}")
+
+    return manifests_df
+
+
+def process_curated_files(
+    dataset_dir: str | Path,
+    dataset_id: str,
+    workflow_name: str,
+    curated_df: pd.DataFrame,
+    release_version: str,
+) -> None:
+    """
+    Merge the dev-bucket curated-file listing with MANIFEST.tsv metadata
+    (workflow_version, timestamp), rebase gcp_uri to the curated bucket, and
+    write curated_files.csv.
+
+    gcp_uri rebase: files are hashed from the DEV bucket (where they live at
+    release-prep time), so the output gcp_uri is *prospective* -- where the
+    file will live once promoted to gs://asap-curated-..., not where it is now.
+
+    ASAP_dataset_id/team_id for cohorts: cohort buckets hold files not
+    attributable to any single constituent -- use the cohort dataset_id itself 
+    and "Cohort" as the team_id instead.
+
+    Args:
+        dataset_dir: path to the dataset (or cohort) directory, e.g.
+            {dss_meta_root}/datasets/{dataset_name}
+        dataset_id: e.g. "team-smith-pmdbs-sn-rnaseq" or "cohort-pmdbs-bulk-rnaseq"
+        workflow_name: workflow whose outputs were catalogued (e.g. pmdbs_sc_rnaseq)
+        curated_df: from gen_dev_bucket_summary, columns
+            [file_name, gcp_uri, bucket_md5, source_prefix]
+        release_version: e.g. "v4.0.0"
+    """
+    dataset_dir = Path(dataset_dir)
+    logging.info(f"Start: generate curated_files.csv for {dataset_id}")
+
+    if curated_df.empty:
+        logging.info(f"Skipping {dataset_id} as no curated files were found")
+        return
+
+    logging.info(f"Dataset: {dataset_id} has {len(curated_df)} curated files")
+    curated_df = curated_df.copy()
+
+    file_metadata_path = dataset_dir / "file_metadata" / "release" / release_version
+    file_metadata_path.mkdir(parents=True, exist_ok=True)
+
+    # Strip the known dev-bucket prefix to get subdirs/filename -- used for
+    # both the archive filter below and the curated-bucket rebase.
+    dev_prefix = f"gs://asap-dev-{dataset_id}/{workflow_name}/"
+    curated_prefix = f"gs://asap-curated-{dataset_id}/{workflow_name}/"
+    curated_df["_remainder"] = curated_df["gcp_uri"].str.slice(len(dev_prefix))
+
+    # Archive filter: only the first subdirectory is checked -- a file
+    # directly under the workflow root is never treated as archived.
+    curated_df["_first_dir"] = curated_df["_remainder"].apply(
+        lambda r: r.split("/")[0] if "/" in r else ""
+    )
+    curated_df = curated_df[~curated_df["_first_dir"].str.startswith("archive")]
+
+    # Get manifest metadata (workflow_version/timestamp)
+    manifest_rows = curated_df[curated_df["file_name"] == "MANIFEST.tsv"]
+    manifests_df = load_manifests(manifest_rows, file_metadata_path)
+
+    # Merge manifest data (no suffix collision: curated_df has no "workflow"
+    # column yet, so the manifest's own passes through for the check below).
+    curated_df = curated_df.merge(manifests_df, on="file_name", how="left")
+
+    # curated_df is unique per gcp_uri pre-merge, so duplicate manifest
+    # copies (see load_manifests) can fan a row out -- collapse back to one
+    # row per gcp_uri. Flag (don't silently drop) if duplicates disagree,
+    # since that would mean two manifest copies recorded different metadata
+    # for the same file.
+    dup_cols = [c for c in ("workflow", "workflow_version", "timestamp") if c in curated_df.columns]
+    conflicting = (
+        curated_df.duplicated(subset=["gcp_uri"], keep=False)
+        & ~curated_df.duplicated(subset=["gcp_uri"] + dup_cols, keep=False)
+    )
+    if conflicting.any():
+        logging.warning(
+            f"{curated_df.loc[conflicting, 'gcp_uri'].nunique()} file(s) matched multiple "
+            f"manifest entries with differing {dup_cols}; keeping the first occurrence: "
+            f"{curated_df.loc[conflicting, 'gcp_uri'].unique().tolist()}"
+        )
+    curated_df = curated_df.drop_duplicates(subset=["gcp_uri"], keep="first")
+
+    # Validate workflow consistency (manifest-declared vs. the one we walked
+    # the dev bucket for)
+    if "workflow" in curated_df.columns:
+        checked = curated_df.loc[curated_df["workflow"].notna(), "workflow"]
+        assert (checked == workflow_name).all(), (
+            f"MANIFEST workflow does not match expected workflow "
+            f"'{workflow_name}' for {dataset_id}"
+        )
+
+    # Rebase gcp_uri from dev bucket to curated (production) bucket
+    curated_df["gcp_uri"] = curated_prefix + curated_df["_remainder"]
+
+    # Add dataset identifiers
+    if dataset_id.startswith("cohort-"):
+        asap_dataset_id = dataset_id
+        asap_team_id = "Cohort"
+    else:
+        study_file = dataset_dir / "metadata" / "release" / release_version / "STUDY.csv"
+        study_df = pd.read_csv(study_file)
+        asap_dataset_id = study_df["ASAP_dataset_id"].unique()[0]
+        asap_team_id = study_df["ASAP_team_id"].unique()[0]
+
+    curated_df["ASAP_dataset_id"] = asap_dataset_id
+    curated_df["ASAP_team_id"] = asap_team_id
+    curated_df["workflow"] = workflow_name  # normalize for rows with no manifest match
+
+    # Columns aligned with artifacts.csv, plus workflow/workflow_version/
+    # timestamp (sourced from MANIFEST.tsv) per the D8 refactor decision.
+    output_cols = [
+        "ASAP_dataset_id", "ASAP_team_id", "file_name", "gcp_uri", "bucket_md5",
+        "source_prefix", "workflow", "workflow_version", "timestamp",
+    ]
+    curated_df = curated_df[output_cols]
+
+    # Save curated files metadata
+    outfile_curated = file_metadata_path / "curated_files.csv"
+    curated_df.to_csv(outfile_curated, index=False)
+
+    logging.info(f"End: generate curated_files.csv for {dataset_id}")
+
+
+def update_data_table_with_bucket_metadata(
+    data_df: pd.DataFrame,
+    cache_df: pd.DataFrame,
+) -> pd.DataFrame:
+    """
+    Add gcp_uri to the DATA table, and reconcile file_MD5 with the bucket-
+    computed value:
+      - bucket_md5 present, contributor's file_MD5 blank: filled from bucket.
+      - bucket_md5 present, contributor's file_MD5 present and they agree:
+        no-op (bucket value used, matches contributor's).
+      - bucket_md5 present, contributor's file_MD5 present and they disagree:
+        bucket value is used (independently verifiable), but the mismatch is
+        logged for follow-up -- could indicate corruption, a stale/wrong
+        contributor value, or a re-upload the contributor didn't reflect in
+        their submission.
+      - bucket_md5 unavailable (e.g. composite-uploaded file, no native MD5
+        in GCS): falls back to the contributor-submitted value, unverified.
+        
+    Args:
+        data_df: QC'd DATA table. Only rows with a DATA.file_name that matches a 
+            cache_df.file_name are updated.
+        cache_df: summary of bucket contents, with columns [file_name, gcp_uri, 
+            bucket_md5, source_prefix] (from gen_raw_bucket_summary)
+    """
+    uri_map = (
+        cache_df[["file_name", "gcp_uri", "bucket_md5"]]
+        .drop_duplicates(subset=["file_name"])
+    )
+
     initial_rows = len(data_df)
-    data_df = data_df.merge(raw_files_unique, on="file_name", how="left", validate="many_to_one")
-    
-    if len(data_df) != initial_rows:
-        print(f"WARNING: Row count changed from {initial_rows} to {len(data_df)} during merge!")
-    
-    print(f"Updated 'DATA.csv' with gcp_uri ({len(data_df)} rows)")
+    data_df = data_df.merge(uri_map, on="file_name", how="left", validate="many_to_one")
 
+    if len(data_df) != initial_rows:
+        logging.warning(f"Row count changed from {initial_rows} to {len(data_df)} during merge!")
+
+    file_md5_str = data_df["file_MD5"].astype("string")
+    bucket_md5_str = data_df["bucket_md5"].astype("string")
+
+    # Normalize for comparison and for final output
+    contributor_md5 = file_md5_str.str.strip().str.lower()
+    bucket_md5 = bucket_md5_str.str.strip().str.lower()
+
+    mismatched = bucket_md5.notna() & contributor_md5.notna() & (bucket_md5 != contributor_md5)
+    if mismatched.any():
+        details = data_df.loc[mismatched, "file_name"].tolist()
+        logging.warning(
+            f"{mismatched.sum()} row(s) have a bucket MD5 that disagrees with the "
+            f"contributor-submitted file_MD5 (bucket value used): {details}"
+        )
+
+    unverified = bucket_md5.isna() & contributor_md5.notna()
+    if unverified.any():
+        logging.warning(
+            f"{unverified.sum()} row(s) have no bucket MD5 (likely composite-uploaded) "
+            f"and retain the contributor-submitted, unverified file_MD5: "
+            f"{data_df.loc[unverified, 'file_name'].unique().tolist()}"
+        )
+
+    data_df["file_MD5"] = bucket_md5.combine_first(contributor_md5)
+    data_df = data_df.drop(columns=["bucket_md5"])
+
+    logging.info(f"Updated 'DATA.csv' with gcp_uri and file_MD5 ({len(data_df)} rows)")
     return data_df
 
 
-def update_spatial_table_with_gcp_uri(
-    spatial_df: pd.DataFrame, ds_path: str | Path, spatial_subtype: str = "other"
-):
-    """
-    Update SPATIAL table with GCP URIs and MD5 hashes.
-
-    Required fields:
-        - spatial_df: DataFrame containing the SPATIAL table information
-        - ds_path: path to the dataset directory, where file_metadata/raw_files.csv is located
-        - spatial_subtype: type of spatial data ("visium", "geomx", "cosmx")
-
-    Returns:
-        - Updated DataFrame with "gcp_uri" and "md5" columns added based on the mapping from raw_files.csv and spatial_files.csv
-        - The specific columns updated depend on the spatial_subtype
-    """
-
-    ds_path = Path(ds_path)
-    file_metadata_path = os.path.join(ds_path, "file_metadata")
-
-    raw_files = pd.read_csv(os.path.join(file_metadata_path, "raw_files.csv"))
-    spatial_files = pd.read_csv(
-        os.path.join(file_metadata_path, f"{ds_path.name}-spatial_files.csv")
-    )
-    # make mappers for spatial files
-    spatial_file_gcp_mapper = dict(
-        zip(spatial_files["file_name"], spatial_files["spatial_files"])
-    )
-    spatial_file_md5_mapper = dict(
-        zip(spatial_files["file_name"], spatial_files["bucket_md5"])
-    )
-
-    raw_files = raw_files[["file_name", "gcp_uri", "bucket_md5"]]
-    raw_file_gcp_mapper = dict(zip(raw_files["file_name"], raw_files["gcp_uri"]))
-    raw_file_md5_mapper = dict(zip(raw_files["file_name"], raw_files["bucket_md5"]))
-
-    # combine mappers
-    spatial_file_gcp_mapper.update(raw_file_gcp_mapper)
-    spatial_file_md5_mapper.update(raw_file_md5_mapper)
-
-    if spatial_subtype == "visium":
-        left_ons = ["visium_cytassist"]
-    elif spatial_subtype == "geomx":
-        left_ons = ["geomx_config", "geomx_dsp_config", "geomx_annotation_file"]
-    elif spatial_subtype == "cosmx":
-        left_ons = [] # currently no files in SPATIAL table for CosMx datasets
-    else:
-        raise ValueError(f"Unsupported spatial subtype: {spatial_subtype}")
-
-    for left_on in left_ons:
-        spatial_df[f"{left_on}_md5"] = spatial_df[left_on].map(spatial_file_md5_mapper)
-        spatial_df[f"{left_on}_gcp_uri"] = spatial_df[left_on].map(
-            spatial_file_gcp_mapper
-        )
-
-    print(f"Updated 'SPATIAL.csv' with gcp_uris")
-    return spatial_df
-
-# Replaces gen_raw_bucket_summary and gen_dev_bucket_summary
-# gen_dev_bucket_summary seemed to be a partial copy of gen_raw_bucket_summary
-# and had incostiencies such as listing fastq's, that aren't expected in the dev bucket.
-def gen_bucket_summary(
+def get_artifacts_df(
     dl_path: str | Path,
-    dataset_id: str,
-    env_type: str,
-    flatten: bool = False,
-):
+    asap_dataset_id: str,
+    asap_team_id: str,
+) -> pd.DataFrame:
     """
-    Generate summary of raw or dev bucket contents and save to dl_path.
-
-    Required fields in config:
-        - dl_path: path to save the summary files
-        - dataset_id: dataset identifier (e.g., "team-smith-pmdbs-sn-rnaseq")
-        - env_type: environment type ("raw" or "dev")
-        - flatten: whether to use a flattened prefix for gcloud_ls (True or False)
-    """
-
-    if dataset_id.startswith("team-"):
-        dataset_name = strip_team_prefix(dataset_id)
-    else:
-        raise RuntimeError(
-            f"Invalid dataset_id format: {dataset_id}. Expected format: team-<team_name>-<dataset_details>")
-
-    if ("cohort" in dataset_name) & (env_type == "raw"):
-        print(f"No raw bucket for cohort datasets: {dataset_name}")
-        return
-
-    # Get bucket name and path
-    bucket_name = f"asap-{env_type}-{dataset_id}"
-    dl_path = Path(dl_path)
-    bucket_path = bucket_name.split("/")[-1]
-
-    # --- Artifacts ---
-    artifacts = gcloud_ls(bucket_path, "artifacts/**", project="dnastack-asap-parkinsons")
-    artifact_files = [
-        f for f in artifacts if f != "" and Path(f).name[0] != "." and f[-1] != "/"
-    ]
-    if artifact_files:
-        bucket_files_md5 = get_md5_hashes(bucket_path, "artifacts/**")
-        artifact_files_df = pd.DataFrame(artifact_files, columns=["artifact_files"])
-        artifact_files_df["file_name"] = artifact_files_df["artifact_files"].apply(lambda x: x.split("/")[-1])
-        artifact_files_df["bucket_md5"] = artifact_files_df["file_name"].map(bucket_files_md5)
-        artifact_files_df.to_csv(dl_path / f"{dataset_name}-{env_type}_artifact_files.csv", index=False)
-        with open(dl_path / f"{dataset_name}-{env_type}_artifacts-md5s.json", "w") as f:
-            json.dump(bucket_files_md5, f)
-    else:
-        print(f"No artifact files found for {dataset_name}")
-
-    # --- Raw files (only in raw env)---
-    # TODO: need to list raw files beyond raw and fastq extensions
-    if env_type == "raw":
-        raw_types = ["raw", "fastq"]
-
-        wrote_raw_files = 0
-        for raw_type in raw_types:
-            if raw_type == "fastq":
-                prefix = "fastqs/*.fastq.gz" if flatten else "fastqs/**/*.fastq.gz"
-            else:
-                prefix = "raw/*.raw" if flatten else "raw/**/*.raw"
-
-            raw_files = [f for f in gcloud_ls(bucket_path, prefix, project="dnastack-asap-parkinsons") if f != ""]
-            if raw_files:
-                print(f"Found {len(raw_files)} {raw_type} raw files for {dataset_name}")
-                raw_files_df = pd.DataFrame(raw_files, columns=["raw_files"])
-                raw_files_df["file_name"] = raw_files_df["raw_files"].apply(lambda x: x.split("/")[-1])
-                bucket_files_md5 = get_md5_hashes(bucket_path, prefix)
-                raw_files_df["bucket_md5"] = raw_files_df["file_name"].map(bucket_files_md5)
-
-                # write file list and md5s to file
-                wrote_raw_files += 1
-                if wrote_raw_files == 1:
-                    raw_files_df.to_csv(dl_path / f"{dataset_name}-{env_type}_{raw_type}_files.csv", index=False)
-                    with open(dl_path / f"{dataset_name}-{env_type}_{raw_type}_files-md5s.json", "w") as f:
-                        json.dump(bucket_files_md5, f)
-                else:
-                    #append to existing file if multiple raw_types are found
-                    raw_files_df.to_csv(dl_path / f"{dataset_name}-{env_type}_raw_files.csv", index=False, mode='a', header=False)
-                    with open(dl_path / f"{dataset_name}-{env_type}_raw_files-md5s.json", "r") as f:
-                        existing_md5s = json.load(f)
-                    new_md5s = get_md5_hashes(bucket_path, prefix)
-                    existing_md5s.update(new_md5s)
-                    with open(dl_path / f"{dataset_name}-{env_type}_raw_files-md5s.json", "w") as f:
-                        json.dump(existing_md5s, f)
-            else:
-                print(f"No {raw_type} raw files found for {dataset_name}")
-
-
-def gen_spatial_bucket_summary(
-    dl_path: str | Path, 
-    dataset_id: str
-):
+    Read the artifact (and spatial, if it exists) intermediate CSVs written by 
+    gen_bucket_summary and return a single combined DataFrame with ASAP identifiers.
     
-    """
-    Generate summary of spatial files in raw bucket and save to dl_path.
-
-    Required fields in config:
-        - dl_path: path to save the summary files
-        - dataset_id: dataset identifier (e.g., "team-smith-pmdbs-sn-rnaseq")
-    """
-
-    if dataset_id.startswith("team-"):
-        dataset_name = strip_team_prefix(dataset_id)
-    else:
-        raise ValueError(f"Dataset ID [{dataset_id}] does not start with expected 'team-' prefix.")
-
-
-    if "cohort" in dataset_id:
-        print(f"No raw bucket for cohort datasets: {dataset_id}")
-
-    else:
-        # Get bucket name and path
-        raw_bucket_name = f"asap-raw-{dataset_id}"
-        dl_path = Path(dl_path)
-        bucket_path = raw_bucket_name.split("/")[-1]
-        prefix = f"spatial/**/*"
-        spatial_files_ = gcloud_ls(
-            bucket_path, prefix, project="dnastack-asap-parkinsons"
-        )
-        spatial_files = [f for f in spatial_files_ if f != ""]
-
-        if len(spatial_files) > 0:
-            bucket_files_md5 = get_md5_hashes(bucket_path, prefix)
-            spatial_files_df = pd.DataFrame(spatial_files, columns=["spatial_files"])
-
-            spatial_files_df["file_name"] = spatial_files_df["spatial_files"].apply(
-                lambda x: x.split("/")[-1]
-            )
-            spatial_files_df["bucket_md5"] = spatial_files_df["file_name"].map(
-                bucket_files_md5
-            )
-            spatial_files_df.to_csv(
-                os.path.join(dl_path, f"{dataset_name}-spatial_files.csv"), index=False
-            )
-            # merge in md5s.
-            # dump md5s to file
-            with open(
-                os.path.join(dl_path, f"{dataset_name}-spatial_files-md5s.json"), "w"
-            ) as f:
-                json.dump(bucket_files_md5, f)
-        else:
-            print(f"No spatial files found for {dataset_name}")
-
-
-####################
-def get_artifacts_df(dl_path: str | Path, 
-                     asap_dataset_id: str, 
-                     asap_team_id: str):
-    """ 
-    Looks for files matching "*-artifact_files.csv" in the given dl_path,
-    reads the first one it finds, and processes it to create an artifacts DataFrame
-
-    Required fields:
-        - dl_path: path to download summary files from bucket
-        - asap_dataset_id: ASAP dataset ID (e.g. DS_PMDBS_0004)
-        - asap_team_id: ASAP team ID (e.g. TEAM_SMITH)
-
-    Returns a DataFrame with columns specified in keep_cols
+    Args:
+        dl_path: path to download summary files from bucket (e.g., file_metadata/release/v5.0.0)
+        asap_dataset_id: ASAP dataset ID (e.g., DS_PMDBS_0004)
+        asap_team_id: ASAP team ID (e.g., TEAM_SMITH)
     """
     dl_path = Path(dl_path)
-
+    
     keep_cols = [
-        "ASAP_dataset_id",
-        "ASAP_team_id",
-        "artifact_type",
-        "file_name",
-        "timestamp",
-        "workflow",
-        "workflow_version",
-        "gcp_uri",  # change to gcp_uri
-        "bucket_md5",
+        "ASAP_dataset_id", "ASAP_team_id", "file_name", "gcp_uri", "bucket_md5", "source_prefix",
     ]
+    
+    ARTIFACT_GLOBS = ["artifact_files_cache.csv", "spatial_files_cache.csv"]
+    
+    csvs = []
+    for pattern in ARTIFACT_GLOBS:
+        csvs.extend(dl_path.glob(pattern))
 
-    dl_path = Path(dl_path)
-    artifacts = list(dl_path.glob("*artifact_files.csv"))
-    if len(artifacts) > 0:
-        artifact = artifacts[0]
-        print(f"Processing {artifact.name}")
-        df = pd.read_csv(artifact)
+    if not csvs:
+        logging.warning(f"No artifact or spatial files found for {dl_path}")
+        return pd.DataFrame(columns=keep_cols)
 
-        df["exclude"] = (
-            df["artifact_files"].apply(lambda x: "cellranger_counts" in x)
-            | df["artifact_files"].apply(lambda x: ".git" in x)
-            | df["artifact_files"].apply(lambda x: ".DS_Store" in x)
+    dfs = []
+    for csv_path in csvs:
+        df = pd.read_csv(csv_path)
+        
+        # NOTE/TODO: These files are excluded from the promote_raw_data script for
+        # storage reasons and to encourage users to use DNAstack's processed data.
+        # This exclusion list is rather fragile and should be revisited: see ticket BIOS-2421
+        exclude = (
+            df["gcp_uri"].str.contains("cellranger_counts", na=False)
+            | df["gcp_uri"].str.contains("bam_files", na=False)
+            | df["gcp_uri"].str.contains(r"\.git", na=False)
+            | df["gcp_uri"].str.contains(r"\.DS_Store", na=False)
         )
-        # now concatenate the dataframes
-        df = df[~df["exclude"]]
+        df = df[~exclude].copy()
         df["ASAP_dataset_id"] = asap_dataset_id
         df["ASAP_team_id"] = asap_team_id
-        df["timestamp"] = "NA"
-        df["workflow"] = "NA"
-        df["workflow_version"] = "NA"
-        df["artifact_type"] = "contributed"
-        df["gcp_uri"] = df["artifact_files"]
+        dfs.append(df[keep_cols])
 
-        return df[keep_cols]
-    else:
-        print(f"no artifact files found for {dl_path.parent.name}")
-        df = pd.DataFrame(columns=keep_cols)
-        return df
+    return pd.concat(dfs, ignore_index=True)
 
 
-def get_fastqs_df(
-        dl_path: str | Path, 
-        asap_dataset_id: str, 
-        asap_team_id: str
-        ) -> pd.DataFrame:
+def get_raw_df(dl_path: str | Path) -> pd.DataFrame:
     """
-    Looks for raw file CSVs written by gen_bucket_summary in the given dl_path,
-    reads all matches, concatenates them, and returns a DataFrame with metadata
-    about the raw files (fastq or .raw).
-    It adds columns for ASAP dataset and team IDs, timestamps, workflow information,
-    artifact type, GCP URI, and bucket MD5 checksums.
-
-    gen_bucket_summary writes files with these naming conventions:
-      - First raw_type found: "{dataset_name}-{env_type}_{raw_type}_files.csv"
-        e.g. "*-raw_fastq_files.csv" or "*-raw_raw_files.csv"
-      - Subsequent raw_types (appended): "{dataset_name}-{env_type}_raw_files.csv"
-    This function uses a glob of "*-raw_*_files.csv" to match all variants.
-
-    Required fields:
-        - dl_path: path to download summary files from bucket
-        - asap_dataset_id: ASAP dataset ID (e.g. DS_PMDBS_0004)
-        - asap_team_id: ASAP team ID (e.g. TEAM_SMITH)
-
-    Returns a DataFrame with columns specified in keep_cols,
-    or an empty DataFrame with those columns if no matching files are found.
-
-    """
-
-    dl_path = Path(dl_path)
-
-    keep_cols = [
-        "ASAP_dataset_id",
-        "ASAP_team_id",
-        "artifact_type",
-        "file_name",
-        "timestamp",
-        "workflow",
-        "workflow_version",
-        "gcp_uri",
-        "bucket_md5",
-    ]
-
-    # gen_bucket_summary writes raw file CSVs with one of two specific names
-    # (column "raw_files"), depending on which raw_type is found first:
-    #   "{dataset_name}-raw_raw_files.csv"   (when .raw files are found first)
-    #   "{dataset_name}-raw_fastq_files.csv" (when fastq.gz files are found first)
-    # If both types exist, the second is appended to the first file (same name, no new file).
-    # We must NOT match "*-raw_artifact_files.csv" (column "artifact_files"), hence the
-    # explicit patterns below rather than the broader "*-raw_*_files.csv".
-    RAW_FILE_GLOBS = ["*-raw_raw_files.csv", "*-raw_fastq_files.csv"]
-    raw_file_csvs = []
-    for pattern in RAW_FILE_GLOBS:
-        raw_file_csvs.extend(dl_path.glob(pattern))
-
-    if len(raw_file_csvs) > 0:
-        dfs = []
-        for raw_file_csv in raw_file_csvs:
-            print(f"Processing {raw_file_csv.name}")
-            df = pd.read_csv(raw_file_csv)
-            df["ASAP_dataset_id"] = asap_dataset_id
-            df["ASAP_team_id"] = asap_team_id
-            df["timestamp"] = "NA"
-            df["workflow"] = "NA"
-            df["workflow_version"] = "NA"
-            df["artifact_type"] = "contributed"
-            df["gcp_uri"] = df["raw_files"]
-            dfs.append(df[keep_cols])
-
-        return pd.concat(dfs, ignore_index=True).drop_duplicates(subset=["file_name"])
-    else:
-        print(f"no raw files found for {dl_path.parent.name}")
-        return pd.DataFrame(columns=keep_cols)
-
-
-def get_spatial_df(
-        dl_path: str | Path, 
-        asap_dataset_id: str, 
-        asap_team_id: str) -> pd.DataFrame:
-    """
-    Looks for files matching "*-spatial_files.csv" in the given dl_path,
-    reads the first one it finds, and processes it to create a DataFrame
-    with metadata about the spatial files.
-    It adds columns for ASAP dataset and team IDs, timestamps, workflow information,
-    artifact type, GCP URI, and bucket MD5 checksums.
-
-    Required fields:
-        - dl_path: path to download summary files from bucket
-        - asap_dataset_id: ASAP dataset ID (e.g. DS_PMDBS_0004)
-        - asap_team_id: ASAP team ID (e.g. TEAM_SMITH)
-
-    Returns a DataFrame with columns specified in keep_cols,
-    or an empty DataFrame with those columns if no matching files are found.
+    Read the raw-files intermediate CSV written by gen_bucket_summary()
     
+    Args:
+        dl_path: path to download summary files from bucket (e.g., file_metadata/release/v5.0.0)
     """
     dl_path = Path(dl_path)
-
-    keep_cols = [
-        "ASAP_dataset_id",
-        "ASAP_team_id",
-        "artifact_type",
-        "file_name",
-        "timestamp",
-        "workflow",
-        "workflow_version",
-        "gcp_uri",  # change to gcp_uri
-        "bucket_md5",
-    ]
-
-    spatial_files = list(dl_path.glob("*-spatial_files.csv"))
-    if len(spatial_files) > 0:
-        spatial_file = spatial_files[0]  # HACK
-        print(f"Processing {spatial_file.name}")
-        # spatial_files,file_name,bucket_md5
-        spatial_df = pd.read_csv(spatial_file)
-        # now export the combined_df to a csv file
-        spatial_df["ASAP_dataset_id"] = asap_dataset_id
-        spatial_df["ASAP_team_id"] = asap_team_id
-        spatial_df["timestamp"] = "NA"
-        spatial_df["workflow"] = "NA"
-        spatial_df["workflow_version"] = "NA"
-        spatial_df["artifact_type"] = "contributed"
-        spatial_df["gcp_uri"] = spatial_df["spatial_files"]
-
-        spatial_df = spatial_df[keep_cols]
-        # rename "spatial_files" to "raw_files"
-        # spatial_df.rename(columns={"spatial_files": "raw_files"}, inplace=True)
-        return spatial_df
-    else:
-        print(f"no images files found for {dl_path.parent.name}")
+    keep_cols = ["file_name", "gcp_uri", "bucket_md5"]
+    raw_file_csvs = list(dl_path.glob("raw_files_cache.csv"))
+    if not raw_file_csvs:
+        logging.warning(f"No raw files found for {dl_path}")
         return pd.DataFrame(columns=keep_cols)
 
+    df = pd.read_csv(raw_file_csvs[0])
+    return df[keep_cols].drop_duplicates(subset=["file_name"])
 
-def add_bucket_md5(
-        df_file_metadata: pd.DataFrame, 
-        dl_path: str | Path):
-    """
-    Adds a column for bucket MD5 checksums to the given DataFrame.
-
-    Required fields
-        - df_file_metadata: DataFrame containing file metadata
-        - dl_path: path to download summary files from bucket
-
-    Returns the DataFrame with an added "bucket_md5" column.
-
-    """
-
-    dl_path = Path(dl_path)
-
-    md5_files = list(dl_path.glob(f"*-md5s.json"))
-    if len(md5_files) == 0:
-        print(f"no md5 files found for {dl_path.parent.name}")
-        df_file_metadata["bucket_md5"] = "NA"
-        return df_file_metadata
-
-    md5_mapper = {}
-    for file in md5_files:
-        with open(file, "r") as f:
-            md5s = json.load(f)
-            md5_mapper.update(md5s)
-    df_file_metadata["bucket_md5"] = df_file_metadata["file_name"].map(md5_mapper)
-    return df_file_metadata
