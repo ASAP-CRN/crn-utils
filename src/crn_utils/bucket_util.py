@@ -18,14 +18,20 @@ __all__ = [
 def gcloud_ls(bucket_name: str, prefix: str, project: str | None = None):
     """
     Lists the files in a GCS bucket_name/prefix path
-    
-    Args:
-        bucket_name (str): GCS bucket name, without the "gs://" scheme.
-        prefix (str): Object glob relative to the bucket root (e.g. "artifacts/**").
-        project (str | None): GCP project name. If None, defaults to "dnastack-asap-parkinsons".
-        
-    Returns:
-        list: List of files in the specified GCS bucket/prefix path. Empty list
+
+    Parameters
+    ----------
+    bucket_name : str
+        GCS bucket name, without the "gs://" scheme.
+    prefix : str
+        Object glob relative to the bucket root (e.g. "artifacts/**").
+    project : str or None, optional
+        GCP project name. If None, defaults to "dnastack-asap-parkinsons".
+
+    Returns
+    -------
+    list
+        List of files in the specified GCS bucket/prefix path. Empty list
         if no files are found or if the command fails.
     """
     default_project = "dnastack-asap-parkinsons"
